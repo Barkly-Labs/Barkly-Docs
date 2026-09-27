@@ -1,798 +1,855 @@
 #!/usr/bin/env python3
 """
 BARKLY DOCX
+DOCX → Barkly-style HTML documentation generator.
 
-Human-friendly DOCX → HTML documentation converter.
+Accepts either:
+    python barkly_docx.py document.docx
+or:
+    python barkly_docx.py ./documents
 
-Reads a Word document and renders it as a Barkly Docs page.
+When given a folder, all .docx files are discovered recursively and
+converted while preserving their directory structure.
 
-Input:
-    .docx
+Example:
 
-Output:
-    index.html
+    documents/
+    ├── requirements.docx
+    ├── research/
+    │   └── paper.docx
+    └── architecture/
+        └── design.docx
 
-Design principle:
-    Preserve the structure of the document while making it
-    easier to navigate, read, and understand.
+becomes:
 
-This is intentionally separate from barkly_docs.py so the
-document conversion system can evolve independently.
+    docs/
+    ├── requirements/
+    │   └── index.html
+    ├── research/
+    │   └── paper/
+    │       └── index.html
+    └── architecture/
+        └── design/
+            └── index.html
+
+Dependency:
+    pip install python-docx
 """
 
 from __future__ import annotations
 
 import argparse
 import html
+import re
 from pathlib import Path
 
 from docx import Document
 
 
-# ============================================================
-# HELPERS
-# ============================================================
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-def esc(value: object) -> str:
-    return html.escape(str(value or ""))
+def escape(value: str) -> str:
+    """Safely escape text for HTML."""
+    return html.escape(value or "")
 
 
-def heading_level(style_name: str) -> int:
+def slugify(value: str) -> str:
+    """Turn a document title into a safe directory name."""
+    value = value.strip().lower()
+    value = re.sub(r"[^\w\s-]", "", value)
+    value = re.sub(r"[-\s]+", "-", value)
+    return value.strip("-_") or "document"
+
+
+def document_title(document: Document, source: Path) -> str:
     """
-    Convert Word heading styles into numeric levels.
+    Determine the document title.
+
+    Preference:
+        1. First Heading 1
+        2. Word document title metadata
+        3. Filename
     """
 
-    name = style_name.lower().strip()
+    for paragraph in document.paragraphs:
+        if paragraph.style and paragraph.style.name:
+            if paragraph.style.name.lower() in {
+                "heading 1",
+                "title",
+            }:
+                text = paragraph.text.strip()
+                if text:
+                    return text
 
-    if name.startswith("heading"):
-        try:
-            return int(name.replace("heading", "").strip())
-        except ValueError:
-            pass
+    metadata_title = document.core_properties.title
 
-    return 0
+    if metadata_title and metadata_title.strip():
+        return metadata_title.strip()
+
+    return source.stem.replace("_", " ").replace("-", " ").title()
 
 
-def paragraph_html(paragraph) -> str:
-    """
-    Convert a DOCX paragraph into HTML.
-    """
+def paragraph_class(style_name: str) -> str:
+    """Return a CSS class for a paragraph style."""
+    return slugify(style_name or "normal")
+
+
+# ---------------------------------------------------------------------------
+# HTML rendering
+# ---------------------------------------------------------------------------
+
+def render_paragraph(paragraph) -> str:
+    """Convert one DOCX paragraph into HTML."""
 
     text = paragraph.text.strip()
 
     if not text:
         return ""
 
-    level = heading_level(
-        paragraph.style.name
-        if paragraph.style
-        else ""
+    style_name = paragraph.style.name if paragraph.style else "Normal"
+    style_lower = style_name.lower()
+
+    if style_lower == "title":
+        return f'<h1 class="document-title">{escape(text)}</h1>'
+
+    if style_lower.startswith("heading 1"):
+        return f"<h1>{escape(text)}</h1>"
+
+    if style_lower.startswith("heading 2"):
+        return f"<h2>{escape(text)}</h2>"
+
+    if style_lower.startswith("heading 3"):
+        return f"<h3>{escape(text)}</h3>"
+
+    if style_lower.startswith("heading 4"):
+        return f"<h4>{escape(text)}</h4>"
+
+    # Lists are handled separately by render_blocks().
+    if "list bullet" in style_lower:
+        return f"<li>{escape(text)}</li>"
+
+    if "list number" in style_lower:
+        return f"<li>{escape(text)}</li>"
+
+    return (
+        f'<p class="paragraph {paragraph_class(style_name)}">'
+        f"{escape(text)}"
+        f"</p>"
     )
 
-    if level:
-        level = max(1, min(level, 4))
 
-        return f"""
-        <h{level}>
-            {esc(text)}
-        </h{level}>
-        """
+def render_table(table) -> str:
+    """Convert a DOCX table into HTML."""
 
-    style = (
-        paragraph.style.name.lower()
-        if paragraph.style
-        else ""
-    )
+    rows = table.rows
 
-    # --------------------------------------------------------
-    # Lists
-    # --------------------------------------------------------
+    if not rows:
+        return ""
 
-    if "list bullet" in style:
-        return f"""
-        <li class="bullet-item">
-            {esc(text)}
-        </li>
-        """
+    output = ['<div class="table-wrap">']
+    output.append("<table>")
 
-    if "list number" in style:
-        return f"""
-        <li class="number-item">
-            {esc(text)}
-        </li>
-        """
-
-    return f"""
-    <p>
-        {esc(text)}
-    </p>
-    """
-
-
-def table_html(table) -> str:
-    """
-    Convert a DOCX table into a Barkly table.
-    """
-
-    rows = []
-
-    for row_index, row in enumerate(table.rows):
-
-        cells = []
+    for row_index, row in enumerate(rows):
+        output.append("<tr>")
 
         for cell in row.cells:
+            cell_text = cell.text.strip()
 
-            text = " ".join(
-                paragraph.text.strip()
-                for paragraph in cell.paragraphs
-                if paragraph.text.strip()
-            )
+            if row_index == 0:
+                output.append(
+                    f"<th>{escape(cell_text)}</th>"
+                )
+            else:
+                output.append(
+                    f"<td>{escape(cell_text)}</td>"
+                )
 
-            tag = "th" if row_index == 0 else "td"
+        output.append("</tr>")
 
-            cells.append(
-                f"<{tag}>{esc(text)}</{tag}>"
-            )
+    output.append("</table>")
+    output.append("</div>")
 
-        rows.append(
-            "<tr>"
-            + "".join(cells)
-            + "</tr>"
-        )
+    return "\n".join(output)
 
-    return f"""
-    <div class="document-table">
-        <table>
-            <tbody>
-                {"".join(rows)}
-            </tbody>
-        </table>
-    </div>
+
+def render_blocks(document: Document) -> str:
+    """
+    Render paragraphs and tables in their original document order.
+
+    Consecutive bullet paragraphs become one <ul>.
+    Consecutive numbered paragraphs become one <ol>.
     """
 
+    output: list[str] = []
 
-def document_title(document, fallback: str) -> str:
-    """
-    Try to determine a useful title from the document.
-    """
+    paragraphs = iter(document.paragraphs)
+    tables = iter(document.tables)
+
+    paragraph_map = {}
+    table_map = {}
 
     for paragraph in document.paragraphs:
+        paragraph_map[id(paragraph._p)] = paragraph
 
-        level = heading_level(
-            paragraph.style.name
-            if paragraph.style
-            else ""
+    for table in document.tables:
+        table_map[id(table._tbl)] = table
+
+    current_list: list[str] = []
+    current_list_type: str | None = None
+
+    def flush_list():
+        nonlocal current_list, current_list_type
+
+        if not current_list:
+            return
+
+        tag = current_list_type or "ul"
+
+        output.append(
+            f"<{tag}>\n"
+            + "\n".join(current_list)
+            + f"\n</{tag}>"
         )
 
-        if level == 1 and paragraph.text.strip():
-            return paragraph.text.strip()
+        current_list = []
+        current_list_type = None
 
-    return fallback
+    # Walk the actual Word body so paragraphs and tables stay ordered.
+    body = document.element.body
 
+    for element in body.iterchildren():
 
-# ============================================================
-# DOCUMENT EXTRACTION
-# ============================================================
-
-def extract_document(document):
-    """
-    Convert the DOCX document into ordered HTML fragments.
-
-    This intentionally keeps the original document order.
-    """
-
-    blocks = []
-
-    for item in document.element.body.iterchildren():
-
-        # ----------------------------------------------------
+        # ---------------------------------------------------------------
         # Paragraph
-        # ----------------------------------------------------
+        # ---------------------------------------------------------------
 
-        if item.tag.endswith("}p"):
+        if element.tag.endswith("}p"):
+            paragraph = paragraph_map.get(id(element))
 
-            for paragraph in document.paragraphs:
+            if paragraph is None:
+                continue
 
-                if paragraph._p is item:
+            text = paragraph.text.strip()
 
-                    rendered = paragraph_html(
-                        paragraph
-                    )
+            if not text:
+                flush_list()
+                continue
 
-                    if rendered:
-                        blocks.append(
-                            rendered
-                        )
+            style_name = paragraph.style.name if paragraph.style else ""
+            style_lower = style_name.lower()
 
-                    break
+            if "list bullet" in style_lower:
+                if current_list_type not in (None, "ul"):
+                    flush_list()
 
-        # ----------------------------------------------------
+                current_list_type = "ul"
+                current_list.append(
+                    f"<li>{escape(text)}</li>"
+                )
+                continue
+
+            if "list number" in style_lower:
+                if current_list_type not in (None, "ol"):
+                    flush_list()
+
+                current_list_type = "ol"
+                current_list.append(
+                    f"<li>{escape(text)}</li>"
+                )
+                continue
+
+            flush_list()
+            output.append(render_paragraph(paragraph))
+
+        # ---------------------------------------------------------------
         # Table
-        # ----------------------------------------------------
+        # ---------------------------------------------------------------
 
-        elif item.tag.endswith("}tbl"):
+        elif element.tag.endswith("}tbl"):
+            flush_list()
 
-            for table in document.tables:
+            table = table_map.get(id(element))
 
-                if table._tbl is item:
+            if table is not None:
+                output.append(render_table(table))
 
-                    blocks.append(
-                        table_html(table)
-                    )
+    flush_list()
 
-                    break
-
-    return blocks
+    return "\n".join(
+        block for block in output if block.strip()
+    )
 
 
-# ============================================================
-# HTML DOCUMENT
-# ============================================================
+# ---------------------------------------------------------------------------
+# HTML document
+# ---------------------------------------------------------------------------
 
-def build_html(
-    document,
+def render_html(
+    title: str,
     source: Path,
+    content: str,
 ) -> str:
+    """Build the complete Barkly HTML document."""
 
-    title = document_title(
-        document,
-        source.stem,
-    )
-
-    blocks = extract_document(
-        document
-    )
+    safe_title = escape(title)
+    safe_source = escape(str(source))
 
     return f"""<!DOCTYPE html>
 <html lang="en">
-
 <head>
-
-    <meta charset="UTF-8" />
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    />
-
-    <title>
-        {esc(title)} · BARKLY DOCS
-    </title>
-
-    <style>
-
-        :root {{
-            --bg: #080808;
-            --panel: #101010;
-            --panel-2: #151515;
-            --line: #262626;
-            --line-soft: #1d1d1d;
-            --text: #f2f2f2;
-            --muted: #9a9a9a;
-            --dim: #666;
-            --accent: #ff6b9d;
-            --accent-soft: rgba(255, 107, 157, 0.12);
-            --radius: 16px;
-        }}
-
-        * {{
-            box-sizing: border-box;
-        }}
-
-        html {{
-            scroll-behavior: smooth;
-        }}
-
-        body {{
-            margin: 0;
-            background: var(--bg);
-            color: var(--text);
-
-            font-family:
-                Inter,
-                ui-sans-serif,
-                system-ui,
-                -apple-system,
-                BlinkMacSystemFont,
-                "Segoe UI",
-                sans-serif;
-
-            line-height: 1.7;
-        }}
-
-        a {{
-            color: inherit;
-        }}
-
-        code,
-        pre,
-        .eyebrow,
-        .brand-meta {{
-            font-family:
-                "SFMono-Regular",
-                Consolas,
-                "Liberation Mono",
-                monospace;
-        }}
-
-        /* --------------------------------------------------
-           TOPBAR
-        -------------------------------------------------- */
-
-        .topbar {{
-            position: sticky;
-            top: 0;
-            z-index: 20;
-
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-
-            min-height: 68px;
-            padding: 0 28px;
-
-            background: rgba(8, 8, 8, 0.92);
-            border-bottom: 1px solid var(--line);
-
-            backdrop-filter: blur(18px);
-        }}
-
-        .brand {{
-            display: flex;
-            align-items: center;
-            gap: 12px;
-
-            font-weight: 800;
-            letter-spacing: -0.03em;
-        }}
-
-        .brand-mark {{
-            color: var(--accent);
-            font-size: 20px;
-        }}
-
-        .brand-meta {{
-            display: block;
-            margin-top: 1px;
-
-            color: var(--muted);
-            font-size: 9px;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-        }}
-
-        .topbar-status {{
-            color: var(--dim);
-
-            font-family: monospace;
-            font-size: 10px;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-        }}
-
-        /* --------------------------------------------------
-           PAGE
-        -------------------------------------------------- */
-
-        .page {{
-            width: min(1000px, calc(100% - 36px));
-            margin: 0 auto;
-        }}
-
-        .hero {{
-            padding: 100px 0 70px;
-        }}
-
-        .eyebrow {{
-            color: var(--accent);
-
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 0.16em;
-            text-transform: uppercase;
-        }}
-
-        .hero h1 {{
-            max-width: 900px;
-
-            margin: 14px 0 18px;
-
-            font-size:
-                clamp(48px, 8vw, 96px);
-
-            line-height: 0.92;
-            letter-spacing: -0.07em;
-        }}
-
-        .hero-description {{
-            max-width: 760px;
-
-            color: var(--muted);
-            font-size: 18px;
-        }}
-
-        .meta {{
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-
-            margin-top: 26px;
-        }}
-
-        .meta-pill {{
-            padding: 7px 10px;
-
-            border: 1px solid var(--line);
-            border-radius: 999px;
-
-            color: var(--muted);
-
-            font-family: monospace;
-            font-size: 10px;
-        }}
-
-        /* --------------------------------------------------
-           DOCUMENT
-        -------------------------------------------------- */
-
-        .document {{
-            padding: 40px;
-
-            background: var(--panel);
-            border: 1px solid var(--line);
-            border-radius: var(--radius);
-        }}
-
-        .document > h1 {{
-            margin-top: 0;
-        }}
-
-        .document h1,
-        .document h2,
-        .document h3,
-        .document h4 {{
-            scroll-margin-top: 100px;
-
-            line-height: 1.05;
-            letter-spacing: -0.04em;
-        }}
-
-        .document h1 {{
-            margin-top: 54px;
-            margin-bottom: 18px;
-
-            font-size: clamp(34px, 5vw, 56px);
-        }}
-
-        .document h2 {{
-            margin-top: 46px;
-            margin-bottom: 14px;
-
-            font-size: clamp(28px, 4vw, 42px);
-        }}
-
-        .document h3 {{
-            margin-top: 34px;
-            margin-bottom: 10px;
-
-            color: var(--accent);
-
-            font-size: 24px;
-        }}
-
-        .document h4 {{
-            margin-top: 26px;
-            margin-bottom: 8px;
-
-            color: var(--muted);
-            font-size: 18px;
-        }}
-
-        .document p {{
-            max-width: 820px;
-
-            margin: 0 0 18px;
-
-            color: #c4c4c4;
-            font-size: 15px;
-        }}
-
-        .document ul,
-        .document ol {{
-            max-width: 820px;
-
-            margin: 12px 0 22px;
-            padding-left: 26px;
-
-            color: #c4c4c4;
-        }}
-
-        .document li {{
-            margin: 6px 0;
-        }}
-
-        .document li::marker {{
-            color: var(--accent);
-        }}
-
-        /* --------------------------------------------------
-           TABLES
-        -------------------------------------------------- */
-
-        .document-table {{
-            overflow-x: auto;
-
-            margin: 26px 0;
-
-            border: 1px solid var(--line);
-            border-radius: 12px;
-        }}
-
-        table {{
-            width: 100%;
-            border-collapse: collapse;
-
-            min-width: 500px;
-        }}
-
-        th,
-        td {{
-            padding: 12px 14px;
-
-            border-bottom: 1px solid var(--line-soft);
-            border-right: 1px solid var(--line-soft);
-
-            text-align: left;
-            vertical-align: top;
-        }}
-
-        th {{
-            background: var(--panel-2);
-
-            color: var(--text);
-
-            font-family: monospace;
-            font-size: 10px;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-        }}
-
-        td {{
-            color: var(--muted);
-            font-size: 13px;
-        }}
-
-        tr:last-child td {{
-            border-bottom: 0;
-        }}
-
-        /* --------------------------------------------------
-           FOOTER
-        -------------------------------------------------- */
-
-        footer {{
-            padding: 60px 0 80px;
-
-            border-top: 1px solid var(--line);
-
-            color: var(--dim);
-
-            font-family: monospace;
-            font-size: 10px;
-        }}
-
-        footer strong {{
-            color: var(--text);
-        }}
-
-        /* --------------------------------------------------
-           MOBILE
-        -------------------------------------------------- */
-
-        @media (max-width: 700px) {{
-
-            .topbar {{
-                padding: 0 16px;
-            }}
-
-            .topbar-status {{
-                display: none;
-            }}
-
-            .page {{
-                width: min(100% - 24px, 1000px);
-            }}
-
-            .hero {{
-                padding-top: 70px;
-            }}
-
-            .document {{
-                padding: 22px;
-            }}
-
-        }}
-
-    </style>
-
+<meta charset="UTF-8">
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+>
+
+<title>{safe_title} — Barkly Docs</title>
+
+<style>
+
+:root {{
+    --bg: #090909;
+    --panel: #111111;
+    --panel-2: #151515;
+    --text: #f2f2f2;
+    --muted: #8d8d8d;
+    --line: #292929;
+    --accent: #ff4fa3;
+    --accent-soft: rgba(255, 79, 163, 0.12);
+}}
+
+* {{
+    box-sizing: border-box;
+}}
+
+html {{
+    scroll-behavior: smooth;
+}}
+
+body {{
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family:
+        Inter,
+        ui-sans-serif,
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+    line-height: 1.7;
+}}
+
+a {{
+    color: var(--accent);
+}}
+
+.topbar {{
+    position: sticky;
+    top: 0;
+    z-index: 20;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 18px 28px;
+
+    background: rgba(9, 9, 9, 0.92);
+    border-bottom: 1px solid var(--line);
+
+    backdrop-filter: blur(12px);
+}}
+
+.brand {{
+    color: var(--text);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+}}
+
+.brand-symbol {{
+    color: var(--accent);
+    margin-right: 8px;
+}}
+
+.status {{
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+}}
+
+.status-dot {{
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 7px;
+
+    border-radius: 50%;
+    background: var(--accent);
+}}
+
+.hero {{
+    position: relative;
+    overflow: hidden;
+
+    padding: 100px 28px 70px;
+
+    border-bottom: 1px solid var(--line);
+}}
+
+.hero::before {{
+    content: "";
+
+    position: absolute;
+    inset: 0;
+
+    background:
+        linear-gradient(
+            rgba(255, 79, 163, 0.04) 1px,
+            transparent 1px
+        ),
+        linear-gradient(
+            90deg,
+            rgba(255, 79, 163, 0.04) 1px,
+            transparent 1px
+        );
+
+    background-size: 40px 40px;
+
+    mask-image: linear-gradient(
+        to bottom,
+        black,
+        transparent
+    );
+}}
+
+.hero-inner {{
+    position: relative;
+
+    width: min(1100px, 100%);
+    margin: auto;
+}}
+
+.kicker {{
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.2em;
+}}
+
+.hero h1 {{
+    max-width: 900px;
+
+    margin: 18px 0;
+
+    font-size: clamp(42px, 8vw, 92px);
+    line-height: 0.95;
+    letter-spacing: -0.055em;
+}}
+
+.hero p {{
+    max-width: 700px;
+
+    color: var(--muted);
+    font-size: 17px;
+}}
+
+.source {{
+    margin-top: 28px;
+
+    color: #666;
+    font-family: monospace;
+    font-size: 11px;
+}}
+
+.document {{
+    width: min(1000px, calc(100% - 40px));
+
+    margin: 50px auto 100px;
+}}
+
+.document-card {{
+    padding: clamp(28px, 5vw, 60px);
+
+    background: var(--panel);
+
+    border: 1px solid var(--line);
+}}
+
+.document-card h1,
+.document-card h2,
+.document-card h3,
+.document-card h4 {{
+    color: var(--text);
+    line-height: 1.2;
+}}
+
+.document-card h1 {{
+    margin-top: 55px;
+    font-size: clamp(30px, 5vw, 48px);
+}}
+
+.document-card h2 {{
+    margin-top: 48px;
+    font-size: clamp(24px, 4vw, 36px);
+}}
+
+.document-card h3 {{
+    margin-top: 36px;
+    font-size: 25px;
+}}
+
+.document-card h4 {{
+    margin-top: 28px;
+    font-size: 20px;
+}}
+
+.document-card p {{
+    max-width: 850px;
+    color: #c8c8c8;
+}}
+
+.document-card ul,
+.document-card ol {{
+    max-width: 850px;
+    padding-left: 25px;
+    color: #c8c8c8;
+}}
+
+.document-card li {{
+    margin: 8px 0;
+}}
+
+.table-wrap {{
+    width: 100%;
+    overflow-x: auto;
+
+    margin: 30px 0;
+}}
+
+table {{
+    width: 100%;
+    min-width: 500px;
+
+    border-collapse: collapse;
+
+    background: var(--panel-2);
+}}
+
+th,
+td {{
+    padding: 14px 16px;
+
+    text-align: left;
+    vertical-align: top;
+
+    border: 1px solid var(--line);
+}}
+
+th {{
+    color: var(--accent);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}}
+
+td {{
+    color: #c8c8c8;
+}}
+
+footer {{
+    padding: 30px 28px;
+
+    border-top: 1px solid var(--line);
+
+    color: #666;
+    font-family: monospace;
+    font-size: 11px;
+    text-align: center;
+}}
+
+@media (max-width: 700px) {{
+
+    .topbar {{
+        padding: 15px 18px;
+    }}
+
+    .status {{
+        display: none;
+    }}
+
+    .hero {{
+        padding: 70px 20px 50px;
+    }}
+
+    .document {{
+        width: calc(100% - 24px);
+        margin-top: 25px;
+    }}
+
+    .document-card {{
+        padding: 24px 20px;
+    }}
+
+}}
+
+</style>
 </head>
 
 <body>
 
-    <header class="topbar">
+<header class="topbar">
 
-        <a class="brand" href="/">
+    <a class="brand" href="/">
+        <span class="brand-symbol">◆</span>
+        BARKLY LABS
+    </a>
 
-            <span class="brand-mark">
-                ◆
-            </span>
+    <div class="status">
+        <span class="status-dot"></span>
+        DOCUMENTATION
+    </div>
 
-            <span>
-                BARKLY DOCS
-
-                <span class="brand-meta">
-                    human-readable engineering reference
-                </span>
-            </span>
-
-        </a>
-
-        <span class="topbar-status">
-            DOCUMENT IMPORT
-        </span>
-
-    </header>
+</header>
 
 
-    <main class="page">
+<section class="hero">
 
-        <section class="hero">
+    <div class="hero-inner">
 
-            <div class="eyebrow">
-                BARKLY LABS · DOCUMENTATION
-            </div>
+        <div class="kicker">
+            BARKLY / KNOWLEDGE
+        </div>
 
-            <h1>
-                {esc(title)}
-            </h1>
+        <h1>
+            {safe_title}
+        </h1>
 
-            <p class="hero-description">
-                Imported from
-                <code>{esc(source.name)}</code>
-                and rendered through BARKLY DOCS.
-            </p>
+        <p>
+            Generated documentation produced by Barkly Docs.
+        </p>
 
-            <div class="meta">
+        <div class="source">
+            SOURCE: {safe_source}
+        </div>
 
-                <span class="meta-pill">
-                    DOCX
-                </span>
+    </div>
 
-                <span class="meta-pill">
-                    STRUCTURED DOCUMENT
-                </span>
-
-                <span class="meta-pill">
-                    HUMAN-READABLE
-                </span>
-
-            </div>
-
-        </section>
+</section>
 
 
-        <article class="document">
+<main class="document">
 
-            {"".join(blocks)}
+    <article class="document-card">
 
-        </article>
+        {content}
+
+    </article>
+
+</main>
 
 
-        <footer>
-
-            <strong>BARKLY DOCS</strong>
-
-            · Generated automatically.
-
-            <br />
-
-            Documentation is infrastructure.
-
-        </footer>
-
-    </main>
+<footer>
+    BARKLY DOCS · DOCUMENTATION IS INFRASTRUCTURE.
+</footer>
 
 </body>
-
 </html>
 """
 
 
-# ============================================================
-# CONVERSION
-# ============================================================
+# ---------------------------------------------------------------------------
+# Conversion
+# ---------------------------------------------------------------------------
 
-def convert_docx(
+def convert_file(
     source: Path,
-    output: Path,
-) -> None:
+    output_root: Path,
+    input_root: Path | None = None,
+) -> Path:
+    """Convert one DOCX file."""
 
-    source = source.resolve()
-    output = output.resolve()
+    document = Document(source)
 
-    if not source.exists():
-        raise FileNotFoundError(
-            f"DOCX file not found: {source}"
+    title = document_title(document, source)
+    content = render_blocks(document)
+
+    # ---------------------------------------------------------------
+    # Determine output directory.
+    #
+    # If converting a folder, preserve its relative structure.
+    # ---------------------------------------------------------------
+
+    if input_root is not None:
+        relative = source.relative_to(input_root)
+        output_dir = output_root / relative.parent / slugify(
+            source.stem
         )
+    else:
+        output_dir = output_root / slugify(source.stem)
 
-    if source.suffix.lower() != ".docx":
-        raise ValueError(
-            "Input file must be a .docx document."
-        )
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    document = Document(
-        str(source)
-    )
-
-    output.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    html_text = build_html(
-        document,
-        source,
-    )
-
-    output_file = output / "index.html"
+    output_file = output_dir / "index.html"
 
     output_file.write_text(
-        html_text,
+        render_html(
+            title=title,
+            source=source,
+            content=content,
+        ),
         encoding="utf-8",
     )
 
-    print()
-    print("BARKLY DOCS · DOCX")
-    print("------------------")
-    print(f"Source: {source}")
-    print(f"Output: {output_file}")
-    print()
-    print("Document converted successfully.")
+    return output_file
 
 
-# ============================================================
+def find_docx_files(root: Path) -> list[Path]:
+    """Recursively discover DOCX files."""
+
+    return sorted(
+        path
+        for path in root.rglob("*.docx")
+        if path.is_file()
+        and not path.name.startswith("~$")
+    )
+
+
+# ---------------------------------------------------------------------------
 # CLI
-# ============================================================
+# ---------------------------------------------------------------------------
 
-def build_parser():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "BARKLY DOCS — DOCX to HTML converter."
+            "Convert DOCX documents into Barkly-style HTML "
+            "documentation."
         )
     )
 
     parser.add_argument(
-        "source",
-        help="Input .docx file.",
+        "input",
+        type=Path,
+        help="DOCX file or folder containing DOCX files",
     )
 
     parser.add_argument(
         "--output",
-        default="docs",
-        help="Output directory.",
+        "-o",
+        type=Path,
+        default=Path("docs"),
+        help="Output directory (default: ./docs)",
     )
 
-    return parser
-
-
-def main():
-
-    parser = build_parser()
     args = parser.parse_args()
 
-    convert_docx(
-        source=Path(args.source),
-        output=Path(args.output),
+    input_path = args.input.resolve()
+    output_root = args.output.resolve()
+
+    if not input_path.exists():
+        raise SystemExit(
+            f"ERROR: Input does not exist: {input_path}"
+        )
+
+    print()
+    print("BARKLY DOCS / DOCX CONVERTER")
+    print("=" * 45)
+    print()
+
+    # ------------------------------------------------------------------
+    # Single file
+    # ------------------------------------------------------------------
+
+    if input_path.is_file():
+
+        if input_path.suffix.lower() != ".docx":
+            raise SystemExit(
+                "ERROR: Input file must be a .docx document."
+            )
+
+        print(f"INPUT : {input_path}")
+        print(f"OUTPUT: {output_root}")
+        print()
+
+        output_file = convert_file(
+            input_path,
+            output_root,
+        )
+
+        print(f"✓ {input_path.name}")
+        print(f"  → {output_file}")
+        print()
+        print("DONE.")
+        return
+
+    # ------------------------------------------------------------------
+    # Folder
+    # ------------------------------------------------------------------
+
+    if input_path.is_dir():
+
+        files = find_docx_files(input_path)
+
+        print(f"INPUT : {input_path}")
+        print(f"OUTPUT: {output_root}")
+        print()
+        print(f"FOUND {len(files)} DOCX DOCUMENT(S)")
+        print()
+
+        if not files:
+            print("No .docx files found.")
+            return
+
+        converted = 0
+        failed = 0
+
+        for index, source in enumerate(files, start=1):
+
+            print(
+                f"[{index}/{len(files)}] "
+                f"{source.relative_to(input_path)}"
+            )
+
+            try:
+
+                output_file = convert_file(
+                    source,
+                    output_root,
+                    input_root=input_path,
+                )
+
+                print(
+                    f"        → {output_file}"
+                )
+
+                converted += 1
+
+            except Exception as exc:
+
+                print(
+                    f"        ERROR: {exc}"
+                )
+
+                failed += 1
+
+        print()
+        print("=" * 45)
+        print("BARKLY DOCS COMPLETE")
+        print()
+        print(f"Converted : {converted}")
+        print(f"Failed    : {failed}")
+        print(f"Output    : {output_root}")
+        print()
+
+        return
+
+    raise SystemExit(
+        "ERROR: Input must be a DOCX file or directory."
     )
 
 
