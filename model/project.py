@@ -67,7 +67,7 @@ class Project:
 
     def add_file(self, node: "FileNode") -> None:
         self.files.append(node)
-        
+
     def add_module(self, node: "ModuleNode") -> None:
         self.modules.append(node)
 
@@ -88,6 +88,35 @@ class Project:
 
     def add_relationship(self, node: "RelationshipNode") -> None:
         self.relationships.append(node)
+
+
+
+    def add_component(self, node: "ComponentNode") -> None:
+        self.components.append(node)
+
+    def add_interface(self, node: "InterfaceNode") -> None:
+        self.interfaces.append(node)
+
+    def add_route(self, node: "RouteNode") -> None:
+        self.routes.append(node)
+
+    def add_endpoint(self, node: "EndpointNode") -> None:
+        self.endpoints.append(node)
+
+    def add_export(self, node: "ExportNode") -> None:
+        self.exports.append(node)
+
+    def add_dependency(self, node: "DependencyNode") -> None:
+        self.dependencies.append(node)
+
+    def add_configuration(self, node: "ConfigurationNode") -> None:
+        self.configurations.append(node)
+
+    def add_test(self, node: "TestNode") -> None:
+        self.tests.append(node)
+
+    def add_documentation(self, node: "DocumentationNode") -> None:
+        self.documentation.append(node)
     
 
     def summary(self) -> dict[str, int]:
