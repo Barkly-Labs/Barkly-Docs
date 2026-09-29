@@ -74,6 +74,9 @@ class Project:
     def add_function(self, node: "FunctionNode") -> None:
         self.functions.append(node)
 
+    def add_method(self, node: "MethodNode") -> None:
+        self.methods.append(node)
+
     def add_class(self, node: "ClassNode") -> None:
         self.classes.append(node)
 
