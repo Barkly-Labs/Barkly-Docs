@@ -67,7 +67,7 @@ class Project:
 
     def add_file(self, node: "FileNode") -> None:
         self.files.append(node)
-
+        
     def add_module(self, node: "ModuleNode") -> None:
         self.modules.append(node)
 
@@ -80,11 +80,15 @@ class Project:
     def add_class(self, node: "ClassNode") -> None:
         self.classes.append(node)
 
+    def add_variable(self, node: "VariableNode") -> None:
+        self.variables.append(node)
+
     def add_import(self, node: "ImportNode") -> None:
         self.imports.append(node)
 
     def add_relationship(self, node: "RelationshipNode") -> None:
         self.relationships.append(node)
+    
 
     def summary(self) -> dict[str, int]:
         """
