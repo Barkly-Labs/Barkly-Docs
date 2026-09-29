@@ -13,6 +13,7 @@ from pathlib import Path
 from analysis.discovery import ProjectDiscovery
 from readers.python import PythonReader
 from readers.rust import RustReader
+from readers.javascript import JavaScriptReader
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -59,6 +60,7 @@ def main() -> int:
     readers = [
         PythonReader(),
         RustReader(),
+        JavaScriptReader(),
     ]
 
     # --------------------------------------------------------
