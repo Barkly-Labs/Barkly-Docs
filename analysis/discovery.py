@@ -1,152 +1,195 @@
 """
 BARKLY DOCS
-Command Line Interface
+Project Discovery
 
-Initial project analysis command.
+Discovers source files in a project and sends each supported
+file to the appropriate Barkly Docs language reader.
 """
 
 from __future__ import annotations
 
-import argparse
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from analysis.discovery import ProjectDiscovery
-from readers.python import PythonReader
+from model.project import Project
+from readers.base import LanguageReader, ReaderResult
 
 
-def build_parser() -> argparse.ArgumentParser:
+@dataclass
+class DiscoveryResult:
     """
-    Build the Barkly Docs command-line parser.
-    """
-
-    parser = argparse.ArgumentParser(
-        prog="barkly-docs",
-        description=(
-            "Analyze a software project and build "
-            "the Barkly Project Model."
-        ),
-    )
-
-    parser.add_argument(
-        "project",
-        type=Path,
-        help="Path to the project to analyze.",
-    )
-
-    parser.add_argument(
-        "--name",
-        default=None,
-        help="Optional project name.",
-    )
-
-    return parser
-
-
-def main() -> int:
-    """
-    Run Barkly Docs.
+    Result of analyzing a project.
     """
 
-    parser = build_parser()
+    project: Project
 
-    args = parser.parse_args()
+    processed_files: list[Path] = field(default_factory=list)
+    skipped_files: list[Path] = field(default_factory=list)
 
-    # --------------------------------------------------------
-    # REGISTER READERS
-    # --------------------------------------------------------
+    warnings: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
-    readers = [
-        PythonReader(),
-    ]
-
-    # --------------------------------------------------------
-    # DISCOVER PROJECT
-    # --------------------------------------------------------
-
-    discovery = ProjectDiscovery(
-        readers=readers,
-    )
-
-    result = discovery.analyze(
-        root=args.project,
-        name=args.name,
-    )
-
-    project = result.project
-
-    # --------------------------------------------------------
-    # OUTPUT
-    # --------------------------------------------------------
-
-    print()
-    print("BARKLY DOCS")
-    print("=" * 50)
-    print()
-    print(f"Project: {project.name}")
-    print(f"Root:    {project.root}")
-    print()
-
-    print("PROJECT SUMMARY")
-    print("-" * 50)
-
-    for key, value in project.summary().items():
-        print(f"{key:20} {value}")
-
-    print()
-
-    print("DISCOVERY")
-    print("-" * 50)
-
-    print(
-        f"Processed files: "
-        f"{len(result.processed_files)}"
-    )
-
-    print(
-        f"Skipped files:   "
-        f"{len(result.skipped_files)}"
-    )
-
-    print(
-        f"Warnings:        "
-        f"{len(result.warnings)}"
-    )
-
-    print(
-        f"Errors:          "
-        f"{len(result.errors)}"
-    )
-
-    # --------------------------------------------------------
-    # WARNINGS
-    # --------------------------------------------------------
-
-    if result.warnings:
-
-        print()
-        print("WARNINGS")
-        print("-" * 50)
-
-        for warning in result.warnings:
-            print(f"⚠ {warning}")
-
-    # --------------------------------------------------------
-    # ERRORS
-    # --------------------------------------------------------
-
-    if result.errors:
-
-        print()
-        print("ERRORS")
-        print("-" * 50)
-
-        for error in result.errors:
-            print(f"✗ {error}")
-
-    print()
-
-    return 0 if not result.errors else 1
+    reader_results: list[ReaderResult] = field(default_factory=list)
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+class ProjectDiscovery:
+    """
+    Discovers files and coordinates language readers.
+    """
+
+    DEFAULT_IGNORED_DIRECTORIES = {
+        ".git",
+        ".github",
+        ".idea",
+        ".vscode",
+        "__pycache__",
+        "node_modules",
+        "venv",
+        ".venv",
+        "env",
+        ".env",
+        "dist",
+        "build",
+        "coverage",
+        ".pytest_cache",
+        ".mypy_cache",
+        ".ruff_cache",
+    }
+
+    def __init__(
+        self,
+        readers: list[LanguageReader],
+        ignored_directories: set[str] | None = None,
+    ) -> None:
+        self.readers = readers
+
+        self.ignored_directories = (
+            ignored_directories
+            if ignored_directories is not None
+            else set(self.DEFAULT_IGNORED_DIRECTORIES)
+        )
+
+    def analyze(
+        self,
+        root: Path,
+        name: str | None = None,
+    ) -> DiscoveryResult:
+        """
+        Discover and analyze a project.
+        """
+
+        root = root.resolve()
+
+        if not root.exists():
+            raise FileNotFoundError(
+                f"Project path does not exist: {root}"
+            )
+
+        if not root.is_dir():
+            raise NotADirectoryError(
+                f"Project path is not a directory: {root}"
+            )
+
+        project = Project(
+            name=name or root.name,
+            root=str(root),
+        )
+
+        result = DiscoveryResult(
+            project=project,
+        )
+
+        for path in self._discover_files(root):
+
+            reader = self._find_reader(path)
+
+            if reader is None:
+                result.skipped_files.append(path)
+                continue
+
+            try:
+                reader_result = reader.read(
+                    path,
+                    project,
+                )
+
+                result.reader_results.append(
+                    reader_result
+                )
+
+                if reader_result.success:
+                    result.processed_files.append(path)
+                else:
+                    result.errors.extend(
+                        reader_result.errors
+                    )
+
+                result.warnings.extend(
+                    reader_result.warnings
+                )
+
+            except Exception as exc:
+                result.errors.append(
+                    f"{path}: reader "
+                    f"{reader.language} failed: {exc}"
+                )
+
+        return result
+
+    def _discover_files(
+        self,
+        root: Path,
+    ) -> list[Path]:
+        """
+        Recursively discover files while respecting
+        ignored directories.
+        """
+
+        files: list[Path] = []
+
+        for path in root.rglob("*"):
+
+            if not path.is_file():
+                continue
+
+            if self._is_ignored(path, root):
+                continue
+
+            files.append(path)
+
+        files.sort()
+
+        return files
+
+    def _is_ignored(
+        self,
+        path: Path,
+        root: Path,
+    ) -> bool:
+        """
+        Determine whether a path is inside an ignored directory.
+        """
+
+        try:
+            relative = path.relative_to(root)
+        except ValueError:
+            return True
+
+        return any(
+            part in self.ignored_directories
+            for part in relative.parts
+        )
+
+    def _find_reader(
+        self,
+        path: Path,
+    ) -> LanguageReader | None:
+        """
+        Find the first reader capable of reading a file.
+        """
+
+        for reader in self.readers:
+            if reader.can_read(path):
+                return reader
+
+        return None
