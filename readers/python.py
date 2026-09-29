@@ -1,5 +1,5 @@
 """
-Barkly Docs
+BARKLY DOCS
 Python Reader
 
 Static Python source analysis using Python's standard-library AST.
@@ -11,8 +11,7 @@ IMPORTANT:
 - Source code is never imported.
 - Source code is never executed.
 - Analysis is deterministic.
-- Syntax errors are recorded as warnings instead of crashing
-  the entire project analysis.
+- Syntax errors are reported through ReaderResult.
 """
 
 from __future__ import annotations
@@ -32,7 +31,7 @@ from ..model.project import (
     VariableNode,
 )
 
-from .base import LanguageReader
+from .base import LanguageReader, ReaderResult
 
 
 class PythonReader(LanguageReader):
@@ -42,90 +41,62 @@ class PythonReader(LanguageReader):
 
     language = "Python"
     extensions = (".py", ".pyw")
+    version = "0.1.0"
 
     # ============================================================
-    # READER INTERFACE
+    # READ
     # ============================================================
-
-    def can_read(self, path: str | Path) -> bool:
-        """
-        Return True when this reader supports the supplied file.
-        """
-        return Path(path).suffix.lower() in self.extensions
-
-    def analyze(
-        self,
-        path: str | Path,
-        project: Project | None = None,
-    ) -> Project:
-        """
-        Analyze a Python file.
-
-        If a Project is supplied, discovered structures are added
-        to that project.
-
-        Otherwise a new Project is created.
-        """
-        source_path = Path(path)
-
-        if project is None:
-            project = Project(
-                name=source_path.stem,
-                root=str(source_path.parent),
-            )
-
-        self.read(source_path, project)
-
-        return project
 
     def read(
         self,
-        path: str | Path,
+        path: Path,
         project: Project,
-    ) -> FileNode:
+    ) -> ReaderResult:
         """
-        Read and statically analyze one Python file.
+        Analyze one Python source file and add the discovered
+        structures to the supplied Project.
+
+        The target Python project is NEVER imported or executed.
         """
-        source_path = Path(path)
+
+        path = Path(path)
+
+        warnings: list[str] = []
+        errors: list[str] = []
 
         # --------------------------------------------------------
         # READ SOURCE
         # --------------------------------------------------------
 
         try:
-            source = source_path.read_text(encoding="utf-8")
-
-        except UnicodeDecodeError:
-            source = source_path.read_text(
-                encoding="utf-8",
-                errors="replace",
-            )
-
-            project.warnings.append(
-                f"Python reader used replacement decoding for "
-                f"{source_path}"
-            )
+            source = self.read_text(path)
 
         except OSError as exc:
-            project.warnings.append(
-                f"Could not read Python file {source_path}: {exc}"
+            error = (
+                f"Could not read Python file "
+                f"{path}: {exc}"
             )
 
-            file_node = FileNode(
-                path=str(source_path),
-                language=self.language,
+            errors.append(error)
+
+            return ReaderResult(
+                success=False,
+                project=project,
+                warnings=warnings,
+                errors=errors,
+                metadata={
+                    "language": self.language,
+                    "reader_version": self.version,
+                    "path": str(path),
+                },
             )
-
-            project.add_file(file_node)
-
-            return file_node
 
         # --------------------------------------------------------
         # FILE NODE
         # --------------------------------------------------------
 
         file_node = FileNode(
-            path=str(source_path),
+            path=str(path),
             language=self.language,
             size=len(source.encode("utf-8")),
         )
@@ -139,15 +110,20 @@ class PythonReader(LanguageReader):
         try:
             tree = ast.parse(
                 source,
-                filename=str(source_path),
+                filename=str(path),
                 type_comments=True,
             )
 
         except SyntaxError as exc:
-            project.warnings.append(
-                f"Could not parse Python file {source_path}: "
-                f"{exc.msg} at line {exc.lineno}"
+            warning = (
+                f"Could not parse Python file "
+                f"{path}: {exc.msg}"
             )
+
+            if exc.lineno is not None:
+                warning += f" at line {exc.lineno}"
+
+            warnings.append(warning)
 
             file_node.metadata["parse_error"] = {
                 "message": exc.msg,
@@ -155,17 +131,28 @@ class PythonReader(LanguageReader):
                 "column": exc.offset,
             }
 
-            return file_node
+            return ReaderResult(
+                success=False,
+                project=project,
+                warnings=warnings,
+                errors=errors,
+                metadata={
+                    "language": self.language,
+                    "reader_version": self.version,
+                    "path": str(path),
+                    "parse_error": True,
+                },
+            )
 
         # --------------------------------------------------------
         # MODULE
         # --------------------------------------------------------
 
-        module_name = self._module_name(source_path)
+        module_name = self._module_name(path)
 
         module_node = ModuleNode(
             name=module_name,
-            path=str(source_path),
+            path=str(path),
             language=self.language,
             documentation=ast.get_docstring(tree),
             metadata={
@@ -183,14 +170,30 @@ class PythonReader(LanguageReader):
         # --------------------------------------------------------
 
         self._read_module_body(
-            tree.body,
-            source_path,
-            project,
-            file_node,
-            module_node,
+            nodes=tree.body,
+            path=path,
+            project=project,
+            file_node=file_node,
+            module_node=module_node,
         )
 
-        return file_node
+        # --------------------------------------------------------
+        # RESULT
+        # --------------------------------------------------------
+
+        return ReaderResult(
+            success=True,
+            project=project,
+            warnings=warnings,
+            errors=errors,
+            metadata={
+                "language": self.language,
+                "reader_version": self.version,
+                "path": str(path),
+                "parser": "python.ast",
+                "static_analysis": True,
+            },
+        )
 
     # ============================================================
     # MODULE
@@ -219,8 +222,8 @@ class PythonReader(LanguageReader):
                 (ast.FunctionDef, ast.AsyncFunctionDef),
             ):
                 function = self._function_node(
-                    node,
-                    path,
+                    node=node,
+                    path=path,
                     class_name=None,
                 )
 
@@ -233,12 +236,13 @@ class PythonReader(LanguageReader):
             # ----------------------------------------------------
 
             elif isinstance(node, ast.ClassDef):
+
                 class_node = self._class_node(
-                    node,
-                    path,
-                    project,
-                    file_node,
-                    module_node,
+                    node=node,
+                    path=path,
+                    project=project,
+                    file_node=file_node,
+                    module_node=module_node,
                 )
 
                 project.classes.append(class_node)
@@ -250,19 +254,21 @@ class PythonReader(LanguageReader):
             # ----------------------------------------------------
 
             elif isinstance(node, ast.Import):
+
                 self._read_import(
-                    node,
-                    path,
-                    project,
-                    module_node,
+                    node=node,
+                    path=path,
+                    project=project,
+                    module_node=module_node,
                 )
 
             elif isinstance(node, ast.ImportFrom):
+
                 self._read_import(
-                    node,
-                    path,
-                    project,
-                    module_node,
+                    node=node,
+                    path=path,
+                    project=project,
+                    module_node=module_node,
                 )
 
             # ----------------------------------------------------
@@ -273,10 +279,11 @@ class PythonReader(LanguageReader):
                 node,
                 (ast.Assign, ast.AnnAssign),
             ):
+
                 self._read_variables(
-                    node,
-                    path,
-                    project,
+                    node=node,
+                    path=path,
+                    project=project,
                 )
 
     # ============================================================
@@ -302,22 +309,42 @@ class PythonReader(LanguageReader):
             )
         ]
 
+        # --------------------------------------------------------
         # *args
+        # --------------------------------------------------------
+
         if node.args.vararg:
+
             parameters.append(
-                "*" + self._format_argument(node.args.vararg)
+                "*" + self._format_argument(
+                    node.args.vararg
+                )
             )
 
+        # --------------------------------------------------------
         # **kwargs
+        # --------------------------------------------------------
+
         if node.args.kwarg:
+
             parameters.append(
-                "**" + self._format_argument(node.args.kwarg)
+                "**" + self._format_argument(
+                    node.args.kwarg
+                )
             )
+
+        # --------------------------------------------------------
+        # DECORATORS
+        # --------------------------------------------------------
 
         decorators = [
             self._safe_unparse(decorator)
             for decorator in node.decorator_list
         ]
+
+        # --------------------------------------------------------
+        # RETURN TYPE
+        # --------------------------------------------------------
 
         return_type = (
             self._safe_unparse(node.returns)
@@ -325,9 +352,23 @@ class PythonReader(LanguageReader):
             else None
         )
 
+        # --------------------------------------------------------
+        # METADATA
+        # --------------------------------------------------------
+
         metadata: dict[str, Any] = {
             "node_type": type(node).__name__,
             "source": "static",
+            "line_start": getattr(
+                node,
+                "lineno",
+                None,
+            ),
+            "line_end": getattr(
+                node,
+                "end_lineno",
+                None,
+            ),
         }
 
         if node.type_comment:
@@ -338,6 +379,7 @@ class PythonReader(LanguageReader):
         # --------------------------------------------------------
 
         if class_name is not None:
+
             return MethodNode(
                 name=node.name,
                 path=str(path),
@@ -346,8 +388,16 @@ class PythonReader(LanguageReader):
                 return_type=return_type,
                 decorators=decorators,
                 documentation=ast.get_docstring(node),
-                line_start=getattr(node, "lineno", None),
-                line_end=getattr(node, "end_lineno", None),
+                line_start=getattr(
+                    node,
+                    "lineno",
+                    None,
+                ),
+                line_end=getattr(
+                    node,
+                    "end_lineno",
+                    None,
+                ),
                 async_function=isinstance(
                     node,
                     ast.AsyncFunctionDef,
@@ -368,8 +418,16 @@ class PythonReader(LanguageReader):
             return_type=return_type,
             decorators=decorators,
             documentation=ast.get_docstring(node),
-            line_start=getattr(node, "lineno", None),
-            line_end=getattr(node, "end_lineno", None),
+            line_start=getattr(
+                node,
+                "lineno",
+                None,
+            ),
+            line_end=getattr(
+                node,
+                "end_lineno",
+                None,
+            ),
             async_function=isinstance(
                 node,
                 ast.AsyncFunctionDef,
@@ -410,8 +468,16 @@ class PythonReader(LanguageReader):
             bases=bases,
             decorators=decorators,
             documentation=ast.get_docstring(node),
-            line_start=getattr(node, "lineno", None),
-            line_end=getattr(node, "end_lineno", None),
+            line_start=getattr(
+                node,
+                "lineno",
+                None,
+            ),
+            line_end=getattr(
+                node,
+                "end_lineno",
+                None,
+            ),
             metadata={
                 "node_type": "ClassDef",
                 "source": "static",
@@ -432,9 +498,10 @@ class PythonReader(LanguageReader):
                 child,
                 (ast.FunctionDef, ast.AsyncFunctionDef),
             ):
+
                 method = self._function_node(
-                    child,
-                    path,
+                    node=child,
+                    path=path,
                     class_name=node.name,
                 )
 
@@ -452,10 +519,16 @@ class PythonReader(LanguageReader):
                 child,
                 (ast.Assign, ast.AnnAssign),
             ):
-                attributes = self._assignment_names(child)
+
+                attributes = self._assignment_names(
+                    child
+                )
 
                 for name in attributes:
-                    class_node.attributes.append(name)
+
+                    class_node.attributes.append(
+                        name
+                    )
 
         return class_node
 
@@ -474,9 +547,14 @@ class PythonReader(LanguageReader):
         Convert Python imports into ImportNode objects.
         """
 
+        # --------------------------------------------------------
+        # import foo
+        # --------------------------------------------------------
+
         if isinstance(node, ast.Import):
 
             for alias in node.names:
+
                 imported_name = alias.name
 
                 import_node = ImportNode(
@@ -491,22 +569,31 @@ class PythonReader(LanguageReader):
                     },
                 )
 
-                project.add_import(import_node)
+                project.add_import(
+                    import_node
+                )
 
                 module_node.imports.append(
                     imported_name
                 )
 
+        # --------------------------------------------------------
+        # from foo import bar
+        # --------------------------------------------------------
+
         else:
+
             module_name = node.module or ""
 
             for alias in node.names:
+
                 imported_name = (
                     f"{'.' * node.level}"
                     f"{module_name}"
                 )
 
                 if alias.name != "*":
+
                     if imported_name:
                         imported_name += "."
 
@@ -525,7 +612,9 @@ class PythonReader(LanguageReader):
                     },
                 )
 
-                project.add_import(import_node)
+                project.add_import(
+                    import_node
+                )
 
                 module_node.imports.append(
                     imported_name
@@ -542,7 +631,7 @@ class PythonReader(LanguageReader):
         project: Project,
     ) -> None:
         """
-        Convert meaningful Python assignments into VariableNodes.
+        Convert Python assignments into VariableNodes.
         """
 
         names = self._assignment_names(node)
@@ -550,29 +639,46 @@ class PythonReader(LanguageReader):
         annotation = None
         value = None
 
+        # --------------------------------------------------------
+        # Annotated assignment
+        # --------------------------------------------------------
+
         if isinstance(node, ast.AnnAssign):
+
             annotation = self._safe_unparse(
                 node.annotation
             )
 
             if node.value is not None:
+
                 value = self._safe_unparse(
                     node.value
                 )
 
+        # --------------------------------------------------------
+        # Normal assignment
+        # --------------------------------------------------------
+
         elif isinstance(node, ast.Assign):
+
             if node.value is not None:
+
                 value = self._safe_unparse(
                     node.value
                 )
+
+        # --------------------------------------------------------
+        # CREATE VARIABLES
+        # --------------------------------------------------------
 
         for name in names:
 
-            # Python convention:
-            # ALL_CAPS names are treated as constants.
             constant = (
                 name.isupper()
-                and any(character.isalpha() for character in name)
+                and any(
+                    character.isalpha()
+                    for character in name
+                )
             )
 
             project.variables.append(
@@ -583,7 +689,11 @@ class PythonReader(LanguageReader):
                     type=annotation,
                     value=value,
                     constant=constant,
-                    line=getattr(node, "lineno", None),
+                    line=getattr(
+                        node,
+                        "lineno",
+                        None,
+                    ),
                     metadata={
                         "source": "static",
                     },
@@ -602,27 +712,48 @@ class PythonReader(LanguageReader):
         Extract variable names from an assignment.
         """
 
-        targets: list[ast.expr] = []
-
         if isinstance(node, ast.Assign):
+
             targets = node.targets
 
-        elif isinstance(node, ast.AnnAssign):
+        else:
+
             targets = [node.target]
 
         names: list[str] = []
 
         for target in targets:
 
-            if isinstance(target, ast.Name):
-                names.append(target.id)
+            if isinstance(
+                target,
+                ast.Name,
+            ):
 
-            elif isinstance(target, (ast.Tuple, ast.List)):
+                names.append(
+                    target.id
+                )
+
+            elif isinstance(
+                target,
+                (ast.Tuple, ast.List),
+            ):
+
                 for element in target.elts:
-                    if isinstance(element, ast.Name):
-                        names.append(element.id)
+
+                    if isinstance(
+                        element,
+                        ast.Name,
+                    ):
+
+                        names.append(
+                            element.id
+                        )
 
         return names
+
+    # ============================================================
+    # ARGUMENT FORMATTING
+    # ============================================================
 
     def _format_argument(
         self,
@@ -630,7 +761,7 @@ class PythonReader(LanguageReader):
     ) -> str:
         """
         Format a Python function parameter while preserving
-        its annotation when available.
+        its annotation.
         """
 
         name = argument.arg
@@ -644,14 +775,18 @@ class PythonReader(LanguageReader):
 
         return f"{name}: {annotation}"
 
+    # ============================================================
+    # SAFE AST UNPARSE
+    # ============================================================
+
     def _safe_unparse(
         self,
         node: ast.AST,
     ) -> str:
         """
-        Convert an AST expression back into readable source.
+        Convert an AST node back into readable source text.
 
-        ast.unparse is deterministic and does not execute code.
+        ast.unparse() does not execute the target code.
         """
 
         try:
@@ -659,6 +794,10 @@ class PythonReader(LanguageReader):
 
         except Exception:
             return "<unavailable>"
+
+    # ============================================================
+    # MODULE NAME
+    # ============================================================
 
     def _module_name(
         self,
