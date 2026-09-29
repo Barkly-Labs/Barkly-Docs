@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..model.project import Project
+from model.project import Project
 
 
 # ============================================================

@@ -10,8 +10,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from ..analysis.discovery import ProjectDiscovery
-from ..readers.python import PythonReader
+from analysis.discovery import ProjectDiscovery
+from readers.python import PythonReader
 
 
 def build_parser() -> argparse.ArgumentParser:

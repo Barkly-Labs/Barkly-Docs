@@ -20,7 +20,7 @@ import ast
 from pathlib import Path
 from typing import Any
 
-from ..model.project import (
+from model.project import (
     ClassNode,
     FileNode,
     FunctionNode,
