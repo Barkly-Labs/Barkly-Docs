@@ -2247,3 +2247,118 @@ class JavaReader(LanguageReader):
             index += 1
 
         return "".join(result)
+    
+
+    def _strip_java_comments(self, source: str) -> str:
+
+        """
+        Remove Java comments while preserving strings, character literals,
+        and line structure.
+
+        Static analysis only:
+        - does not compile Java
+        - does not execute Java
+        - preserves newlines so line numbers remain stable
+        """
+
+        result = []
+        i = 0
+        n = len(source)
+
+        in_string = False
+        in_char = False
+        in_line_comment = False
+        in_block_comment = False
+        escaped = False
+
+        while i < n:
+            ch = source[i]
+            nxt = source[i + 1] if i + 1 < n else ""
+
+            if in_line_comment:
+                if ch == "\n":
+                    in_line_comment = False
+                    result.append("\n")
+                else:
+                    result.append(" ")
+                i += 1
+                continue
+
+            if in_block_comment:
+                if ch == "*" and nxt == "/":
+                    result.append(" ")
+                    result.append(" ")
+                    i += 2
+                    in_block_comment = False
+                    continue
+
+                if ch == "\n":
+                    result.append("\n")
+                else:
+                    result.append(" ")
+
+                i += 1
+                continue
+
+            if in_string:
+                result.append(ch)
+
+                if escaped:
+                    escaped = False
+                elif ch == "\\":
+                    escaped = True
+                elif ch == '"':
+                    in_string = False
+
+                i += 1
+                continue
+
+            if in_char:
+                result.append(ch)
+
+                if escaped:
+                    escaped = False
+                elif ch == "\\":
+                    escaped = True
+                elif ch == "'":
+                    in_char = False
+
+                i += 1
+                continue
+
+            # Start // comment
+            if ch == "/" and nxt == "/":
+                result.append(" ")
+                result.append(" ")
+                i += 2
+                in_line_comment = True
+                continue
+
+            # Start /* ... */ comment
+            if ch == "/" and nxt == "*":
+                result.append(" ")
+                result.append(" ")
+                i += 2
+                in_block_comment = True
+                continue
+
+            # Start string
+            if ch == '"':
+                result.append(ch)
+                in_string = True
+                escaped = False
+                i += 1
+                continue
+
+            # Start character literal
+            if ch == "'":
+                result.append(ch)
+                in_char = True
+                escaped = False
+                i += 1
+                continue
+
+            result.append(ch)
+            i += 1
+
+        return "".join(result)

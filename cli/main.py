@@ -15,6 +15,7 @@ from readers.python import PythonReader
 from readers.rust import RustReader
 from readers.javascript import JavaScriptReader
 from readers.ruby import RubyReader
+from readers.java import JavaReader
 
 def build_parser() -> argparse.ArgumentParser:
     """
@@ -62,6 +63,7 @@ def main() -> int:
         RustReader(),
         JavaScriptReader(),
         RubyReader(),
+        JavaReader(),
     ]
 
     # --------------------------------------------------------
