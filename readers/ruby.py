@@ -1,35 +1,33 @@
 """
 BARKLY DOCS
-
 Ruby Reader
 
-Static Ruby source reader for Barkly Docs.
+Static structural reader for Ruby source files.
 
-This reader does not execute Ruby code. It extracts
-structural information from Ruby source files and maps
-that information into the Barkly Project Model.
+This reader does NOT execute Ruby code.
 
-Design principle:
+It translates Ruby source into the common Barkly Project Model:
 
     Ruby Source
-
         ↓
-
-    Ruby Reader
-
+    RubyReader
         ↓
-
     Barkly Project Model
-
         ↓
+    Documentation / Graph / Website
 
-    Documentation / Graph / Website / CYN-X
+Supported file types:
+
+    .rb
+    .rake
+    .gemspec
 """
 
 from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 from model.project import (
     ClassNode,
@@ -43,1545 +41,1770 @@ from model.project import (
     RelationshipNode,
     VariableNode,
 )
+
 from readers.base import LanguageReader, ReaderResult
 
 
 class RubyReader(LanguageReader):
     """
-    Static reader for Ruby source files.
-
-    Supported:
-
-        .rb
-        .rake
-        .gemspec
-
-    This reader is intentionally static.
-
-    It does not:
-
-        - execute Ruby
-        - load Ruby files
-        - require gems
-        - invoke Bundler
-        - instantiate application objects
-        - require a Ruby runtime
-
-    It extracts structural information from source text and
-    maps that information into the Barkly Project Model.
+    Static structural reader for Ruby source files.
     """
 
     language = "Ruby"
-    extensions = (".rb", ".rake", ".gemspec")
-    version = "0.1.0"
 
-    # ================================================================
-    # READER
-    # ================================================================
+    extensions = (
+        ".rb",
+        ".rake",
+        ".gemspec",
+    )
+
+    version = "0.2.0"
+
+    # ========================================================
+    # REGEX
+    # ========================================================
+
+    _REQUIRE_RE = re.compile(
+        r"""^\s*require\s+(?P<target>['"])(?P<name>.+?)(?P=target)\s*(?:#.*)?$"""
+    )
+
+    _REQUIRE_RELATIVE_RE = re.compile(
+        r"""^\s*require_relative\s+(?P<target>['"])(?P<name>.+?)(?P=target)\s*(?:#.*)?$"""
+    )
+
+    _CLASS_RE = re.compile(
+        r"""
+        ^\s*
+        class
+        \s+
+        (?P<name>[A-Za-z_][A-Za-z0-9_:]*)
+        (?:\s*<\s*(?P<superclass>[A-Za-z_][A-Za-z0-9_:]*(?:\s*::\s*[A-Za-z_][A-Za-z0-9_:]*)*))?
+        (?:\s*;\s*)?
+        $
+        """,
+        re.VERBOSE,
+    )
+
+    _MODULE_RE = re.compile(
+        r"""
+        ^\s*
+        module
+        \s+
+        (?P<name>[A-Za-z_][A-Za-z0-9_:]*)
+        (?:\s*;\s*)?
+        $
+        """,
+        re.VERBOSE,
+    )
+
+    # Ruby method names can include:
+    #
+    #   foo
+    #   foo?
+    #   foo!
+    #   foo=
+    #   foo?
+    #   foo!
+    #   initialize
+    #   self.foo
+    #   self.foo=
+    #   <=> 
+    #   ==
+    #   []
+    #   []=
+    #   +
+    #   -
+    #
+    _METHOD_RE = re.compile(
+        r"""
+        ^\s*
+        def
+        \s+
+        (?:
+            (?P<receiver>
+                self
+                |
+                [A-Za-z_][A-Za-z0-9_:]*
+            )
+            \.
+        )?
+        (?P<name>
+            [A-Za-z_][A-Za-z0-9_!?=]*
+            |
+            <=>|==|!=|<=|>=|<|>|\+|-|\*|/|%|&
+            |\[\]=|\[\]
+            |\+@|-@|~
+        )
+        (?P<params>\s*\(.*\))?
+        \s*
+        $
+        """,
+        re.VERBOSE,
+    )
+
+    _INCLUDE_RE = re.compile(
+        r"""
+        ^\s*
+        include
+        \s+
+        (?P<names>.+?)
+        \s*
+        $
+        """,
+        re.VERBOSE,
+    )
+
+    _EXTEND_RE = re.compile(
+        r"""
+        ^\s*
+        extend
+        \s+
+        (?P<names>.+?)
+        \s*
+        $
+        """,
+        re.VERBOSE,
+    )
+
+    _ATTRIBUTE_RE = re.compile(
+        r"""
+        ^\s*
+        (?P<kind>
+            attr_reader
+            |attr_writer
+            |attr_accessor
+        )
+        \s+
+        (?P<names>.+?)
+        \s*
+        $
+        """,
+        re.VERBOSE,
+    )
+
+    _CONSTANT_RE = re.compile(
+        r"""
+        ^\s*
+        (?P<name>[A-Z][A-Za-z0-9_]*(?:\s*=\s*.+)?)
+        \s*$
+        """,
+        re.VERBOSE,
+    )
+
+    _INSTANCE_VARIABLE_RE = re.compile(
+        r"""(?<![A-Za-z0-9_])@[A-Za-z_][A-Za-z0-9_]*"""
+    )
+
+    _CLASS_VARIABLE_RE = re.compile(
+        r"""(?<![A-Za-z0-9_])@@[A-Za-z_][A-Za-z0-9_]*"""
+    )
+
+    _LOCAL_VARIABLE_RE = re.compile(
+        r"""
+        \b
+        [a-z_][A-Za-z0-9_]*
+        \s*=
+        """,
+        re.VERBOSE,
+    )
+
+    _RUBYDOC_RE = re.compile(
+        r"""
+        ^\s*
+        \#\#\#?
+        (?:\s)?(?P<text>.*?)
+        \s*$
+        """,
+        re.VERBOSE,
+    )
+
+    # Ruby keywords which introduce nested structures that
+    # normally terminate with `end`.
+    _BLOCK_OPENERS = {
+        "if",
+        "unless",
+        "case",
+        "begin",
+        "while",
+        "until",
+        "for",
+        "class",
+        "module",
+        "def",
+    }
+
+    # These keywords can open a block with `do`.
+    _DO_BLOCK_RE = re.compile(
+        r"""
+        \b
+        (?:do)
+        (?:\s*\|.*?\|)?
+        \s*$
+        """,
+        re.VERBOSE,
+    )
+
+    # ========================================================
+    # PUBLIC API
+    # ========================================================
 
     def read(
         self,
         path: Path,
         project: Project,
     ) -> ReaderResult:
+        """
+        Analyze one Ruby source file.
+
+        The source is treated as data only.
+        Ruby code is never imported or executed.
+        """
 
         warnings: list[str] = []
         errors: list[str] = []
 
-        # ------------------------------------------------------------
-        # READ SOURCE
-        # ------------------------------------------------------------
-
         try:
             source = self.read_text(path)
-
         except Exception as exc:
             return ReaderResult(
                 success=False,
                 project=project,
-                warnings=[],
+                warnings=warnings,
                 errors=[
                     f"{path}: unable to read Ruby source: {exc}"
                 ],
                 metadata={
                     "language": self.language,
+                    "version": self.version,
+                },
+            )
+
+        try:
+            # ------------------------------------------------
+            # FILE
+            # ------------------------------------------------
+
+            file_node = FileNode(
+                path=str(path),
+                language=self.language,
+                size=len(source.encode("utf-8", errors="replace")),
+                metadata={
+                    "reader": self.__class__.__name__,
                     "reader_version": self.version,
                 },
             )
 
-        # ------------------------------------------------------------
-        # FILE
-        # ------------------------------------------------------------
+            project.add_file(file_node)
 
-        file_node = FileNode(
-            path=str(path),
-            language=self.language,
-            size=len(source.encode("utf-8")),
-        )
+            # ------------------------------------------------
+            # FILE MODULE
+            # ------------------------------------------------
 
-        project.add_file(file_node)
+            module_name = self._module_name(path)
 
-        # ------------------------------------------------------------
-        # MODULE
-        # ------------------------------------------------------------
-
-        module_name = self._module_name(path)
-
-        module_node = ModuleNode(
-            name=module_name,
-            path=str(path),
-            language=self.language,
-            documentation=self._extract_documentation(source),
-            metadata={
-                "ruby_file": True,
-                "reader": self.version,
-                "ruby_kind": "source_file",
-            },
-        )
-
-        project.add_module(module_node)
-
-        # ------------------------------------------------------------
-        # REQUIRES
-        # ------------------------------------------------------------
-
-        for match in self._REQUIRE_RE.finditer(source):
-
-            target = match.group("target")
-
-            line = self._line_number(
-                source,
-                match.start(),
-            )
-
-            import_node = ImportNode(
-                source_file=str(path),
-                target=target,
-                language=self.language,
-                names=[],
-                alias=None,
-                metadata={
-                    "ruby_statement": match.group(0).strip(),
-                    "line": line,
-                    "module_system": "ruby_require",
-                    "require_kind": "require",
-                },
-            )
-
-            project.add_import(import_node)
-
-            project.add_relationship(
-                RelationshipNode(
-                    source=str(path),
-                    target=target,
-                    kind="imports",
-                    source_file=str(path),
-                    metadata={
-                        "language": self.language,
-                        "require_kind": "require",
-                        "line": line,
-                    },
-                )
-            )
-
-        # ------------------------------------------------------------
-        # REQUIRE RELATIVE
-        # ------------------------------------------------------------
-
-        for match in self._REQUIRE_RELATIVE_RE.finditer(source):
-
-            target = match.group("target")
-
-            line = self._line_number(
-                source,
-                match.start(),
-            )
-
-            import_node = ImportNode(
-                source_file=str(path),
-                target=target,
-                language=self.language,
-                names=[],
-                alias=None,
-                metadata={
-                    "ruby_statement": match.group(0).strip(),
-                    "line": line,
-                    "module_system": "ruby_require",
-                    "require_kind": "require_relative",
-                    "relative": True,
-                },
-            )
-
-            project.add_import(import_node)
-
-            project.add_relationship(
-                RelationshipNode(
-                    source=str(path),
-                    target=target,
-                    kind="imports",
-                    source_file=str(path),
-                    metadata={
-                        "language": self.language,
-                        "require_kind": "require_relative",
-                        "relative": True,
-                        "line": line,
-                    },
-                )
-            )
-
-        # ------------------------------------------------------------
-        # MODULES
-        # ------------------------------------------------------------
-
-        structures = self._scan_structures(source)
-
-        for structure in structures:
-
-            if structure["kind"] != "module":
-                continue
-
-            name = structure["name"]
-
-            line_start = structure["line_start"]
-            line_end = structure["line_end"]
-
-            documentation = self._extract_documentation_before(
-                source,
-                structure["offset"],
-            )
-
-            node = ModuleNode(
-                name=name,
+            file_module = ModuleNode(
+                name=module_name,
                 path=str(path),
                 language=self.language,
-                documentation=documentation,
                 metadata={
-                    "ruby_kind": "module",
-                    "line_start": line_start,
-                    "line_end": line_end,
-                    "namespace": structure.get(
-                        "namespace"
-                    ),
+                    "kind": "ruby_file",
                 },
             )
 
-            project.add_module(node)
+            project.add_module(file_module)
 
-            # --------------------------------------------------------
-            # NESTED MODULE RELATIONSHIP
-            # --------------------------------------------------------
+            file_node.modules.append(module_name)
 
-            parent = structure.get("parent")
+            # ------------------------------------------------
+            # IMPORTS
+            # ------------------------------------------------
 
-            if parent:
-
-                project.add_relationship(
-                    RelationshipNode(
-                        source=f"{path}:{parent}",
-                        target=f"{path}:{name}",
-                        kind="contains",
-                        source_file=str(path),
-                        metadata={
-                            "language": self.language,
-                            "ruby_kind": "nested_module",
-                            "line": line_start,
-                        },
-                    )
-                )
-
-        # ------------------------------------------------------------
-        # CLASSES
-        # ------------------------------------------------------------
-
-        for structure in structures:
-
-            if structure["kind"] != "class":
-                continue
-
-            name = structure["name"]
-
-            line_start = structure["line_start"]
-            line_end = structure["line_end"]
-
-            body = structure.get("body", "")
-
-            bases = []
-
-            superclass = structure.get("superclass")
-
-            if superclass:
-                bases.append(superclass)
-
-            includes = self._extract_includes(body)
-            extends = self._extract_extends(body)
-
-            methods = self._extract_method_names(body)
-            attributes = self._extract_attributes(body)
-
-            documentation = self._extract_documentation_before(
+            imports = self._extract_imports(
                 source,
-                structure["offset"],
-            )
-
-            node = ClassNode(
-                name=name,
-                path=str(path),
-                language=self.language,
-                bases=bases,
-                decorators=[],
-                methods=methods,
-                attributes=attributes,
-                documentation=documentation,
-                line_start=line_start,
-                line_end=line_end,
-                metadata={
-                    "ruby_kind": "class",
-                    "line_start": line_start,
-                    "line_end": line_end,
-                    "namespace": structure.get(
-                        "namespace"
-                    ),
-                    "included_modules": includes,
-                    "extended_modules": extends,
-                },
-            )
-
-            project.add_class(node)
-
-            # --------------------------------------------------------
-            # INHERITANCE
-            # --------------------------------------------------------
-
-            for base in bases:
-
-                project.add_relationship(
-                    RelationshipNode(
-                        source=f"{path}:{name}",
-                        target=base,
-                        kind="inherits",
-                        source_file=str(path),
-                        metadata={
-                            "language": self.language,
-                            "ruby_kind": "class_inheritance",
-                            "line": line_start,
-                        },
-                    )
-                )
-
-            # --------------------------------------------------------
-            # INCLUDED MODULES
-            # --------------------------------------------------------
-
-            for included in includes:
-
-                project.add_relationship(
-                    RelationshipNode(
-                        source=f"{path}:{name}",
-                        target=included,
-                        kind="includes",
-                        source_file=str(path),
-                        metadata={
-                            "language": self.language,
-                            "ruby_kind": "include",
-                            "line": line_start,
-                        },
-                    )
-                )
-
-            # --------------------------------------------------------
-            # EXTENDED MODULES
-            # --------------------------------------------------------
-
-            for extended in extends:
-
-                project.add_relationship(
-                    RelationshipNode(
-                        source=f"{path}:{name}",
-                        target=extended,
-                        kind="extends",
-                        source_file=str(path),
-                        metadata={
-                            "language": self.language,
-                            "ruby_kind": "extend",
-                            "line": line_start,
-                        },
-                    )
-                )
-
-            # --------------------------------------------------------
-            # CLASS METHODS
-            # --------------------------------------------------------
-
-            method_structures = self._extract_methods(
-                body,
-                source,
-                structure["body_start"],
-                name,
                 path,
+                project,
+                file_module,
             )
 
-            for method in method_structures:
+            # ------------------------------------------------
+            # STRUCTURES
+            # ------------------------------------------------
 
-                method_node = MethodNode(
-                    name=method["name"],
+            structures = self._scan_structures(source)
+
+            classes = [
+                item
+                for item in structures
+                if item["kind"] == "class"
+            ]
+
+            modules = [
+                item
+                for item in structures
+                if item["kind"] == "module"
+            ]
+
+            # ------------------------------------------------
+            # MODULE NODES
+            # ------------------------------------------------
+
+            for structure in modules:
+                name = structure["name"]
+
+                node = ModuleNode(
+                    name=name,
                     path=str(path),
                     language=self.language,
-                    parameters=method["parameters"],
-                    return_type=None,
-                    decorators=[],
-                    documentation=method["documentation"],
-                    line_start=method["line_start"],
-                    line_end=method["line_end"],
-                    class_name=name,
+                    documentation=structure.get("documentation"),
                     metadata={
-                        "ruby_kind": method["ruby_kind"],
-                        "visibility": method["visibility"],
-                        "singleton": method["singleton"],
-                        "line_start": method["line_start"],
-                        "line_end": method["line_end"],
+                        "ruby_kind": "module",
+                        "line_start": structure["line_start"],
+                        "line_end": structure["line_end"],
+                        "parent": structure.get("parent"),
                     },
                 )
 
-                project.add_method(method_node)
+                project.add_module(node)
 
-                project.add_relationship(
-                    RelationshipNode(
-                        source=f"{path}:{name}",
-                        target=(
-                            f"{path}:{method['name']}"
-                        ),
-                        kind="contains",
-                        source_file=str(path),
-                        metadata={
-                            "language": self.language,
-                            "ruby_kind": "class_method",
-                            "line": method["line_start"],
-                        },
-                    )
+            # ------------------------------------------------
+            # CLASSES
+            # ------------------------------------------------
+
+            for structure in classes:
+                class_name = structure["name"]
+
+                methods = self._extract_methods(
+                    structure["body"],
+                    structure["body_start"],
+                    class_name,
                 )
 
-        # ------------------------------------------------------------
-        # TOP-LEVEL METHODS
-        # ------------------------------------------------------------
+                method_names = [
+                    method["name"]
+                    for method in methods
+                ]
 
-        top_level_methods = self._extract_top_level_methods(
-            source,
-            structures,
-            path,
-        )
+                includes = self._extract_includes(
+                    structure["body"]
+                )
 
-        for method in top_level_methods:
+                extends = self._extract_extends(
+                    structure["body"]
+                )
 
-            function_node = FunctionNode(
-                name=method["name"],
-                path=str(path),
-                language=self.language,
-                parameters=method["parameters"],
-                return_type=None,
-                decorators=[],
-                documentation=method["documentation"],
-                line_start=method["line_start"],
-                line_end=method["line_end"],
-                async_function=False,
+                attributes = self._extract_attributes(
+                    structure["body"]
+                )
+
+                class_node = ClassNode(
+                    name=class_name,
+                    path=str(path),
+                    language=self.language,
+                    bases=self._class_bases(structure),
+                    methods=method_names,
+                    attributes=attributes,
+                    documentation=structure.get("documentation"),
+                    line_start=structure["line_start"],
+                    line_end=structure["line_end"],
+                    metadata={
+                        "ruby_kind": "class",
+                        "superclass": structure.get("superclass"),
+                        "includes": includes,
+                        "extends": extends,
+                        "parent": structure.get("parent"),
+                    },
+                )
+
+                project.add_class(class_node)
+
+                file_node.classes.append(class_name)
+                file_module.classes.append(class_name)
+
+                # --------------------------------------------
+                # INHERITANCE
+                # --------------------------------------------
+
+                for base in self._class_bases(structure):
+                    project.add_relationship(
+                        RelationshipNode(
+                            source=class_name,
+                            target=base,
+                            kind="inherits",
+                            source_file=str(path),
+                        )
+                    )
+
+                # --------------------------------------------
+                # INCLUDE
+                # --------------------------------------------
+
+                for include_name in includes:
+                    project.add_relationship(
+                        RelationshipNode(
+                            source=class_name,
+                            target=include_name,
+                            kind="includes",
+                            source_file=str(path),
+                        )
+                    )
+
+                # --------------------------------------------
+                # EXTEND
+                # --------------------------------------------
+
+                for extend_name in extends:
+                    project.add_relationship(
+                        RelationshipNode(
+                            source=class_name,
+                            target=extend_name,
+                            kind="extends",
+                            source_file=str(path),
+                        )
+                    )
+
+                # --------------------------------------------
+                # METHODS
+                # --------------------------------------------
+
+                for method in methods:
+                    method_node = MethodNode(
+                        name=method["name"],
+                        path=str(path),
+                        language=self.language,
+                        parameters=self._parse_parameters(
+                            method.get("params", "")
+                        ),
+                        documentation=method.get("documentation"),
+                        line_start=method["line_start"],
+                        line_end=method["line_end"],
+                        class_name=class_name,
+                        metadata={
+                            "ruby_kind": "method",
+                            "visibility": method.get(
+                                "visibility",
+                                "public",
+                            ),
+                            "singleton": method.get(
+                                "singleton",
+                                False,
+                            ),
+                            "receiver": method.get(
+                                "receiver"
+                            ),
+                        },
+                    )
+
+                    project.add_method(method_node)
+
+                    project.add_relationship(
+                        RelationshipNode(
+                            source=class_name,
+                            target=method["name"],
+                            kind="contains",
+                            source_file=str(path),
+                        )
+                    )
+
+            # ------------------------------------------------
+            # TOP-LEVEL METHODS
+            # ------------------------------------------------
+
+            top_level_methods = self._extract_top_level_methods(
+                source
+            )
+
+            for function in top_level_methods:
+                function_node = FunctionNode(
+                    name=function["name"],
+                    path=str(path),
+                    language=self.language,
+                    parameters=self._parse_parameters(
+                        function.get("params", "")
+                    ),
+                    documentation=function.get("documentation"),
+                    line_start=function["line_start"],
+                    line_end=function["line_end"],
+                    metadata={
+                        "ruby_kind": "top_level_method",
+                        "visibility": function.get(
+                            "visibility",
+                            "public",
+                        ),
+                        "singleton": function.get(
+                            "singleton",
+                            False,
+                        ),
+                    },
+                )
+
+                project.add_function(function_node)
+
+                file_node.functions.append(
+                    function["name"]
+                )
+
+                file_module.functions.append(
+                    function["name"]
+                )
+
+            # ------------------------------------------------
+            # VARIABLES / CONSTANTS
+            # ------------------------------------------------
+
+            self._extract_variables(
+                source,
+                path,
+                project,
+            )
+
+            # ------------------------------------------------
+            # DOCUMENTATION
+            # ------------------------------------------------
+
+            self._extract_documentation(
+                source,
+                path,
+                project,
+            )
+
+            # ------------------------------------------------
+            # FILE METADATA
+            # ------------------------------------------------
+
+            file_node.metadata.update(
+                {
+                    "ruby_version": "unknown",
+                    "classes": [
+                        structure["name"]
+                        for structure in classes
+                    ],
+                    "modules": [
+                        structure["name"]
+                        for structure in modules
+                    ],
+                    "imports": [
+                        item["name"]
+                        for item in imports
+                    ],
+                    "parser": "static-ruby-structural-scanner",
+                }
+            )
+
+            return ReaderResult(
+                success=True,
+                project=project,
+                warnings=warnings,
+                errors=errors,
                 metadata={
-                    "ruby_kind": "top_level_method",
-                    "singleton": method["singleton"],
-                    "visibility": method["visibility"],
+                    "language": self.language,
+                    "version": self.version,
+                    "parser": "static-ruby-structural-scanner",
+                    "static_analysis": True,
+                    "ruby_version": "unknown",
+                    "classes": len(classes),
+                    "modules": len(modules),
+                    "top_level_functions": len(
+                        top_level_methods
+                    ),
                 },
             )
 
-            project.add_function(function_node)
-
-        # ------------------------------------------------------------
-        # CONSTANTS
-        # ------------------------------------------------------------
-
-        for match in self._CONSTANT_RE.finditer(source):
-
-            name = match.group("name")
-            value = match.group("value")
-
-            line = self._line_number(
-                source,
-                match.start(),
+        except Exception as exc:
+            errors.append(
+                f"{path}: Ruby structural analysis failed: {exc}"
             )
 
-            project.add_variable(
-                VariableNode(
-                    name=name,
-                    path=str(path),
-                    language=self.language,
-                    type=None,
-                    value=(
-                        value.strip()
-                        if value
-                        else None
-                    ),
-                    constant=True,
-                    line=line,
-                    metadata={
-                        "ruby_kind": "constant",
-                        "declaration": "constant",
-                    },
-                )
+            return ReaderResult(
+                success=False,
+                project=project,
+                warnings=warnings,
+                errors=errors,
+                metadata={
+                    "language": self.language,
+                    "version": self.version,
+                },
             )
 
-        # ------------------------------------------------------------
-        # INSTANCE VARIABLES
-        # ------------------------------------------------------------
+    # ========================================================
+    # STRUCTURE SCANNER
+    # ========================================================
 
-        for match in self._INSTANCE_VARIABLE_RE.finditer(
-            source
-        ):
-
-            name = match.group("name")
-            value = match.group("value")
-
-            line = self._line_number(
-                source,
-                match.start(),
-            )
-
-            project.add_variable(
-                VariableNode(
-                    name=name,
-                    path=str(path),
-                    language=self.language,
-                    type=None,
-                    value=(
-                        value.strip()
-                        if value
-                        else None
-                    ),
-                    constant=False,
-                    line=line,
-                    metadata={
-                        "ruby_kind": "instance_variable",
-                        "scope": "instance",
-                    },
-                )
-            )
-
-        # ------------------------------------------------------------
-        # CLASS VARIABLES
-        # ------------------------------------------------------------
-
-        for match in self._CLASS_VARIABLE_RE.finditer(
-            source
-        ):
-
-            name = match.group("name")
-            value = match.group("value")
-
-            line = self._line_number(
-                source,
-                match.start(),
-            )
-
-            project.add_variable(
-                VariableNode(
-                    name=name,
-                    path=str(path),
-                    language=self.language,
-                    type=None,
-                    value=(
-                        value.strip()
-                        if value
-                        else None
-                    ),
-                    constant=False,
-                    line=line,
-                    metadata={
-                        "ruby_kind": "class_variable",
-                        "scope": "class",
-                    },
-                )
-            )
-
-        # ------------------------------------------------------------
-        # LOCAL VARIABLES
-        # ------------------------------------------------------------
-
-        for match in self._LOCAL_VARIABLE_RE.finditer(
-            source
-        ):
-
-            name = match.group("name")
-            value = match.group("value")
-
-            line = self._line_number(
-                source,
-                match.start(),
-            )
-
-            project.add_variable(
-                VariableNode(
-                    name=name,
-                    path=str(path),
-                    language=self.language,
-                    type=None,
-                    value=(
-                        value.strip()
-                        if value
-                        else None
-                    ),
-                    constant=False,
-                    line=line,
-                    metadata={
-                        "ruby_kind": "local_variable",
-                        "scope": "local",
-                    },
-                )
-            )
-
-        # ------------------------------------------------------------
-        # DOCUMENTATION
-        # ------------------------------------------------------------
-
-        for match in self._RUBYDOC_RE.finditer(source):
-
-            documentation = self._clean_rubydoc(
-                match.group("doc")
-            )
-
-            if not documentation:
-                continue
-
-            line = self._line_number(
-                source,
-                match.start(),
-            )
-
-            project.add_documentation(
-                DocumentationNode(
-                    title=self._documentation_title(
-                        documentation
-                    ),
-                    path=str(path),
-                    kind="rubydoc",
-                    headings=[],
-                    links=[],
-                    metadata={
-                        "language": self.language,
-                        "line": line,
-                        "text": documentation,
-                    },
-                )
-            )
-
-        # ------------------------------------------------------------
-        # READER RESULT
-        # ------------------------------------------------------------
-
-        return ReaderResult(
-            success=True,
-            project=project,
-            warnings=warnings,
-            errors=errors,
-            metadata={
-                "language": self.language,
-                "reader_version": self.version,
-                "path": str(path),
-                "parser": "static-structural-scanner",
-                "static_analysis": True,
-                "ruby_version": "unknown",
-            },
-        )
-
-    # ================================================================
-    # REGEX PATTERNS
-    # ================================================================
-
-    # ------------------------------------------------------------
-    # require "foo"
-    # ------------------------------------------------------------
-
-    _REQUIRE_RE = re.compile(
-        r"""(?m)
-        ^\s*
-        require
-        \s*
-        ["'](?P<target>[^"']+)["']
-        \s*
-        $
-        """,
-        re.VERBOSE,
-    )
-
-    # ------------------------------------------------------------
-    # require_relative "./foo"
-    # ------------------------------------------------------------
-
-    _REQUIRE_RELATIVE_RE = re.compile(
-        r"""(?m)
-        ^\s*
-        require_relative
-        \s*
-        ["'](?P<target>[^"']+)["']
-        \s*
-        $
-        """,
-        re.VERBOSE,
-    )
-
-    # ------------------------------------------------------------
-    # class Foo
-    # class Foo < Bar
-    # ------------------------------------------------------------
-
-    _CLASS_RE = re.compile(
-        r"""^\s*
-        class
-        \s+
-        (?P<name>
-            [A-Za-z_][A-Za-z0-9_:]*
-        )
-        (?:
-            \s*
-            <
-            \s*
-            (?P<superclass>
-                [A-Za-z_][A-Za-z0-9_:]*
-            )
-        )?
-        """,
-        re.VERBOSE,
-    )
-
-    # ------------------------------------------------------------
-    # module Foo
-    # ------------------------------------------------------------
-
-    _MODULE_RE = re.compile(
-        r"""^\s*
-        module
-        \s+
-        (?P<name>
-            [A-Za-z_][A-Za-z0-9_:]*
-        )
-        """,
-        re.VERBOSE,
-    )
-
-    # ------------------------------------------------------------
-    # def foo
-    # def foo(...)
-    # def self.foo
-    # def ClassName.foo
-    # ------------------------------------------------------------
-
-    _METHOD_RE = re.compile(
-        r"""^\s*
-        def
-        \s+
-        (?P<receiver>
-            self
-            |
-            [A-Za-z_][A-Za-z0-9_:]*
-        )?
-        (?:\.)?
-        (?P<name>
-            [A-Za-z_][A-Za-z0-9_!?=]*
-        )
-        (?:
-            \s*
-            \(
-                (?P<parameters>[^)]*)
-            \)
-        )?
-        """,
-        re.VERBOSE,
-    )
-
-    # ------------------------------------------------------------
-    # include Foo
-    # ------------------------------------------------------------
-
-    _INCLUDE_RE = re.compile(
-        r"""(?m)
-        ^\s*
-        include
-        \s+
-        (?P<modules>.+?)
-        \s*$
-        """,
-        re.VERBOSE,
-    )
-
-    # ------------------------------------------------------------
-    # extend Foo
-    # ------------------------------------------------------------
-
-    _EXTEND_RE = re.compile(
-        r"""(?m)
-        ^\s*
-        extend
-        \s+
-        (?P<modules>.+?)
-        \s*$
-        """,
-        re.VERBOSE,
-    )
-
-    # ------------------------------------------------------------
-    # attr_reader / attr_writer / attr_accessor
-    # ------------------------------------------------------------
-
-    _ATTRIBUTE_RE = re.compile(
-        r"""(?m)
-        ^\s*
-        (?P<kind>
-            attr_reader
-            |
-            attr_writer
-            |
-            attr_accessor
-        )
-        \s+
-        (?P<attributes>.+?)
-        \s*$
-        """,
-        re.VERBOSE,
-    )
-
-    # ------------------------------------------------------------
-    # CONSTANT = value
-    # ------------------------------------------------------------
-
-    _CONSTANT_RE = re.compile(
-        r"""(?m)
-        ^\s*
-        (?P<name>
-            [A-Z][A-Za-z0-9_]*
-        )
-        \s*=\s*
-        (?P<value>[^\n]+)
-        """,
-        re.VERBOSE,
-    )
-
-    # ------------------------------------------------------------
-    # @variable = value
-    # ------------------------------------------------------------
-
-    _INSTANCE_VARIABLE_RE = re.compile(
-        r"""(?m)
-        (?P<name>
-            @[A-Za-z_][A-Za-z0-9_]*
-        )
-        \s*
-        =
-        \s*
-        (?P<value>[^\n;]+)
-        """,
-        re.VERBOSE,
-    )
-
-    # ------------------------------------------------------------
-    # @@variable = value
-    # ------------------------------------------------------------
-
-    _CLASS_VARIABLE_RE = re.compile(
-        r"""(?m)
-        (?P<name>
-            @@[A-Za-z_][A-Za-z0-9_]*
-        )
-        \s*
-        =
-        \s*
-        (?P<value>[^\n;]+)
-        """,
-        re.VERBOSE,
-    )
-
-    # ------------------------------------------------------------
-    # local_variable = value
-    #
-    # This intentionally requires a lowercase/underscore identifier
-    # and an assignment so method calls and keywords are less likely
-    # to be interpreted as variables.
-    # ------------------------------------------------------------
-
-    _LOCAL_VARIABLE_RE = re.compile(
-        r"""(?m)
-        ^\s*
-        (?P<name>
-            [a-z_][A-Za-z0-9_]*
-        )
-        \s*
-        =
-        \s*
-        (?P<value>[^\n;]+)
-        """,
-        re.VERBOSE,
-    )
-
-    # ------------------------------------------------------------
-    # Ruby documentation comments
-    #
-    # Examples:
-    #
-    # # Project documentation
-    #
-    # ##
-    # # Project documentation
-    # ##
-    # ------------------------------------------------------------
-
-    _RUBYDOC_RE = re.compile(
-        r"""(?m)
-        (?P<doc>
-            (?:
-                ^\s*#.*(?:\n|$)
-            )+
-        )
-        """,
-        re.VERBOSE,
-    )
-
-    # ================================================================
-    # STRUCTURAL SCANNER
-    # ================================================================
-
-    @classmethod
     def _scan_structures(
-        cls,
+        self,
         source: str,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
+        """
+        Scan Ruby class/module structures.
 
-        lines = source.splitlines(
-            keepends=True
-        )
+        The important difference from the previous scanner is
+        that `end` is matched against a complete Ruby nesting
+        stack rather than assuming every `end` closes a class
+        or module.
 
-        structures: list[dict] = []
+        Example:
 
-        stack: list[dict] = []
+            class Bot
+              def start
+                if ready?
+                  run
+                end
+              end
+            end
+
+        produces:
+
+            class Bot
+                def start
+                    if
+        """
+
+        lines = source.splitlines(keepends=True)
+
+        structures: list[dict[str, Any]] = []
+
+        stack: list[dict[str, Any]] = []
 
         offsets: list[int] = []
 
-        current_offset = 0
+        offset = 0
 
         for line in lines:
+            offsets.append(offset)
+            offset += len(line)
 
-            offsets.append(current_offset)
+        total_length = len(source)
 
-            current_offset += len(line)
+        for index, raw_line in enumerate(lines):
+            line_start_offset = offsets[index]
+            line_end_offset = (
+                offsets[index + 1]
+                if index + 1 < len(offsets)
+                else total_length
+            )
 
-        for index, line in enumerate(lines):
+            stripped = self._strip_ruby_comment(
+                raw_line
+            ).strip()
 
-            stripped = cls._strip_ruby_comment(
+            if not stripped:
+                continue
+
+            # ------------------------------------------------
+            # CLASS
+            # ------------------------------------------------
+
+            class_match = self._CLASS_RE.match(stripped)
+
+            if class_match:
+                name = class_match.group("name")
+
+                structure = {
+                    "kind": "class",
+                    "name": name,
+                    "superclass": class_match.group(
+                        "superclass"
+                    ),
+                    "line_start": index + 1,
+                    "line_end": None,
+                    "offset": line_start_offset,
+                    "body_start": line_end_offset,
+                    "body": "",
+                    "parent": self._nearest_namespace(
+                        stack
+                    ),
+                    "documentation": self._documentation_before(
+                        lines,
+                        index,
+                    ),
+                }
+
+                stack.append(
+                    {
+                        "kind": "class",
+                        "structure": structure,
+                        "start_offset": line_start_offset,
+                    }
+                )
+
+                continue
+
+            # ------------------------------------------------
+            # MODULE
+            # ------------------------------------------------
+
+            module_match = self._MODULE_RE.match(stripped)
+
+            if module_match:
+                name = module_match.group("name")
+
+                structure = {
+                    "kind": "module",
+                    "name": name,
+                    "superclass": None,
+                    "line_start": index + 1,
+                    "line_end": None,
+                    "offset": line_start_offset,
+                    "body_start": line_end_offset,
+                    "body": "",
+                    "parent": self._nearest_namespace(
+                        stack
+                    ),
+                    "documentation": self._documentation_before(
+                        lines,
+                        index,
+                    ),
+                }
+
+                stack.append(
+                    {
+                        "kind": "module",
+                        "structure": structure,
+                        "start_offset": line_start_offset,
+                    }
+                )
+
+                continue
+
+            # ------------------------------------------------
+            # METHOD
+            # ------------------------------------------------
+
+            method_match = self._METHOD_RE.match(stripped)
+
+            if method_match:
+                stack.append(
+                    {
+                        "kind": "def",
+                        "start_offset": line_start_offset,
+                    }
+                )
+
+                continue
+
+            # ------------------------------------------------
+            # OPENING STRUCTURES
+            # ------------------------------------------------
+
+            if self._opens_end_structure(stripped):
+                stack.append(
+                    {
+                        "kind": self._opening_kind(
+                            stripped
+                        ),
+                        "start_offset": line_start_offset,
+                    }
+                )
+
+                continue
+
+            # ------------------------------------------------
+            # END
+            # ------------------------------------------------
+
+            if self._is_end_line(stripped):
+                self._close_stack_structure(
+                    stack,
+                    line_end_offset,
+                    index + 1,
+                    source,
+                    structures,
+                )
+
+                continue
+
+        # ----------------------------------------------------
+        # CLOSE UNFINISHED STRUCTURES
+        # ----------------------------------------------------
+
+        while stack:
+            entry = stack.pop()
+
+            if entry["kind"] not in {
+                "class",
+                "module",
+            }:
+                continue
+
+            structure = entry["structure"]
+
+            structure["line_end"] = len(lines)
+
+            structure["body"] = source[
+                structure["body_start"]:
+            ]
+
+            structures.append(structure)
+
+        # Preserve source order.
+        structures.sort(
+            key=lambda item: (
+                item["line_start"],
+                item["line_end"] or item["line_start"],
+            )
+        )
+
+        return structures
+
+    def _close_stack_structure(
+        self,
+        stack: list[dict[str, Any]],
+        end_offset: int,
+        end_line: int,
+        source: str,
+        structures: list[dict[str, Any]],
+    ) -> None:
+        """
+        Close the most recent Ruby nesting structure.
+
+        Only classes and modules become Project Model
+        structures. Other entries merely protect namespace
+        boundaries from premature closure.
+        """
+
+        if not stack:
+            return
+
+        entry = stack.pop()
+
+        if entry["kind"] not in {
+            "class",
+            "module",
+        }:
+            return
+
+        structure = entry["structure"]
+
+        structure["line_end"] = end_line
+
+        structure["body"] = source[
+            structure["body_start"]:
+            end_offset
+        ]
+
+        structures.append(structure)
+
+    # ========================================================
+    # RUBY NESTING
+    # ========================================================
+
+    def _opens_end_structure(
+        self,
+        stripped: str,
+    ) -> bool:
+        """
+        Return True when a Ruby line opens a structure that
+        normally requires `end`.
+        """
+
+        if self._METHOD_RE.match(stripped):
+            return True
+
+        if self._CLASS_RE.match(stripped):
+            return True
+
+        if self._MODULE_RE.match(stripped):
+            return True
+
+        if re.match(
+            r"^(if|unless|case|begin|while|until|for)\b",
+            stripped,
+        ):
+            return True
+
+        if re.search(
+            r"\bdo(?:\s*\|.*?\|)?\s*$",
+            stripped,
+        ):
+            return True
+
+        return False
+
+    def _opening_kind(
+        self,
+        stripped: str,
+    ) -> str:
+        """
+        Determine the kind of a generic Ruby nesting opener.
+        """
+
+        if re.match(r"^if\b", stripped):
+            return "if"
+
+        if re.match(r"^unless\b", stripped):
+            return "unless"
+
+        if re.match(r"^case\b", stripped):
+            return "case"
+
+        if re.match(r"^begin\b", stripped):
+            return "begin"
+
+        if re.match(r"^while\b", stripped):
+            return "while"
+
+        if re.match(r"^until\b", stripped):
+            return "until"
+
+        if re.match(r"^for\b", stripped):
+            return "for"
+
+        if re.search(
+            r"\bdo(?:\s*\|.*?\|)?\s*$",
+            stripped,
+        ):
+            return "do"
+
+        return "block"
+
+    def _nearest_namespace(
+        self,
+        stack: list[dict[str, Any]],
+    ) -> str | None:
+        """
+        Return the nearest class/module namespace.
+        """
+
+        for entry in reversed(stack):
+            if entry["kind"] in {
+                "class",
+                "module",
+            }:
+                return entry["structure"]["name"]
+
+        return None
+
+    # ========================================================
+    # METHODS
+    # ========================================================
+
+    def _extract_methods(
+        self,
+        body: str,
+        body_start_offset: int,
+        class_name: str,
+    ) -> list[dict[str, Any]]:
+        """
+        Extract methods from a class/module body.
+
+        Uses the same Ruby nesting model so internal `end`
+        statements do not prematurely terminate methods.
+        """
+
+        lines = body.splitlines(keepends=True)
+
+        methods: list[dict[str, Any]] = []
+
+        stack: list[dict[str, Any]] = []
+
+        visibility = "public"
+
+        offsets: list[int] = []
+
+        offset = body_start_offset
+
+        for line in lines:
+            offsets.append(offset)
+            offset += len(line)
+
+        for index, raw_line in enumerate(lines):
+            stripped = self._strip_ruby_comment(
+                raw_line
+            ).strip()
+
+            if not stripped:
+                continue
+
+            # ------------------------------------------------
+            # VISIBILITY
+            # ------------------------------------------------
+
+            if stripped in {
+                "public",
+                "private",
+                "protected",
+            }:
+                visibility = stripped
+                continue
+
+            method_match = self._METHOD_RE.match(
+                stripped
+            )
+
+            if method_match:
+                stack.append(
+                    {
+                        "kind": "def",
+                        "method": {
+                            "name": method_match.group(
+                                "name"
+                            ),
+                            "params": (
+                                method_match.group(
+                                    "params"
+                                )
+                                or ""
+                            ),
+                            "receiver": (
+                                method_match.group(
+                                    "receiver"
+                                )
+                            ),
+                            "singleton": bool(
+                                method_match.group(
+                                    "receiver"
+                                )
+                            ),
+                            "line_start": self._line_number_from_offset(
+                                body,
+                                offsets[index],
+                            ),
+                            "line_end": None,
+                            "visibility": visibility,
+                            "documentation": self._documentation_before(
+                                lines,
+                                index,
+                            ),
+                            "class_name": class_name,
+                        },
+                    }
+                )
+
+                continue
+
+            if self._opens_end_structure(stripped):
+                stack.append(
+                    {
+                        "kind": self._opening_kind(
+                            stripped
+                        ),
+                    }
+                )
+
+                continue
+
+            if self._is_end_line(stripped):
+                if not stack:
+                    continue
+
+                entry = stack.pop()
+
+                if entry["kind"] == "def":
+                    method = entry["method"]
+
+                    method["line_end"] = (
+                        self._line_number_from_offset(
+                            body,
+                            offsets[index]
+                            + len(raw_line),
+                        )
+                    )
+
+                    methods.append(method)
+
+        # Handle unterminated methods conservatively.
+        while stack:
+            entry = stack.pop()
+
+            if entry["kind"] != "def":
+                continue
+
+            method = entry["method"]
+
+            method["line_end"] = (
+                self._line_number_from_offset(
+                    body,
+                    len(body),
+                )
+            )
+
+            methods.append(method)
+
+        methods.sort(
+            key=lambda item: (
+                item["line_start"],
+                item["line_end"] or item["line_start"],
+            )
+        )
+
+        return methods
+
+    def _extract_top_level_methods(
+        self,
+        source: str,
+    ) -> list[dict[str, Any]]:
+        """
+        Extract top-level Ruby methods.
+
+        Methods nested inside classes/modules are excluded.
+        """
+
+        lines = source.splitlines(keepends=True)
+
+        methods: list[dict[str, Any]] = []
+
+        stack: list[str] = []
+
+        visibility = "public"
+
+        offsets: list[int] = []
+
+        offset = 0
+
+        for line in lines:
+            offsets.append(offset)
+            offset += len(line)
+
+        for index, raw_line in enumerate(lines):
+            stripped = self._strip_ruby_comment(
+                raw_line
+            ).strip()
+
+            if not stripped:
+                continue
+
+            if stripped in {
+                "public",
+                "private",
+                "protected",
+            }:
+                visibility = stripped
+                continue
+
+            method_match = self._METHOD_RE.match(
+                stripped
+            )
+
+            if method_match:
+                if not any(
+                    item in {
+                        "class",
+                        "module",
+                    }
+                    for item in stack
+                ):
+                    stack.append("def")
+
+                    methods.append(
+                        {
+                            "name": method_match.group(
+                                "name"
+                            ),
+                            "params": (
+                                method_match.group(
+                                    "params"
+                                )
+                                or ""
+                            ),
+                            "receiver": (
+                                method_match.group(
+                                    "receiver"
+                                )
+                            ),
+                            "singleton": bool(
+                                method_match.group(
+                                    "receiver"
+                                )
+                            ),
+                            "line_start": index + 1,
+                            "line_end": None,
+                            "visibility": visibility,
+                            "documentation": self._documentation_before(
+                                lines,
+                                index,
+                            ),
+                        }
+                    )
+
+                else:
+                    stack.append("def")
+
+                continue
+
+            if self._CLASS_RE.match(stripped):
+                stack.append("class")
+                continue
+
+            if self._MODULE_RE.match(stripped):
+                stack.append("module")
+                continue
+
+            if self._opens_end_structure(stripped):
+                stack.append(
+                    self._opening_kind(stripped)
+                )
+                continue
+
+            if self._is_end_line(stripped):
+                if not stack:
+                    continue
+
+                closed = stack.pop()
+
+                if closed == "def":
+                    # Find the most recent unfinished top-level
+                    # method and close it.
+                    for method in reversed(methods):
+                        if method["line_end"] is None:
+                            method["line_end"] = (
+                                index + 1
+                            )
+                            break
+
+        # Conservative close for unfinished methods.
+        for method in methods:
+            if method["line_end"] is None:
+                method["line_end"] = len(lines)
+
+        return methods
+
+    # ========================================================
+    # IMPORTS
+    # ========================================================
+
+    def _extract_imports(
+        self,
+        source: str,
+        path: Path,
+        project: Project,
+        file_module: ModuleNode,
+    ) -> list[dict[str, str]]:
+        """
+        Extract require / require_relative statements.
+        """
+
+        imports: list[dict[str, str]] = []
+
+        for line in source.splitlines():
+            stripped = self._strip_ruby_comment(
                 line
             ).strip()
 
             if not stripped:
                 continue
 
-            # --------------------------------------------------------
-            # CLASS
-            # --------------------------------------------------------
-
-            class_match = cls._CLASS_RE.match(
-                stripped
-            )
-
-            if class_match:
-
-                name = class_match.group(
-                    "name"
-                )
-
-                superclass = class_match.group(
-                    "superclass"
-                )
-
-                structure = {
-                    "kind": "class",
-                    "name": name,
-                    "superclass": superclass,
-                    "line_start": index + 1,
-                    "line_end": index + 1,
-                    "offset": offsets[index],
-                    "body_start": offsets[index]
-                    + len(line),
-                    "body": "",
-                    "parent": (
-                        stack[-1]["name"]
-                        if stack
-                        else None
-                    ),
-                }
-
-                stack.append(
-                    structure
-                )
-
-                structures.append(
-                    structure
-                )
-
-                continue
-
-            # --------------------------------------------------------
-            # MODULE
-            # --------------------------------------------------------
-
-            module_match = cls._MODULE_RE.match(
-                stripped
-            )
-
-            if module_match:
-
-                name = module_match.group(
-                    "name"
-                )
-
-                structure = {
-                    "kind": "module",
-                    "name": name,
-                    "line_start": index + 1,
-                    "line_end": index + 1,
-                    "offset": offsets[index],
-                    "body_start": offsets[index]
-                    + len(line),
-                    "body": "",
-                    "parent": (
-                        stack[-1]["name"]
-                        if stack
-                        else None
-                    ),
-                }
-
-                stack.append(
-                    structure
-                )
-
-                structures.append(
-                    structure
-                )
-
-                continue
-
-            # --------------------------------------------------------
-            # END
-            # --------------------------------------------------------
-
-            if cls._is_end_line(stripped):
-
-                if stack:
-
-                    structure = stack.pop()
-
-                    structure[
-                        "line_end"
-                    ] = index + 1
-
-                    body_start = structure[
-                        "body_start"
-                    ]
-
-                    body_end = offsets[index]
-
-                    structure["body"] = (
-                        source[
-                            body_start:body_end
-                        ]
-                    )
-
-                continue
-
-        # ------------------------------------------------------------
-        # UNFINISHED STRUCTURES
-        #
-        # A malformed/incomplete file should not crash the reader.
-        # We simply use the end of the source as the current boundary.
-        # ------------------------------------------------------------
-
-        total_lines = len(lines)
-
-        for structure in stack:
-
-            structure["line_end"] = (
-                total_lines
-            )
-
-            structure["body"] = source[
-                structure["body_start"] :
-            ]
-
-        return structures
-
-    # ================================================================
-    # METHOD EXTRACTION
-    # ================================================================
-
-    @classmethod
-    def _extract_methods(
-        cls,
-        body: str,
-        source: str,
-        body_offset: int,
-        class_name: str,
-        path: Path,
-    ) -> list[dict]:
-
-        lines = body.splitlines(
-            keepends=True
-        )
-
-        methods: list[dict] = []
-
-        stack: list[dict] = []
-
-        current_offset = body_offset
-
-        visibility = "public"
-
-        for line in lines:
-
-            stripped = cls._strip_ruby_comment(
-                line
-            ).strip()
-
-            line_start = cls._line_number(
-                source,
-                current_offset,
-            )
-
-            # --------------------------------------------------------
-            # VISIBILITY
-            # --------------------------------------------------------
-
-            if stripped in (
-                "public",
-                "private",
-                "protected",
-            ):
-
-                visibility = stripped
-
-                current_offset += len(line)
-
-                continue
-
-            # --------------------------------------------------------
-            # METHOD
-            # --------------------------------------------------------
-
-            match = cls._METHOD_RE.match(
+            match = self._REQUIRE_RELATIVE_RE.match(
                 stripped
             )
 
             if match:
+                name = match.group("name")
 
-                receiver = match.group(
-                    "receiver"
+                imports.append(
+                    {
+                        "name": name,
+                        "kind": "require_relative",
+                    }
                 )
 
-                name = match.group(
-                    "name"
+                project.add_import(
+                    ImportNode(
+                        source_file=str(path),
+                        target=name,
+                        language=self.language,
+                        metadata={
+                            "ruby_kind": "require_relative"
+                        },
+                    )
                 )
 
-                parameters = (
-                    match.group("parameters")
-                    or ""
+                project.add_relationship(
+                    RelationshipNode(
+                        source=str(path),
+                        target=name,
+                        kind="imports",
+                        source_file=str(path),
+                    )
                 )
 
-                singleton = (
-                    receiver is not None
-                )
-
-                method_kind = (
-                    "singleton_method"
-                    if singleton
-                    else "instance_method"
-                )
-
-                method = {
-                    "name": name,
-                    "parameters": cls._parse_parameters(
-                        parameters
-                    ),
-                    "line_start": line_start,
-                    "line_end": line_start,
-                    "documentation": (
-                        cls._extract_documentation_before(
-                            source,
-                            current_offset,
-                        )
-                    ),
-                    "visibility": visibility,
-                    "singleton": singleton,
-                    "ruby_kind": method_kind,
-                    "offset": current_offset,
-                    "body_start": (
-                        current_offset
-                        + len(line)
-                    ),
-                    "body": "",
-                }
-
-                stack.append(method)
-
-                methods.append(method)
-
-                current_offset += len(line)
+                file_module.imports.append(name)
 
                 continue
 
-            # --------------------------------------------------------
-            # END
-            # --------------------------------------------------------
-
-            if cls._is_end_line(stripped):
-
-                if stack:
-
-                    method = stack.pop()
-
-                    method[
-                        "line_end"
-                    ] = line_start
-
-                    body_end = current_offset
-
-                    method["body"] = source[
-                        method["body_start"] :
-                        body_end
-                    ]
-
-                current_offset += len(line)
-
-                continue
-
-            current_offset += len(line)
-
-        # ------------------------------------------------------------
-        # INCOMPLETE METHODS
-        # ------------------------------------------------------------
-
-        for method in stack:
-
-            method["line_end"] = (
-                cls._line_number(
-                    source,
-                    len(source),
-                )
+            match = self._REQUIRE_RE.match(
+                stripped
             )
 
-            method["body"] = source[
-                method["body_start"] :
-            ]
+            if match:
+                name = match.group("name")
 
-        return methods
+                imports.append(
+                    {
+                        "name": name,
+                        "kind": "require",
+                    }
+                )
 
-    # ================================================================
-    # TOP-LEVEL METHODS
-    # ================================================================
+                project.add_import(
+                    ImportNode(
+                        source_file=str(path),
+                        target=name,
+                        language=self.language,
+                        metadata={
+                            "ruby_kind": "require"
+                        },
+                    )
+                )
 
-    @classmethod
-    def _extract_top_level_methods(
-        cls,
-        source: str,
-        structures: list[dict],
-        path: Path,
-    ) -> list[dict]:
+                project.add_relationship(
+                    RelationshipNode(
+                        source=str(path),
+                        target=name,
+                        kind="imports",
+                        source_file=str(path),
+                    )
+                )
 
-        results: list[dict] = []
+                file_module.imports.append(name)
 
-        lines = source.splitlines(
-            keepends=True
-        )
+        return imports
 
-        nesting = 0
+    # ========================================================
+    # INCLUDES / EXTENDS
+    # ========================================================
 
-        current_offset = 0
+    def _extract_includes(
+        self,
+        body: str,
+    ) -> list[str]:
+        """
+        Extract Ruby include declarations.
+        """
 
-        stack: list[dict] = []
+        names: list[str] = []
 
-        visibility = "public"
-
-        for index, line in enumerate(lines):
-
-            stripped = cls._strip_ruby_comment(
+        for line in body.splitlines():
+            stripped = self._strip_ruby_comment(
                 line
             ).strip()
 
-            line_start = index + 1
-
-            # --------------------------------------------------------
-            # TRACK STRUCTURAL NESTING
-            # --------------------------------------------------------
-
-            class_match = cls._CLASS_RE.match(
+            match = self._INCLUDE_RE.match(
                 stripped
             )
 
-            module_match = cls._MODULE_RE.match(
-                stripped
-            )
-
-            if class_match or module_match:
-
-                nesting += 1
-
-                current_offset += len(line)
-
+            if not match:
                 continue
 
-            # --------------------------------------------------------
-            # VISIBILITY
-            # --------------------------------------------------------
-
-            if stripped in (
-                "public",
-                "private",
-                "protected",
-            ):
-
-                visibility = stripped
-
-                current_offset += len(line)
-
-                continue
-
-            # --------------------------------------------------------
-            # TOP-LEVEL METHOD
-            # --------------------------------------------------------
-
-            if nesting == 0:
-
-                match = cls._METHOD_RE.match(
-                    stripped
-                )
-
-                if match:
-
-                    receiver = match.group(
-                        "receiver"
-                    )
-
-                    name = match.group(
-                        "name"
-                    )
-
-                    parameters = (
-                        match.group(
-                            "parameters"
-                        )
-                        or ""
-                    )
-
-                    method = {
-                        "name": name,
-                        "parameters": cls._parse_parameters(
-                            parameters
-                        ),
-                        "line_start": line_start,
-                        "line_end": line_start,
-                        "documentation": (
-                            cls._extract_documentation_before(
-                                source,
-                                current_offset,
-                            )
-                        ),
-                        "visibility": visibility,
-                        "singleton": (
-                            receiver
-                            is not None
-                        ),
-                        "body_start": (
-                            current_offset
-                            + len(line)
-                        ),
-                    }
-
-                    stack.append(method)
-
-                    results.append(method)
-
-            # --------------------------------------------------------
-            # END
-            # --------------------------------------------------------
-
-            if cls._is_end_line(stripped):
-
-                if stack:
-
-                    method = stack.pop()
-
-                    method[
-                        "line_end"
-                    ] = line_start
-
-                else:
-
-                    nesting = max(
-                        0,
-                        nesting - 1,
-                    )
-
-            current_offset += len(line)
-
-        return results
-
-    # ================================================================
-    # INCLUDES
-    # ================================================================
-
-    @classmethod
-    def _extract_includes(
-        cls,
-        body: str,
-    ) -> list[str]:
-
-        result: list[str] = []
-
-        for match in cls._INCLUDE_RE.finditer(
-            body
-        ):
-
-            modules = match.group(
-                "modules"
-            )
-
-            result.extend(
-                cls._split_constant_list(
-                    modules
+            names.extend(
+                self._split_symbol_list(
+                    match.group("names")
                 )
             )
 
-        return result
+        return names
 
-    # ================================================================
-    # EXTENDS
-    # ================================================================
-
-    @classmethod
     def _extract_extends(
-        cls,
+        self,
         body: str,
     ) -> list[str]:
+        """
+        Extract Ruby extend declarations.
+        """
 
-        result: list[str] = []
+        names: list[str] = []
 
-        for match in cls._EXTEND_RE.finditer(
-            body
-        ):
+        for line in body.splitlines():
+            stripped = self._strip_ruby_comment(
+                line
+            ).strip()
 
-            modules = match.group(
-                "modules"
+            match = self._EXTEND_RE.match(
+                stripped
             )
 
-            result.extend(
-                cls._split_constant_list(
-                    modules
+            if not match:
+                continue
+
+            names.extend(
+                self._split_symbol_list(
+                    match.group("names")
                 )
             )
 
-        return result
+        return names
 
-    # ================================================================
+    # ========================================================
     # ATTRIBUTES
-    # ================================================================
+    # ========================================================
 
-    @classmethod
     def _extract_attributes(
-        cls,
+        self,
         body: str,
     ) -> list[str]:
+        """
+        Extract attr_reader / attr_writer / attr_accessor.
+        """
 
         attributes: list[str] = []
 
-        for match in cls._ATTRIBUTE_RE.finditer(
-            body
-        ):
+        for line in body.splitlines():
+            stripped = self._strip_ruby_comment(
+                line
+            ).strip()
 
-            kind = match.group(
-                "kind"
+            match = self._ATTRIBUTE_RE.match(
+                stripped
             )
 
-            values = cls._split_symbol_list(
-                match.group("attributes")
-            )
+            if not match:
+                continue
 
-            for value in values:
+            kind = match.group("kind")
 
+            for name in self._split_symbol_list(
+                match.group("names")
+            ):
                 attributes.append(
-                    value
+                    f"{kind}:{name}"
                 )
 
         return attributes
 
-    # ================================================================
-    # METHOD NAMES
-    # ================================================================
+    # ========================================================
+    # VARIABLES
+    # ========================================================
 
-    @classmethod
-    def _extract_method_names(
-        cls,
-        body: str,
-    ) -> list[str]:
+    def _extract_variables(
+        self,
+        source: str,
+        path: Path,
+        project: Project,
+    ) -> None:
+        """
+        Extract meaningful Ruby variables and constants.
 
-        methods: list[str] = []
+        This intentionally remains static and conservative.
+        """
 
-        for match in cls._METHOD_RE.finditer(
-            body
+        seen: set[tuple[str, str]] = set()
+
+        for line_number, raw_line in enumerate(
+            source.splitlines(),
+            start=1,
         ):
-
-            name = match.group(
-                "name"
+            line = self._strip_ruby_comment(
+                raw_line
             )
 
-            if name not in methods:
+            # --------------------------------------------
+            # CONSTANTS
+            # --------------------------------------------
 
-                methods.append(name)
+            constant_match = re.match(
+                r"""
+                ^\s*
+                (?P<name>
+                    [A-Z][A-Za-z0-9_]*
+                    (?:\s*=\s*(?P<value>.*))?
+                )
+                \s*$
+                """,
+                line,
+                re.VERBOSE,
+            )
 
-        return methods
+            if constant_match:
+                name = constant_match.group(
+                    "name"
+                )
 
-    # ================================================================
+                if "=" in name:
+                    name, value = name.split(
+                        "=",
+                        1,
+                    )
+
+                    name = name.strip()
+                    value = value.strip()
+                else:
+                    value = None
+
+                key = ("constant", name)
+
+                if key not in seen:
+                    seen.add(key)
+
+                    project.add_variable(
+                        VariableNode(
+                            name=name,
+                            path=str(path),
+                            language=self.language,
+                            value=value,
+                            constant=True,
+                            line=line_number,
+                            metadata={
+                                "ruby_kind": "constant"
+                            },
+                        )
+                    )
+
+            # --------------------------------------------
+            # INSTANCE VARIABLES
+            # --------------------------------------------
+
+            for match in self._INSTANCE_VARIABLE_RE.finditer(
+                line
+            ):
+                name = match.group(0)
+
+                key = (
+                    "instance_variable",
+                    name,
+                )
+
+                if key in seen:
+                    continue
+
+                seen.add(key)
+
+                project.add_variable(
+                    VariableNode(
+                        name=name,
+                        path=str(path),
+                        language=self.language,
+                        constant=False,
+                        line=line_number,
+                        metadata={
+                            "ruby_kind": "instance_variable"
+                        },
+                    )
+                )
+
+            # --------------------------------------------
+            # CLASS VARIABLES
+            # --------------------------------------------
+
+            for match in self._CLASS_VARIABLE_RE.finditer(
+                line
+            ):
+                name = match.group(0)
+
+                key = (
+                    "class_variable",
+                    name,
+                )
+
+                if key in seen:
+                    continue
+
+                seen.add(key)
+
+                project.add_variable(
+                    VariableNode(
+                        name=name,
+                        path=str(path),
+                        language=self.language,
+                        constant=False,
+                        line=line_number,
+                        metadata={
+                            "ruby_kind": "class_variable"
+                        },
+                    )
+                )
+
+            # --------------------------------------------
+            # LOCAL ASSIGNMENTS
+            # --------------------------------------------
+
+            for match in self._LOCAL_VARIABLE_RE.finditer(
+                line
+            ):
+                name = match.group(
+                    0
+                ).split(
+                    "=",
+                    1,
+                )[0].strip()
+
+                if name in {
+                    "if",
+                    "unless",
+                    "while",
+                    "until",
+                    "case",
+                    "when",
+                    "return",
+                    "yield",
+                    "next",
+                    "break",
+                    "redo",
+                    "retry",
+                    "def",
+                    "class",
+                    "module",
+                    "begin",
+                    "end",
+                }:
+                    continue
+
+                key = (
+                    "local_variable",
+                    name,
+                )
+
+                if key in seen:
+                    continue
+
+                seen.add(key)
+
+                project.add_variable(
+                    VariableNode(
+                        name=name,
+                        path=str(path),
+                        language=self.language,
+                        constant=False,
+                        line=line_number,
+                        metadata={
+                            "ruby_kind": "local_variable"
+                        },
+                    )
+                )
+
+    # ========================================================
+    # DOCUMENTATION
+    # ========================================================
+
+    def _extract_documentation(
+        self,
+        source: str,
+        path: Path,
+        project: Project,
+    ) -> None:
+        """
+        Extract Ruby documentation comments.
+        """
+
+        lines = source.splitlines()
+
+        current: list[str] = []
+
+        start_line: int | None = None
+
+        for index, line in enumerate(
+            lines,
+            start=1,
+        ):
+            match = self._RUBYDOC_RE.match(
+                line
+            )
+
+            if match:
+                if start_line is None:
+                    start_line = index
+
+                current.append(
+                    match.group("text").strip()
+                )
+
+                continue
+
+            if current:
+                text = "\n".join(
+                    current
+                ).strip()
+
+                if text:
+                    project.add_documentation(
+                        DocumentationNode(
+                            title=self._documentation_title(
+                                text
+                            ),
+                            path=str(path),
+                            kind="ruby_comment",
+                            headings=[
+                                self._documentation_title(
+                                    text
+                                )
+                            ],
+                            metadata={
+                                "line_start": start_line,
+                                "line_end": index - 1,
+                                "language": self.language,
+                            },
+                        )
+                    )
+
+                current = []
+                start_line = None
+
+        if current:
+            text = "\n".join(
+                current
+            ).strip()
+
+            if text:
+                project.add_documentation(
+                    DocumentationNode(
+                        title=self._documentation_title(
+                            text
+                        ),
+                        path=str(path),
+                        kind="ruby_comment",
+                        headings=[
+                            self._documentation_title(
+                                text
+                            )
+                        ],
+                        metadata={
+                            "line_start": start_line,
+                            "line_end": len(lines),
+                            "language": self.language,
+                        },
+                    )
+                )
+
+    # ========================================================
     # HELPERS
-    # ================================================================
+    # ========================================================
 
-    @staticmethod
     def _module_name(
+        self,
         path: Path,
     ) -> str:
+        """
+        Convert a Ruby filename into a logical module name.
+        """
 
         return path.stem
 
-    # ------------------------------------------------------------
-    # LINE NUMBER
-    # ------------------------------------------------------------
+    def _class_bases(
+        self,
+        structure: dict[str, Any],
+    ) -> list[str]:
+        """
+        Return class inheritance information.
+        """
 
-    @staticmethod
-    def _line_number(
-        source: str,
-        offset: int,
-    ) -> int:
-
-        return (
-            source.count(
-                "\n",
-                0,
-                offset,
-            )
-            + 1
+        superclass = structure.get(
+            "superclass"
         )
 
-    # ------------------------------------------------------------
-    # PARAMETERS
-    # ------------------------------------------------------------
-
-    @staticmethod
-    def _parse_parameters(
-        parameters: str,
-    ) -> list[str]:
-
-        if not parameters.strip():
-
+        if not superclass:
             return []
 
-        parts: list[str] = []
+        return [
+            superclass.strip()
+        ]
+
+    def _parse_parameters(
+        self,
+        params: str,
+    ) -> list[str]:
+        """
+        Parse a Ruby parameter list conservatively.
+        """
+
+        if not params:
+            return []
+
+        value = params.strip()
+
+        if value.startswith("(") and value.endswith(")"):
+            value = value[1:-1]
+
+        if not value.strip():
+            return []
+
+        result: list[str] = []
 
         current: list[str] = []
 
@@ -1589,380 +1812,271 @@ class RubyReader(LanguageReader):
 
         quote: str | None = None
 
-        escape = False
+        escaped = False
 
-        for character in parameters:
+        for char in value:
+            if escaped:
+                current.append(char)
+                escaped = False
+                continue
 
-            # --------------------------------------------------------
-            # STRING TRACKING
-            # --------------------------------------------------------
+            if char == "\\":
+                current.append(char)
+                escaped = True
+                continue
 
             if quote:
+                current.append(char)
 
-                if escape:
-
-                    escape = False
-
-                elif character == "\\":
-                    escape = True
-
-                elif character == quote:
+                if char == quote:
                     quote = None
 
-            else:
+                continue
 
-                if character in (
-                    "'",
-                    '"',
-                    "`",
-                ):
+            if char in {
+                "'",
+                '"',
+                "`",
+            }:
+                quote = char
+                current.append(char)
+                continue
 
-                    quote = character
+            if char in "([{":
+                depth += 1
+                current.append(char)
+                continue
 
-                elif character in "([{":
+            if char in ")]}":
+                depth = max(
+                    0,
+                    depth - 1,
+                )
+                current.append(char)
+                continue
 
-                    depth += 1
-
-                elif character in ")]}":
-
-                    depth = max(
-                        0,
-                        depth - 1,
-                    )
-
-            # --------------------------------------------------------
-            # PARAMETER SEPARATOR
-            # --------------------------------------------------------
-
-            if (
-                character == ","
-                and depth == 0
-                and quote is None
-            ):
-
-                value = "".join(
+            if char == "," and depth == 0:
+                item = "".join(
                     current
                 ).strip()
 
-                if value:
-
-                    parts.append(value)
+                if item:
+                    result.append(item)
 
                 current = []
-
                 continue
 
-            current.append(character)
+            current.append(char)
 
-        value = "".join(
+        item = "".join(
             current
         ).strip()
 
-        if value:
+        if item:
+            result.append(item)
 
-            parts.append(value)
+        return result
 
-        return parts
-
-    # ------------------------------------------------------------
-    # SYMBOL LIST
-    # ------------------------------------------------------------
-
-    @staticmethod
     def _split_symbol_list(
+        self,
         value: str,
     ) -> list[str]:
+        """
+        Split Ruby include/extend/attribute arguments.
+        """
 
         result: list[str] = []
 
         for item in value.split(","):
-
             item = item.strip()
 
             if not item:
-
                 continue
 
-            item = item.rstrip(";")
+            item = item.lstrip(":")
 
-            item = item.strip()
+            if (
+                (
+                    item.startswith('"')
+                    and item.endswith('"')
+                )
+                or (
+                    item.startswith("'")
+                    and item.endswith("'")
+                )
+            ):
+                item = item[1:-1]
 
-            if item.startswith(":"):
+            result.append(item)
 
-                item = item[1:]
+        return result
 
-            item = item.strip(
-                "'\""
+    def _strip_constant_name(
+        self,
+        value: str,
+    ) -> str:
+        return value.split(
+            "=",
+            1,
+        )[0].strip()
+
+    def _documentation_before(
+        self,
+        lines: list[str],
+        index: int,
+    ) -> str | None:
+        """
+        Return contiguous documentation comments directly
+        preceding a declaration.
+        """
+
+        docs: list[str] = []
+
+        cursor = index - 1
+
+        while cursor >= 0:
+            line = lines[cursor].strip()
+
+            if not line:
+                if docs:
+                    break
+
+                cursor -= 1
+                continue
+
+            if line.startswith("#"):
+                text = line[1:].strip()
+
+                # Avoid treating normal comments as structured
+                # documentation unless they actually contain text.
+                if text:
+                    docs.append(text)
+
+                cursor -= 1
+                continue
+
+            break
+
+        if not docs:
+            return None
+
+        docs.reverse()
+
+        return "\n".join(docs).strip()
+
+    def _documentation_title(
+        self,
+        text: str,
+    ) -> str:
+        """
+        Generate a deterministic documentation title.
+        """
+
+        first_line = text.splitlines()[0].strip()
+
+        if not first_line:
+            return "Ruby Documentation"
+
+        return first_line[:120]
+
+    def _line_number_from_offset(
+        self,
+        text: str,
+        offset: int,
+    ) -> int:
+        """
+        Convert a character offset into a 1-based line number.
+        """
+
+        offset = max(
+            0,
+            min(
+                offset,
+                len(text),
+            ),
+        )
+
+        return text.count(
+            "\n",
+            0,
+            offset,
+        ) + 1
+
+    def _line_number(
+        self,
+        source: str,
+        offset: int,
+    ) -> int:
+        """
+        Compatibility helper for offset-based callers.
+        """
+
+        return self._line_number_from_offset(
+            source,
+            offset,
+        )
+
+    def _is_end_line(
+        self,
+        stripped: str,
+    ) -> bool:
+        """
+        Determine whether a line closes a Ruby nesting block.
+        """
+
+        return bool(
+            re.match(
+                r"^end\b",
+                stripped,
             )
+        )
 
-            if item:
-
-                result.append(item)
-
-        return result
-
-    # ------------------------------------------------------------
-    # CONSTANT LIST
-    # ------------------------------------------------------------
-
-    @staticmethod
-    def _split_constant_list(
-        value: str,
-    ) -> list[str]:
-
-        result: list[str] = []
-
-        for item in value.split(","):
-
-            item = item.strip()
-
-            if not item:
-
-                continue
-
-            # Remove trailing inline comments.
-            item = item.split(
-                "#",
-                1,
-            )[0].strip()
-
-            if item:
-
-                result.append(item)
-
-        return result
-
-    # ------------------------------------------------------------
-    # STRIP RUBY COMMENTS
-    # ------------------------------------------------------------
-
-    @staticmethod
     def _strip_ruby_comment(
+        self,
         line: str,
     ) -> str:
+        """
+        Strip a Ruby # comment while attempting to preserve
+        # characters inside quoted strings.
+        """
 
         result: list[str] = []
 
         quote: str | None = None
 
-        escape = False
+        escaped = False
 
-        for character in line:
+        for char in line:
+            if escaped:
+                result.append(char)
+                escaped = False
+                continue
+
+            if char == "\\":
+                result.append(char)
+                escaped = True
+                continue
 
             if quote:
+                result.append(char)
 
-                result.append(
-                    character
-                )
-
-                if escape:
-
-                    escape = False
-
-                elif character == "\\":
-                    escape = True
-
-                elif character == quote:
+                if char == quote:
                     quote = None
 
                 continue
 
-            if character in (
+            if char in {
                 "'",
                 '"',
                 "`",
-            ):
-
-                quote = character
-
-                result.append(
-                    character
-                )
-
+            }:
+                quote = char
+                result.append(char)
                 continue
 
-            if character == "#":
-
+            if char == "#":
                 break
 
-            result.append(
-                character
-            )
+            result.append(char)
 
         return "".join(result)
-
-    # ------------------------------------------------------------
-    # END LINE
-    # ------------------------------------------------------------
-
-    @staticmethod
-    def _is_end_line(
-        stripped: str,
-    ) -> bool:
-
-        if stripped == "end":
-            return True
-
-        if stripped.startswith(
-            "end "
-        ):
-
-            return True
-
-        if stripped.startswith(
-            "end;"
-        ):
-
-            return True
-
-        return False
-
-    # ------------------------------------------------------------
-    # DOCUMENTATION
-    # ------------------------------------------------------------
-
-    @classmethod
-    def _extract_documentation(
-        cls,
-        source: str,
-    ) -> str | None:
-
-        lines: list[str] = []
-
-        for line in source.splitlines():
-
-            stripped = line.strip()
-
-            if not stripped.startswith(
-                "#"
-            ):
-
-                continue
-
-            content = stripped[
-                1:
-            ].strip()
-
-            if content:
-
-                lines.append(
-                    content
-                )
-
-        if not lines:
-
-            return None
-
-        return "\n".join(lines)
-
-    # ------------------------------------------------------------
-    # DOCUMENTATION BEFORE SYMBOL
-    # ------------------------------------------------------------
-
-    @classmethod
-    def _extract_documentation_before(
-        cls,
-        source: str,
-        offset: int,
-    ) -> str | None:
-
-        before = source[:offset]
-
-        lines = before.splitlines()
-
-        documentation: list[str] = []
-
-        for line in reversed(lines):
-
-            stripped = line.strip()
-
-            if not stripped:
-
-                if documentation:
-
-                    break
-
-                continue
-
-            if stripped.startswith(
-                "#"
-            ):
-
-                content = stripped[
-                    1:
-                ].strip()
-
-                documentation.insert(
-                    0,
-                    content,
-                )
-
-                continue
-
-            break
-
-        if not documentation:
-
-            return None
-
-        return "\n".join(
-            documentation
-        ).strip()
-
-    # ------------------------------------------------------------
-    # CLEAN RUBYDOC
-    # ------------------------------------------------------------
-
-    @staticmethod
-    def _clean_rubydoc(
-        documentation: str,
-    ) -> str:
-
-        lines: list[str] = []
-
-        for line in documentation.splitlines():
-
-            line = line.strip()
-
-            if line.startswith(
-                "#"
-            ):
-
-                line = line[1:].strip()
-
-            if line:
-
-                lines.append(
-                    line
-                )
-
-        return "\n".join(
-            lines
-        ).strip()
-
-    # ------------------------------------------------------------
-    # DOCUMENTATION TITLE
-    # ------------------------------------------------------------
-
-    @staticmethod
-    def _documentation_title(
-        documentation: str,
-    ) -> str:
-
-        for line in documentation.splitlines():
-
-            line = line.strip()
-
-            if not line:
-
-                continue
-
-            if line.startswith(
-                "@"
-            ):
-
-                continue
-
-            return line[:120]
-
-        return "Ruby Documentation"
