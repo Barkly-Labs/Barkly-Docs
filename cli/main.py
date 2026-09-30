@@ -14,7 +14,7 @@ from analysis.discovery import ProjectDiscovery
 from readers.python import PythonReader
 from readers.rust import RustReader
 from readers.javascript import JavaScriptReader
-
+from readers.ruby import RubyReader
 
 def build_parser() -> argparse.ArgumentParser:
     """
@@ -61,6 +61,7 @@ def main() -> int:
         PythonReader(),
         RustReader(),
         JavaScriptReader(),
+        RubyReader(),
     ]
 
     # --------------------------------------------------------
