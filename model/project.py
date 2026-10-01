@@ -58,6 +58,7 @@ class Project:
     classes: list["ClassNode"] = field(default_factory=list)
     interfaces: list["InterfaceNode"] = field(default_factory=list)
     variables: list["VariableNode"] = field(default_factory=list)
+    data: list["DataNode"] = field(default_factory=list)
 
     routes: list["RouteNode"] = field(default_factory=list)
     endpoints: list["EndpointNode"] = field(default_factory=list)
@@ -121,6 +122,17 @@ class Project:
         if any(existing.name == node.name and existing.path == node.path and existing.line == node.line for existing in self.variables):
             return
         self.variables.append(node)
+
+    def add_data(self, node: "DataNode") -> None:
+        if any(
+            existing.name == node.name
+            and existing.path == node.path
+            and existing.kind == node.kind
+            and getattr(existing, "value_type", None) == getattr(node, "value_type", None)
+            for existing in self.data
+        ):
+            return
+        self.data.append(node)
 
     def add_import(self, node: "ImportNode") -> None:
         if any(existing.source_file == node.source_file and existing.target == node.target and existing.alias == node.alias for existing in self.imports):
@@ -404,6 +416,33 @@ class VariableNode:
     constant: bool = False
 
     line: int | None = None
+
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+# ============================================================
+# DATA (STRUCTURED FILE CONTENT)
+# ============================================================
+
+@dataclass
+class DataNode:
+    """
+    Represents a structured JSON-like value discovered in a data file.
+
+    `kind` records the JSON container or primitive category; `value_type`
+    preserves the exact type, while `keys` captures object member names or
+    array indexes in a stable, readable form.
+    """
+
+    name: str
+    path: str
+
+    language: str | None = None
+
+    kind: str = "object"
+    value_type: str | None = None
+    keys: list[str] = field(default_factory=list)
+    value: str | None = None
 
     metadata: dict[str, Any] = field(default_factory=dict)
 

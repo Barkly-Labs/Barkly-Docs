@@ -16,6 +16,7 @@ from pathlib import Path
 
 from model.project import Project
 from readers.base import LanguageReader, ReaderResult
+from analysis.graph import build_relation_graph
 
 
 _PROJECT_NODE_FIELDS = (
@@ -27,6 +28,7 @@ _PROJECT_NODE_FIELDS = (
     "classes",
     "interfaces",
     "variables",
+    "data",
     "routes",
     "endpoints",
     "imports",
@@ -47,6 +49,7 @@ _PROJECT_NODE_CLASSES = {
     "classes": "ClassNode",
     "interfaces": "InterfaceNode",
     "variables": "VariableNode",
+    "data": "DataNode",
     "routes": "RouteNode",
     "endpoints": "EndpointNode",
     "imports": "ImportNode",
@@ -67,6 +70,7 @@ _PROJECT_ADDERS = {
     "classes": "add_class",
     "interfaces": "add_interface",
     "variables": "add_variable",
+    "data": "add_data",
     "routes": "add_route",
     "endpoints": "add_endpoint",
     "imports": "add_import",
@@ -448,7 +452,7 @@ class ProjectDiscovery:
                             "failed": len(result.errors),
                         },
                     )
-
+ 
         if event_logger is not None:
             event_logger.stage_complete(
                 "discovery",
@@ -457,6 +461,28 @@ class ProjectDiscovery:
                 processed=len(result.processed_files),
                 skipped=len(result.skipped_files),
                 failed=len(result.errors),
+            )
+
+        if event_logger is not None:
+            event_logger.stage_start(
+                "relationship_map",
+                discovered=total,
+                processed=len(result.processed_files),
+                skipped=len(result.skipped_files),
+                failed=len(result.errors),
+            )
+
+        graph = build_relation_graph(project)
+        result.project.metadata["relation_graph"] = graph.as_dict()
+        result.project.metadata["relation_graph_unresolved"] = list(graph.unresolved)
+
+        if event_logger is not None:
+            event_logger.stage_complete(
+                "relationship_map",
+                nodes=len(graph.nodes),
+                edges=len(graph.edges),
+                unresolved=len(graph.unresolved),
+                warnings=len(graph.warnings),
             )
 
         return result
@@ -636,6 +662,28 @@ class ProjectDiscovery:
                 processed=len(result.processed_files),
                 skipped=len(result.skipped_files),
                 failed=len(result.errors),
+            )
+
+        if event_logger is not None:
+            event_logger.stage_start(
+                "relationship_map",
+                discovered=total,
+                processed=len(result.processed_files),
+                skipped=len(result.skipped_files),
+                failed=len(result.errors),
+            )
+
+        graph = build_relation_graph(project)
+        result.project.metadata["relation_graph"] = graph.as_dict()
+        result.project.metadata["relation_graph_unresolved"] = list(graph.unresolved)
+
+        if event_logger is not None:
+            event_logger.stage_complete(
+                "relationship_map",
+                nodes=len(graph.nodes),
+                edges=len(graph.edges),
+                unresolved=len(graph.unresolved),
+                warnings=len(graph.warnings),
             )
 
         return result

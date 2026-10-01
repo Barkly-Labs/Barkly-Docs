@@ -1,9 +1,11 @@
 ﻿from __future__ import annotations
 
 import html
+import json
 import re
 from pathlib import Path
 
+from analysis.graph import build_relation_graph
 from model.project import Project
 
 CSS = """
@@ -212,6 +214,146 @@ nav.site-nav a.active { color: var(--text); background: rgba(141, 211, 255, 0.08
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+#relation-map-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 360px);
+  gap: 18px;
+  margin-top: 24px;
+}
+#relation-map-panel,
+#relation-map-details {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+}
+#relation-map-panel {
+  min-height: 560px;
+  position: relative;
+}
+#relation-map-canvas {
+  width: 100%;
+  height: 560px;
+  display: block;
+  background:
+    linear-gradient(rgba(255,255,255,0.015), rgba(255,255,255,0.015)),
+    radial-gradient(circle at top, rgba(141,211,255,0.08), transparent 60%);
+}
+#relation-map-details {
+  padding: 18px;
+}
+.graph-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255,255,255,0.02);
+}
+.graph-tools input[type="search"] {
+  flex: 1 1 220px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  padding: 10px 14px;
+}
+.graph-tools button {
+  background: rgba(141, 211, 255, 0.12);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.graph-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: var(--muted);
+}
+.filter-chip input {
+  accent-color: var(--accent);
+}
+.legend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+.legend-item {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.015);
+}
+.legend-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  margin-right: 8px;
+}
+.relationship-list {
+  margin-top: 8px;
+  display: grid;
+  gap: 10px;
+}
+.relation-map-empty,
+.relation-map-error {
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  padding: 18px;
+  color: var(--muted);
+  background: rgba(255,255,255,0.01);
+}
+.relation-map-error {
+  border-color: rgba(255, 123, 140, 0.4);
+  color: var(--danger);
+}
+.node-label {
+  font-size: 11px;
+  fill: var(--text);
+  pointer-events: none;
+}
+.edge-label {
+  font-size: 10px;
+  fill: var(--muted);
+  pointer-events: none;
+}
+.graph-node {
+  cursor: pointer;
+}
+.graph-node.selected .node-body {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+.graph-edge {
+  stroke: var(--muted);
+  stroke-width: 1.4;
+  fill: none;
+  cursor: pointer;
+}
+.graph-edge.selected {
+  stroke: var(--accent);
+  stroke-width: 2.2;
+}
+@media (max-width: 980px) {
+  #relation-map-shell {
+    grid-template-columns: 1fr;
+  }
+}
 """
 
 PAW_SVG = '''
@@ -244,6 +386,295 @@ PAW_SVG = '''
   "/>
 </svg>
 '''
+
+RELATION_MAP_JS = """
+document.addEventListener("DOMContentLoaded", () => {
+  const dataElement = document.getElementById("relation-map-data");
+  if (!dataElement) {
+    return;
+  }
+
+  const graphData = JSON.parse(dataElement.textContent || "{}") || { nodes: [], edges: [] };
+  const svg = document.getElementById("relation-map-canvas");
+  const details = document.getElementById("relation-map-details");
+  const searchInput = document.getElementById("relation-map-search");
+  const nodeTypeFilters = Array.from(document.querySelectorAll("input[data-filter-node]"));
+  const edgeTypeFilters = Array.from(document.querySelectorAll("input[data-filter-edge]"));
+  const buttons = Array.from(document.querySelectorAll("[data-graph-action]"));
+  const state = {
+    selectedNodeId: null,
+    selectedEdgeId: null,
+    search: "",
+    nodeTypes: new Set(nodeTypeFilters.filter((input) => input.checked).map((input) => input.value)),
+    edgeTypes: new Set(edgeTypeFilters.filter((input) => input.checked).map((input) => input.value)),
+    scale: 1,
+    offsetX: 0,
+    offsetY: 0,
+    dragging: false,
+    dragStartX: 0,
+    dragStartY: 0,
+  };
+
+  const kindColors = {
+    file: "#8dd3ff",
+    module: "#7af0b6",
+    class: "#ffd166",
+    interface: "#d8a4ff",
+    function: "#8dd3ff",
+    method: "#ff9f7a",
+    endpoint: "#ff7b8c",
+    route: "#9ad3bc",
+    variable: "#7fccff",
+    component: "#a5d6a7",
+    unknown: "#a4b3c9",
+  };
+
+  const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+  function matchQuery(node, query) {
+    if (!query) return true;
+    const text = `${node.label || ""} ${node.qualified_name || ""} ${node.path || ""}`.toLowerCase();
+    return text.includes(query.toLowerCase());
+  }
+
+  function getVisibleNodes() {
+    const search = state.search.trim();
+    return (graphData.nodes || []).filter((node) => {
+      if (!state.nodeTypes.has(node.kind)) return false;
+      return matchQuery(node, search);
+    });
+  }
+
+  function getVisibleEdges() {
+    const visibleNodeIds = new Set(getVisibleNodes().map((node) => node.id));
+    const selectedEdgeKinds = state.edgeTypes;
+    return (graphData.edges || []).filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target) && selectedEdgeKinds.has(edge.kind));
+  }
+
+  function computeLayout() {
+    const visibleNodes = getVisibleNodes();
+    const buckets = new Map();
+    for (const node of visibleNodes) {
+      if (!buckets.has(node.kind)) buckets.set(node.kind, []);
+      buckets.get(node.kind).push(node);
+    }
+
+    const positions = new Map();
+    let column = 0;
+    for (const kind of Object.keys(kindColors)) {
+      const bucket = buckets.get(kind) || [];
+      if (bucket.length === 0) continue;
+      for (let index = 0; index < bucket.length; index += 1) {
+        const node = bucket[index];
+        const x = 180 + column * 240 + (index % 3) * 80;
+        const y = 120 + Math.floor(index / 3) * 120;
+        positions.set(node.id, { x, y });
+      }
+      column += 1;
+    }
+
+    const remaining = visibleNodes.filter((node) => !positions.has(node.id));
+    for (let index = 0; index < remaining.length; index += 1) {
+      const node = remaining[index];
+      positions.set(node.id, { x: 160 + (index % 4) * 180, y: 180 + Math.floor(index / 4) * 140 });
+    }
+
+    return positions;
+  }
+
+  function setDetailsPanel(target) {
+    if (!details || !target) {
+      return;
+    }
+    const htmlParts = [];
+    if (target.kind) {
+      htmlParts.push(`<div class="meta"><span class="badge detected">${target.kind}</span></div>`);
+    }
+    if (target.qualified_name) {
+      htmlParts.push(`<h3>${target.qualified_name}</h3>`);
+    }
+    if (target.path || target.source_file) {
+      htmlParts.push(`<div class="meta">Source: ${target.path || target.source_file || "unknown"}</div>`);
+    }
+    if (target.line) {
+      htmlParts.push(`<div class="meta">Line: ${target.line}</div>`);
+    }
+    if (target.evidence) {
+      htmlParts.push(`<div class="meta">Evidence: <span class="badge ${target.evidence.toLowerCase()}">${target.evidence}</span></div>`);
+    }
+    if (target.metadata && Object.keys(target.metadata).length > 0) {
+      htmlParts.push(`<div class="meta">Metadata: ${Object.entries(target.metadata).slice(0, 6).map(([key, value]) => `${key}: ${String(value)}`).join(" · ")}</div>`);
+    }
+    if (target.relationships && target.relationships.length) {
+      htmlParts.push(`<div class="meta">Relationships: ${target.relationships.length}</div>`);
+    }
+    if (target.explanation) {
+      htmlParts.push(`<p>${target.explanation}</p>`);
+    }
+    details.innerHTML = htmlParts.join("");
+  }
+
+  function renderGraph() {
+    const visibleNodes = getVisibleNodes();
+    const visibleEdges = getVisibleEdges();
+    const positionMap = computeLayout();
+    svg.innerHTML = "";
+
+    if (!visibleNodes.length) {
+      svg.innerHTML = '<text x="20" y="30" fill="#a4b3c9" font-size="16">No matching nodes.</text>';
+      if (details) details.innerHTML = '<div class="relation-map-empty">No matching nodes are available for the selected filters.</div>';
+      return;
+    }
+
+    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+    const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+    marker.setAttribute("id", "arrowhead");
+    marker.setAttribute("markerWidth", "8");
+    marker.setAttribute("markerHeight", "8");
+    marker.setAttribute("refX", "6");
+    marker.setAttribute("refY", "3");
+    marker.setAttribute("orient", "auto");
+    marker.innerHTML = '<path d="M0,0 L0,6 L6,3 z" fill="#a4b3c9"></path>';
+    defs.appendChild(marker);
+    svg.appendChild(defs);
+
+    const edgeGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    const nodeGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+
+    for (const edge of visibleEdges) {
+      const source = positionMap.get(edge.source);
+      const target = positionMap.get(edge.target);
+      if (!source || !target) continue;
+
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      const dx = target.x - source.x;
+      const dy = target.y - source.y;
+      const curve = Math.max(40, Math.abs(dx) * 0.25);
+      const d = `M ${source.x} ${source.y} C ${source.x + curve} ${source.y}, ${target.x - curve} ${target.y}, ${target.x} ${target.y}`;
+      path.setAttribute("d", d);
+      path.setAttribute("class", `graph-edge ${state.selectedEdgeId === edge.id ? "selected" : ""}`.trim());
+      path.setAttribute("stroke", "#a4b3c9");
+      path.setAttribute("marker-end", "url(#arrowhead)");
+      path.dataset.edgeId = edge.id;
+      path.addEventListener("click", () => {
+        state.selectedEdgeId = edge.id;
+        state.selectedNodeId = null;
+        const edgeRecord = graphData.edges.find((item) => item.id === edge.id);
+        if (edgeRecord) {
+          details.innerHTML = `<h3>${edgeRecord.kind}</h3><div class="meta">${edgeRecord.source} → ${edgeRecord.target}</div><div class="meta">Evidence: <span class="badge ${edgeRecord.evidence.toLowerCase()}">${edgeRecord.evidence}</span></div><p>${edgeRecord.explanation || "Source evidence recorded by the project analysis pipeline."}</p><div class="meta">File: ${edgeRecord.source_file || "unknown"}</div>`;
+        }
+        renderGraph();
+      });
+      edgeGroup.appendChild(path);
+
+      const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      label.setAttribute("x", String((source.x + target.x) / 2));
+      label.setAttribute("y", String((source.y + target.y) / 2 - 8));
+      label.setAttribute("class", "edge-label");
+      label.textContent = edge.kind;
+      edgeGroup.appendChild(label);
+    }
+
+    for (const node of visibleNodes) {
+      const position = positionMap.get(node.id) || { x: 160, y: 140 };
+      const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      group.setAttribute("class", `graph-node ${state.selectedNodeId === node.id ? "selected" : ""}`.trim());
+      group.dataset.nodeId = node.id;
+
+      const body = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      const width = Math.max(100, 12 + (node.label.length * 6));
+      const height = 32;
+      body.setAttribute("class", "node-body");
+      body.setAttribute("x", String(position.x - width / 2));
+      body.setAttribute("y", String(position.y - height / 2));
+      body.setAttribute("rx", "10");
+      body.setAttribute("width", String(width));
+      body.setAttribute("height", String(height));
+      body.setAttribute("fill", kindColors[node.kind] || kindColors.unknown);
+      body.setAttribute("stroke", "rgba(255,255,255,0.2)");
+      group.appendChild(body);
+
+      const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      text.setAttribute("x", String(position.x));
+      text.setAttribute("y", String(position.y + 4));
+      text.setAttribute("text-anchor", "middle");
+      text.setAttribute("class", "node-label");
+      text.textContent = node.label.length > 24 ? `${node.label.slice(0, 22)}…` : node.label;
+      group.appendChild(text);
+
+      group.addEventListener("click", () => {
+        state.selectedNodeId = node.id;
+        state.selectedEdgeId = null;
+        setDetailsPanel(node);
+        renderGraph();
+      });
+
+      nodeGroup.appendChild(group);
+    }
+
+    svg.appendChild(edgeGroup);
+    svg.appendChild(nodeGroup);
+    const transform = `translate(${state.offsetX}px, ${state.offsetY}px) scale(${state.scale})`;
+    svg.setAttribute("transform", transform);
+
+    if (details && !state.selectedNodeId && !state.selectedEdgeId) {
+      const summaryNode = visibleNodes[0];
+      if (summaryNode) {
+        setDetailsPanel(summaryNode);
+      }
+    }
+  }
+
+  function applyFilters() {
+    state.nodeTypes = new Set(nodeTypeFilters.filter((input) => input.checked).map((input) => input.value));
+    state.edgeTypes = new Set(edgeTypeFilters.filter((input) => input.checked).map((input) => input.value));
+    renderGraph();
+  }
+
+  searchInput.addEventListener("input", (event) => {
+    state.search = event.target.value;
+    renderGraph();
+  });
+  nodeTypeFilters.forEach((input) => input.addEventListener("change", applyFilters));
+  edgeTypeFilters.forEach((input) => input.addEventListener("change", applyFilters));
+
+  buttons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const action = button.dataset.graphAction;
+      if (action === "zoom-in") {
+        state.scale = clamp(state.scale * 1.2, 0.3, 2.5);
+      } else if (action === "zoom-out") {
+        state.scale = clamp(state.scale / 1.2, 0.3, 2.5);
+      } else if (action === "reset") {
+        state.scale = 1;
+        state.offsetX = 0;
+        state.offsetY = 0;
+      }
+      renderGraph();
+    });
+  });
+
+  svg.addEventListener("pointerdown", (event) => {
+    state.dragging = true;
+    state.dragStartX = event.clientX - state.offsetX;
+    state.dragStartY = event.clientY - state.offsetY;
+  });
+  svg.addEventListener("pointermove", (event) => {
+    if (!state.dragging) return;
+    state.offsetX = event.clientX - state.dragStartX;
+    state.offsetY = event.clientY - state.dragStartY;
+    renderGraph();
+  });
+  svg.addEventListener("pointerup", () => {
+    state.dragging = false;
+  });
+  svg.addEventListener("pointerleave", () => {
+    state.dragging = false;
+  });
+
+  renderGraph();
+});
+"""
 
 
 def _escape(value: object) -> str:
@@ -302,10 +733,17 @@ def _nav(current: str) -> str:
         ("index.html", "Project overview"),
         ("entities.html", "Entities"),
         ("relationships.html", "Relationships"),
+        ("relation-map.html", "Relation Map"),
     ]
+    current_map = {
+        "index": "index.html",
+        "entities": "entities.html",
+        "relationships": "relationships.html",
+        "relation-map": "relation-map.html",
+    }
     html_links = []
     for href, label in pages:
-        active = " active" if href == ("index.html" if current == "index" else "entities.html" if current == "entities" else "relationships.html") else ""
+        active = " active" if href == current_map.get(current, "index.html") else ""
         html_links.append(f'<a class="{active.strip()}" href="{href}">{_escape(label)}</a>')
     return "".join(html_links)
 
@@ -474,6 +912,79 @@ def _render_relationships(project: Project) -> str:
     return '<div class="relationship-list">' + ''.join(items) + '</div>' + mermaid
 
 
+def _render_relation_map_page(project: Project) -> str:
+    graph = build_relation_graph(project, view="relation_map")
+    graph_payload = json.dumps(graph.as_dict(), ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    node_types = sorted({node.kind for node in graph.nodes}) or ["file"]
+    edge_types = sorted({edge.kind for edge in graph.edges}) or ["imports"]
+    legend_items = [
+        ('file', '#8dd3ff'),
+        ('module', '#7af0b6'),
+        ('class', '#ffd166'),
+        ('interface', '#d8a4ff'),
+        ('function', '#8dd3ff'),
+        ('method', '#ff9f7a'),
+        ('endpoint', '#ff7b8c'),
+    ]
+    filter_boxes = (
+        ''.join(
+            f'<label class="filter-chip"><input type="checkbox" data-filter-node value="{_escape(kind)}" checked /> {_escape(kind)}</label>'
+            for kind in node_types
+        )
+        + ''.join(
+            f'<label class="filter-chip"><input type="checkbox" data-filter-edge value="{_escape(kind)}" checked /> {_escape(kind)}</label>'
+            for kind in edge_types
+        )
+    )
+    legend_html = ''.join(
+        f'<div class="legend-item"><span class="legend-swatch" style="background: {color};"></span>{_escape(kind)}</div>'
+        for kind, color in legend_items
+    )
+    if graph.edges:
+        edges = ''.join(
+            f'<div class="relationship-item"><h3>{_escape(edge.source)} → {_escape(edge.target)}</h3><div class="meta">{_relationship_badge(edge.evidence)} <span class="code">{_escape(edge.kind)}</span></div><div class="meta">{_escape(edge.source_file or "Unknown file")}</div><p>{_escape(edge.explanation or "Static relationship discovered during source analysis.")}</p></div>'
+            for edge in graph.edges[:20]
+        )
+        relationship_listing = f'<div class="relationship-list">{edges}</div>'
+    else:
+        relationship_listing = '<div class="relation-map-empty">No relationships were detected for the current scan.</div>'
+
+    body = (
+        '<section class="section">'
+        '<h2>Relation Map</h2>'
+        '<div class="section-subtitle">A normalized graph built from the current scan results and evidence-labeled relationships.</div>'
+        + (f'<div class="meta">Graph nodes: {len(graph.nodes)} · edges: {len(graph.edges)} · unresolved: {len(graph.unresolved)}</div>' if graph.nodes or graph.edges else '')
+        + '<div id="relation-map-shell">'
+        '  <div id="relation-map-panel" class="card">'
+        '    <div class="graph-tools">'
+        '      <input id="relation-map-search" type="search" placeholder="Search by file path or symbol name" aria-label="Search graph" />'
+        '      <button type="button" data-graph-action="zoom-in">Zoom+</button>'
+        '      <button type="button" data-graph-action="zoom-out">Zoom-</button>'
+        '      <button type="button" data-graph-action="reset">Reset view</button>'
+        '    </div>'
+        '    <div class="graph-filters">' + filter_boxes + '</div>'
+        '    <svg id="relation-map-canvas" aria-label="Relation map graph"></svg>'
+        '  </div>'
+        '  <aside id="relation-map-details" class="card">'
+        '    <h3>Node details</h3>'
+        '    <div class="meta">Select a node or edge to inspect its evidence.</div>'
+        '  </aside>'
+        '</div>'
+        + '<div class="section">'
+        '<h3>Legend</h3>'
+        '<div class="legend-grid">' + legend_html + '</div>'
+        '</div>'
+        + '<div class="section">'
+        '<h3>Relationship list</h3>'
+        + relationship_listing
+        + '</div>'
+        + (f'<script type="application/json" id="relation-map-data">{graph_payload}</script>' if graph_payload else '<script type="application/json" id="relation-map-data">{"nodes":[],"edges":[]}</script>')
+        + '<script src="assets/relation-map.js" defer></script>'
+        + '</section>'
+    )
+    return _page_shell(f"Relation Map — {_project_name(project)}", "relation-map", body)
+
+
 def _render_files(project: Project) -> str:
     if not project.files:
         return '<div class="empty-state">No project files were discovered.</div>'
@@ -485,6 +996,33 @@ def _render_files(project: Project) -> str:
               <h3>{_escape(item.name)}</h3>
               <div class="meta">Language: {_escape(item.language or 'Unknown')}</div>
               <div class="meta">Path: {_escape(item.path)}</div>
+            </div>
+            """
+        )
+    return '<div class="entity-list">' + ''.join(items) + '</div>'
+
+
+def _render_json_data(project: Project) -> str:
+    if not project.data:
+        return '<div class="empty-state">No JSON data objects or arrays were extracted.</div>'
+
+    items = []
+    for item in sorted(project.data, key=lambda node: (node.metadata.get("path", node.path), node.kind)):
+        key_summary = ", ".join(item.keys) if item.keys else "(empty)"
+        value_preview = item.value if item.value is not None else ""
+        meta_parts = [
+            f"Type: {_escape(item.value_type or item.kind or 'unknown')}",
+            f"Path: {_escape(item.metadata.get('path', item.path))}",
+        ]
+        if item.keys:
+            meta_parts.append(f"Keys: {_escape(key_summary)}")
+        if value_preview:
+            meta_parts.append(f"Value: {_escape(value_preview)}")
+        items.append(
+            f"""
+            <div class="entity-item">
+              <h3>{_escape(item.name)}</h3>
+              <div class="meta">{' · '.join(meta_parts)}</div>
             </div>
             """
         )
@@ -571,7 +1109,14 @@ def _render_index(project: Project) -> str:
         + _render_files(project)
         + '</div>'
     )
-    body = f'<section class="hero">{project_summary}{stats}</section>{overview}{evidence}{documentation}{structure}'
+    json_section = (
+        '<div class="section">'
+        '<h2>JSON data</h2>'
+        '<div class="section-subtitle">Structured JSON values extracted as data facts without classifying them as functions or methods.</div>'
+        + _render_json_data(project)
+        + '</div>'
+    )
+    body = f'<section class="hero">{project_summary}{stats}</section>{overview}{evidence}{documentation}{structure}{json_section}'
     return _page_shell(f"{_project_name(project)} — Barkly Docs", "index", body)
 
 
@@ -603,21 +1148,26 @@ def _render_relationships_page(project: Project) -> str:
 
 
 def render_project_website(project: Project, output_dir: str | Path) -> list[Path]:
+    project_obj = project
+    build_relation_graph(project_obj)
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     assets_dir = output_path / "assets"
     assets_dir.mkdir(exist_ok=True)
     (assets_dir / "site.css").write_text(CSS, encoding="utf-8")
+    (assets_dir / "relation-map.js").write_text(RELATION_MAP_JS, encoding="utf-8")
 
     index_path = output_path / "index.html"
     entities_path = output_path / "entities.html"
     relationships_path = output_path / "relationships.html"
+    relation_map_path = output_path / "relation-map.html"
 
-    index_path.write_text(_render_index(project), encoding="utf-8")
-    entities_path.write_text(_render_entities_page(project), encoding="utf-8")
-    relationships_path.write_text(_render_relationships_page(project), encoding="utf-8")
+    index_path.write_text(_render_index(project_obj), encoding="utf-8")
+    entities_path.write_text(_render_entities_page(project_obj), encoding="utf-8")
+    relationships_path.write_text(_render_relationships_page(project_obj), encoding="utf-8")
+    relation_map_path.write_text(_render_relation_map_page(project_obj), encoding="utf-8")
 
-    return [index_path, entities_path, relationships_path, assets_dir / "site.css"]
+    return [index_path, entities_path, relationships_path, relation_map_path, assets_dir / "site.css", assets_dir / "relation-map.js"]
 
 
 def generate_html_website(project: Project, output_dir: str | Path) -> list[Path]:

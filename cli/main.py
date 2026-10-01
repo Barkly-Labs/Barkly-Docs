@@ -21,6 +21,7 @@ from readers.rust import RustReader
 from readers.javascript import JavaScriptReader
 from readers.ruby import RubyReader
 from readers.java import JavaReader
+from readers.json import JSONReader
 from rendering.html import render_project_website
 
 DEFAULT_PREVIEW_HOST = "127.0.0.1"
@@ -234,6 +235,7 @@ def main() -> int:
         JavaScriptReader(),
         RubyReader(),
         JavaReader(),
+        JSONReader(),
     ]
 
     discovery = ProjectDiscovery(readers=readers)

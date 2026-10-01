@@ -16,15 +16,18 @@ from model.project import (
     ClassNode,
     FileNode,
     FunctionNode,
+    ImportNode,
     MethodNode,
     ModuleNode,
     Project,
     RelationshipNode,
 )
+from analysis.graph import build_relation_graph
 from model.relationships import RelationshipEngine, RELATIONSHIP_KINDS
 from rendering.html import render_project_website
 from readers.java import JavaReader
 from readers.javascript import JavaScriptReader
+from readers.json import JSONReader
 from readers.python import PythonReader
 from readers.ruby import RubyReader
 from readers.rust import RustReader
@@ -51,7 +54,7 @@ def test_project_discovery_finds_supported_files_and_skips_ignored_dirs(tmp_path
 
 
 def test_readers_are_selected_for_the_right_file_types():
-    readers = [PythonReader(), JavaScriptReader(), JavaReader(), RubyReader(), RustReader()]
+    readers = [PythonReader(), JavaScriptReader(), JavaReader(), RubyReader(), RustReader(), JSONReader()]
 
     by_extension = {
         ".py": PythonReader,
@@ -59,6 +62,7 @@ def test_readers_are_selected_for_the_right_file_types():
         ".java": JavaReader,
         ".rb": RubyReader,
         ".rs": RustReader,
+        ".json": JSONReader,
     }
 
     for extension, reader_type in by_extension.items():
@@ -337,7 +341,9 @@ def test_html_site_generation_renders_pages_and_relationships(tmp_path):
     assert output_dir.joinpath("index.html").exists()
     assert output_dir.joinpath("entities.html").exists()
     assert output_dir.joinpath("relationships.html").exists()
+    assert output_dir.joinpath("relation-map.html").exists()
     assert output_dir.joinpath("assets", "site.css").exists()
+    assert output_dir.joinpath("assets", "relation-map.js").exists()
 
     index_html = output_dir.joinpath("index.html").read_text(encoding="utf-8")
     assert "Widget" in index_html
@@ -352,6 +358,43 @@ def test_html_site_generation_renders_pages_and_relationships(tmp_path):
     assert "WidgetRunner" in relationships_html
     assert "DETECTED" in relationships_html
     assert "graph TD" in relationships_html
+
+    relation_map_html = output_dir.joinpath("relation-map.html").read_text(encoding="utf-8")
+    assert "Relation Map" in relation_map_html
+    assert "relation-map-data" in relation_map_html
+    assert "assets/relation-map.js" in relation_map_html
+
+
+def test_relation_graph_normalizes_scan_relationships_and_unresolved_refs():
+    project = Project(name="graph-demo", root="/tmp/graph-demo")
+    project.add_file(FileNode(path="/tmp/graph-demo/app.py", language="Python"))
+    project.add_function(FunctionNode(name="main", path="/tmp/graph-demo/app.py", language="Python"))
+    project.add_relationship(
+        RelationshipNode(
+            source="main",
+            target="helper",
+            kind="calls",
+            source_file="/tmp/graph-demo/app.py",
+            evidence="DETECTED",
+            source_location={"line": 4},
+        )
+    )
+    project.add_import(
+        ImportNode(
+            source_file="/tmp/graph-demo/app.py",
+            target="missing.module",
+            language="Python",
+            names=["missing.module"],
+        )
+    )
+
+    graph = build_relation_graph(project)
+
+    assert any(edge.kind == "calls" for edge in graph.edges)
+    assert any(edge.kind == "imports" for edge in graph.edges)
+    assert graph.unresolved
+    assert "relation_graph" in project.metadata
+    assert "relation_graph_unresolved" in project.metadata
 
 
 def test_project_counts_and_evidence_summary_remain_consistent():
