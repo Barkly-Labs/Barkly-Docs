@@ -30,6 +30,21 @@ body {
 }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+}
+.skip-link:focus {
+  left: 16px;
+  top: 16px;
+  z-index: 40;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text);
+  padding: 12px 14px;
+  border-radius: 8px;
+}
 .container {
   max-width: 1180px;
   margin: 0 auto;
@@ -57,8 +72,19 @@ header.site-header .container {
   text-transform: uppercase;
 }
 nav.site-nav { display: flex; gap: 16px; flex-wrap: wrap; }
-nav.site-nav a { color: var(--muted); font-size: 0.95rem; }
-nav.site-nav a.active { color: var(--text); }
+nav.site-nav a {
+  color: var(--muted);
+  font-size: 0.95rem;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+nav.site-nav a:hover, nav.site-nav a:focus-visible {
+  color: var(--text);
+  text-decoration: none;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+nav.site-nav a.active { color: var(--text); background: rgba(141, 211, 255, 0.08); }
 .hero {
   display: grid;
   grid-template-columns: 1.5fr 1fr;
@@ -177,6 +203,10 @@ nav.site-nav a.active { color: var(--text); }
   header.site-header .container { align-items: flex-start; flex-direction: column; }
   nav.site-nav { width: 100%; }
 }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
 """
 
 
@@ -214,7 +244,21 @@ def _languages(project: Project) -> list[str]:
 def _relationship_badge(value: str) -> str:
     key = (value or "UNKNOWN").upper()
     css = key.lower()
-    return f'<span class="badge {css}">{_escape(key)}</span>'
+    return f'<span class="badge {css}" aria-label="Evidence status: { _escape(key) }">{_escape(key)}</span>'
+
+
+def _evidence_summary(project: Project) -> str:
+    counts = {"DECLARED": 0, "DETECTED": 0, "INFERRED": 0, "UNKNOWN": 0}
+    for relationship in project.relationships:
+        key = (relationship.evidence or "UNKNOWN").upper()
+        if key in counts:
+            counts[key] += 1
+    entries = []
+    for label in ["DECLARED", "DETECTED", "INFERRED", "UNKNOWN"]:
+        entries.append(
+            f'<div class="tile"><h3>{_escape(label)}</h3><p>{counts[label]} relationship(s)</p></div>'
+        )
+    return '<div class="grid">' + ''.join(entries) + '</div>'
 
 
 def _nav(current: str) -> str:
@@ -342,16 +386,18 @@ def _page_shell(title: str, current: str, body: str) -> str:
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{_escape(title)}</title>
+  <meta name="description" content="Barkly Docs project overview and evidence-based documentation." />
   <link rel="stylesheet" href="assets/site.css" />
 </head>
 <body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
   <header class="site-header">
     <div class="container">
       <div class="brand">Barkly Docs</div>
-      <nav class="site-nav">{_nav(current)}</nav>
+      <nav class="site-nav" aria-label="Main navigation">{_nav(current)}</nav>
     </div>
   </header>
-  <main class="container">
+  <main id="main-content" class="container">
     {body}
   </main>
   <footer class="site-footer"><div class="container">Generated from the shared Barkly Project Model.</div></footer>
@@ -382,7 +428,7 @@ def _render_index(project: Project) -> str:
     overview = (
         '<div class="section">'
         '<h2>Project overview</h2>'
-        '<div class="section-subtitle">A static overview of the project model.</div>'
+        '<div class="section-subtitle">What this project appears to do, based on declared project metadata and static source evidence.</div>'
         '<div class="grid">'
         f'<div class="tile"><h3>Purpose</h3><p>{_escape(description)}</p></div>'
         f'<div class="tile"><h3>Languages</h3><p>{_escape(", ".join(languages) if languages else "Unknown")}</p></div>'
@@ -390,6 +436,14 @@ def _render_index(project: Project) -> str:
         f'<div class="tile"><h3>Documentation</h3><p>{_escape("README.md present" if (Path(project.root) / "README.md").exists() else "README.md not discovered")}</p></div>'
         '</div>'
         '</div>'
+    )
+    evidence = (
+        '<div class="section">'
+        '<h2>Evidence and limits</h2>'
+        '<div class="section-subtitle">Declared facts, detected structure, inferred patterns, and unknown areas remain clearly separated.</div>'
+        + _evidence_summary(project)
+        + '<div class="tile" style="margin-top:12px;"><h3>Evidence labels</h3><p>DECLARED = explicitly stated in source or project metadata; DETECTED = directly identified through static analysis; INFERRED = derived but not directly observed; UNKNOWN = not established by available evidence.</p></div>'
+        + '</div>'
     )
     documentation = (
         '<div class="section">'
@@ -405,7 +459,7 @@ def _render_index(project: Project) -> str:
         + _render_files(project)
         + '</div>'
     )
-    body = f'<section class="hero">{project_summary}{stats}</section>{overview}{documentation}{structure}'
+    body = f'<section class="hero">{project_summary}{stats}</section>{overview}{evidence}{documentation}{structure}'
     return _page_shell(f"{_project_name(project)} — Barkly Docs", "index", body)
 
 

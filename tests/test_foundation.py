@@ -272,6 +272,21 @@ def test_html_renderer_escapes_special_characters_and_empty_project(tmp_path):
     assert "No project files were discovered." in empty_html or "No project entities were detected." in empty_html
 
 
+def test_html_renderer_uses_accessible_structure_and_evidence_labels(tmp_path):
+    project = Project(name="Example", root=str(tmp_path))
+    project.add_relationship(RelationshipNode(source="a", target="b", kind="calls", evidence="DETECTED"))
+    project.add_relationship(RelationshipNode(source="b", target="c", kind="uses", evidence="INFERRED"))
+    project.add_relationship(RelationshipNode(source="c", target="d", kind="references", evidence="UNKNOWN"))
+    render_project_website(project, tmp_path / "accessible-site")
+    html_text = (tmp_path / "accessible-site" / "index.html").read_text(encoding="utf-8")
+    assert '<a class="skip-link" href="#main-content">Skip to main content</a>' in html_text
+    assert 'Evidence and limits' in html_text
+    assert 'DETECTED' in html_text
+    assert 'INFERRED' in html_text
+    assert 'UNKNOWN' in html_text
+    assert '<nav class="site-nav" aria-label="Main navigation">' in html_text
+
+
 def test_cli_can_generate_html_site(tmp_path):
     project_dir = tmp_path / "fixture"
     project_dir.mkdir()
