@@ -27,6 +27,7 @@ The current CLI supports two working modes:
 python -m cli .
 python -m cli . --name BarklyDocs
 python -m cli . --name BarklyDocs --output docs-site
+python -m cli . --name BarklyDocs --output docs-site --serve --port 8000
 ```
 
 For compatibility with the repository root entry point, this also works:
@@ -35,6 +36,7 @@ For compatibility with the repository root entry point, this also works:
 python __main__.py .
 python __main__.py . --name BarklyDocs
 python __main__.py . --name BarklyDocs --output docs-site
+python __main__.py . --name BarklyDocs --output docs-site --serve --port 8000
 ```
 
 The CLI accepts:
@@ -42,8 +44,13 @@ The CLI accepts:
 - positional `project`: path to the project to analyze
 - optional `--name`: display name for the project in the output
 - optional `-o` / `--output`: output directory for a static HTML website
+- optional `--serve`: generate the site and serve it on `127.0.0.1`
+- optional `--host`: override the local host interface for preview serving (defaults to `127.0.0.1`)
+- optional `--port`: choose the local preview port (defaults to `8000`)
 
-There is no `barkly_docs` package entry point in this repository, and no `init` / `generate` subcommands are implemented beyond the optional HTML output path above.
+When `--serve` is used, Barkly Docs validates that `index.html` exists, opens the landing page in the default browser, and keeps the local preview server running until you press Ctrl+C. The server is bound to the local machine only unless you explicitly override `--host`.
+
+There is no `barkly_docs` package entry point in this repository, and no `init` / `generate` subcommands are implemented beyond the optional HTML output and local preview flow above.
 
 ## Architecture
 

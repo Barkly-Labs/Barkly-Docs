@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import importlib
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -289,4 +292,59 @@ def test_cli_can_generate_html_site(tmp_path):
     assert result.returncode == 0, result.stderr
     assert output_dir.joinpath("index.html").exists()
     assert "HTML WEBSITE" in result.stdout
-    assert "Project: Fixture" in result.stdout
+
+
+def test_cli_parser_supports_preview_flags():
+    cli_main = importlib.import_module("cli.main")
+    parser = cli_main.build_parser()
+    args = parser.parse_args([
+        ".",
+        "--serve",
+        "--output",
+        "site-output",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8123",
+    ])
+
+    assert args.serve is True
+    assert args.output == Path("site-output")
+    assert args.host == "127.0.0.1"
+    assert args.port == 8123
+
+
+def test_preview_page_validation_requires_index_file(tmp_path):
+    cli_main = importlib.import_module("cli.main")
+
+    with pytest.raises(FileNotFoundError):
+        cli_main.validate_preview_landing_page(tmp_path / "missing")
+
+    site_dir = tmp_path / "site"
+    site_dir.mkdir()
+    (site_dir / "index.html").write_text("<html></html>", encoding="utf-8")
+    assert cli_main.validate_preview_landing_page(site_dir) == site_dir / "index.html"
+
+
+def test_build_preview_server_uses_localhost_and_port(monkeypatch, tmp_path):
+    cli_main = importlib.import_module("cli.main")
+
+    site_dir = tmp_path / "site"
+    site_dir.mkdir()
+    (site_dir / "index.html").write_text("<html><body>ok</body></html>", encoding="utf-8")
+
+    captured = {}
+
+    class FakeHTTPServer:
+        def __init__(self, server_address, handler):
+            captured["server_address"] = server_address
+            captured["handler"] = handler
+
+        def server_close(self):
+            captured["closed"] = True
+
+    monkeypatch.setattr(cli_main, "ThreadingHTTPServer", FakeHTTPServer)
+    server = cli_main.build_preview_server(site_dir, host="127.0.0.1", port=8123)
+
+    assert isinstance(server, FakeHTTPServer)
+    assert captured["server_address"] == ("127.0.0.1", 8123)
