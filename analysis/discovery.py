@@ -73,9 +73,14 @@ class ProjectDiscovery:
         self,
         root: Path,
         name: str | None = None,
+        event_logger: object | None = None,
+        progress_callback: callable | None = None,
     ) -> DiscoveryResult:
         """
         Discover and analyze a project.
+
+        The optional event_logger and progress_callback let the CLI report
+        real pipeline progress without changing the underlying analysis.
         """
 
         root = root.resolve()
@@ -99,14 +104,49 @@ class ProjectDiscovery:
             project=project,
         )
 
-        for path in self._discover_files(root):
+        discovered_files = self._discover_files(root)
+        total = len(discovered_files)
 
+        if event_logger is not None:
+            event_logger.stage_start(
+                "discovery",
+                discovered=total,
+                root=str(root),
+            )
+
+        for index, path in enumerate(discovered_files, start=1):
             reader = self._find_reader(path)
 
             if reader is None:
                 result.skipped_files.append(path)
+                if progress_callback is not None:
+                    progress_callback(
+                        stage="discovery",
+                        current=index,
+                        total=total,
+                        current_file=str(path),
+                        counts={
+                            "processed": len(result.processed_files),
+                            "skipped": len(result.skipped_files),
+                            "failed": len(result.errors),
+                        },
+                    )
+                if event_logger is not None:
+                    event_logger.file_event(
+                        path=path,
+                        file_type="unknown",
+                        reader_name="none",
+                        status="skipped",
+                        phase="discovery",
+                        counts={
+                            "processed": len(result.processed_files),
+                            "skipped": len(result.skipped_files),
+                            "failed": len(result.errors),
+                        },
+                    )
                 continue
 
+            start_time = __import__("time").perf_counter()
             try:
                 reader_result = reader.read(
                     path,
@@ -117,22 +157,101 @@ class ProjectDiscovery:
                     reader_result
                 )
 
+                duration_ms = int((__import__("time").perf_counter() - start_time) * 1000)
+
                 if reader_result.success:
                     result.processed_files.append(path)
+                    status = "complete"
                 else:
                     result.errors.extend(
                         reader_result.errors
                     )
+                    status = "failed" if reader_result.errors else "partial"
 
                 result.warnings.extend(
                     reader_result.warnings
                 )
+
+                if progress_callback is not None:
+                    progress_callback(
+                        stage="analysis",
+                        current=index,
+                        total=total,
+                        current_file=str(path),
+                        counts={
+                            "processed": len(result.processed_files),
+                            "skipped": len(result.skipped_files),
+                            "failed": len(result.errors),
+                            "warnings": len(result.warnings),
+                        },
+                        reader=reader.language,
+                    )
+
+                if event_logger is not None:
+                    event_logger.file_event(
+                        path=path,
+                        file_type=path.suffix.lower(),
+                        reader_name=reader.language,
+                        status=status,
+                        phase="analysis",
+                        duration_ms=duration_ms,
+                        counts={
+                            "classes": len(project.classes),
+                            "functions": len(project.functions),
+                            "methods": len(project.methods),
+                            "relationships": len(project.relationships),
+                        },
+                        message=(
+                            "File analyzed successfully."
+                            if status == "complete"
+                            else "File analysis returned warnings or errors."
+                        ),
+                    )
 
             except Exception as exc:
                 result.errors.append(
                     f"{path}: reader "
                     f"{reader.language} failed: {exc}"
                 )
+                if progress_callback is not None:
+                    progress_callback(
+                        stage="analysis",
+                        current=index,
+                        total=total,
+                        current_file=str(path),
+                        counts={
+                            "processed": len(result.processed_files),
+                            "skipped": len(result.skipped_files),
+                            "failed": len(result.errors),
+                            "warnings": len(result.warnings),
+                        },
+                        reader=reader.language,
+                    )
+                if event_logger is not None:
+                    event_logger.file_event(
+                        path=path,
+                        file_type=path.suffix.lower(),
+                        reader_name=reader.language,
+                        status="failed",
+                        phase="analysis",
+                        duration_ms=int((__import__("time").perf_counter() - start_time) * 1000),
+                        error=str(exc),
+                        counts={
+                            "processed": len(result.processed_files),
+                            "skipped": len(result.skipped_files),
+                            "failed": len(result.errors),
+                        },
+                    )
+
+        if event_logger is not None:
+            event_logger.stage_complete(
+                "discovery",
+                discovered=total,
+                eligible=len(result.processed_files) + len(result.errors),
+                processed=len(result.processed_files),
+                skipped=len(result.skipped_files),
+                failed=len(result.errors),
+            )
 
         return result
 
