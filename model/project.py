@@ -22,7 +22,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .relationships import RelationshipEngine
+
+
+EVIDENCE_STATUS = {
+    "DECLARED",
+    "DETECTED",
+    "INFERRED",
+    "UNKNOWN",
+}
 
 
 # ============================================================
@@ -64,6 +75,16 @@ class Project:
     warnings: list[str] = field(default_factory=list)
 
     metadata: dict[str, Any] = field(default_factory=dict)
+    relationship_engine: "RelationshipEngine | None" = field(
+        default=None,
+        init=False,
+        repr=False,
+    )
+
+    def __post_init__(self) -> None:
+        from .relationships import RelationshipEngine
+
+        self.relationship_engine = RelationshipEngine(self)
 
     def add_file(self, node: "FileNode") -> None:
         self.files.append(node)
@@ -87,9 +108,10 @@ class Project:
         self.imports.append(node)
 
     def add_relationship(self, node: "RelationshipNode") -> None:
-        self.relationships.append(node)
+        if self.relationship_engine is None:
+            self.__post_init__()
 
-
+        self.relationship_engine.store(node)
 
     def add_component(self, node: "ComponentNode") -> None:
         self.components.append(node)
@@ -552,5 +574,17 @@ class RelationshipNode:
     kind: str
 
     source_file: str | None = None
+    evidence: str = "DETECTED"
+    source_location: dict[str, Any] | None = None
 
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.evidence not in EVIDENCE_STATUS:
+            self.evidence = "UNKNOWN"
+
+        if self.source_location is not None and not isinstance(
+            self.source_location,
+            dict,
+        ):
+            raise TypeError("source_location must be a dict or None")

@@ -13,15 +13,20 @@ The implementation in this repository is a work in progress. It currently suppor
 - Python AST extraction into the shared project model
 - JavaScript, Java, Ruby, and Rust static readers
 - project summaries printed by the CLI
-- no graph renderer, no explanation layer, and no HTML/Markdown/JSON documentation pipeline yet
+- optional HTML website generation from the shared project model
+- no graph renderer, no explanation layer, and no full Markdown/JSON generation pipeline beyond the static HTML site
 
 ## Supported CLI
 
-The current CLI has a single command form: analyze a project directory and print a project summary.
+The current CLI supports two working modes:
+
+1. analyze a project directory and print a project summary
+2. generate a small static HTML documentation site in an output directory
 
 ```bash
 python -m cli .
 python -m cli . --name BarklyDocs
+python -m cli . --name BarklyDocs --output docs-site
 ```
 
 For compatibility with the repository root entry point, this also works:
@@ -29,14 +34,16 @@ For compatibility with the repository root entry point, this also works:
 ```bash
 python __main__.py .
 python __main__.py . --name BarklyDocs
+python __main__.py . --name BarklyDocs --output docs-site
 ```
 
 The CLI accepts:
 
 - positional `project`: path to the project to analyze
 - optional `--name`: display name for the project in the output
+- optional `-o` / `--output`: output directory for a static HTML website
 
-There is no `barkly_docs` package entry point in this repository, and no `init` / `generate` subcommands are implemented yet.
+There is no `barkly_docs` package entry point in this repository, and no `init` / `generate` subcommands are implemented beyond the optional HTML output path above.
 
 ## Architecture
 

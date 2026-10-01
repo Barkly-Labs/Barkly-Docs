@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterable
 
-from .project import Project, RelationshipNode
+from .project import EVIDENCE_STATUS, Project, RelationshipNode
 
 
 # ============================================================
@@ -97,6 +97,8 @@ class RelationshipEngine:
         *,
         source_file: str | None = None,
         metadata: dict | None = None,
+        source_location: dict | None = None,
+        evidence: str = "DETECTED",
     ) -> RelationshipNode | None:
         """
         Add a relationship to the project.
@@ -129,30 +131,73 @@ class RelationshipEngine:
             )
             return None
 
-        key = (
-            source,
-            target,
-            kind,
-            source_file,
-        )
-
-        if key in self._seen:
-            return None
+        if kind not in RELATIONSHIP_KINDS:
+            self.project.warnings.append(
+                f"Relationship kind not in supported set for {source!r} -> {target!r}: {kind!r}."
+            )
 
         node = RelationshipNode(
             source=source,
             target=target,
             kind=kind,
             source_file=source_file,
+            evidence=evidence,
+            source_location=dict(source_location) if source_location is not None else None,
             metadata=dict(metadata or {}),
         )
 
+        return self.store(node)
+
+    def store(self, node: RelationshipNode) -> RelationshipNode | None:
+        """Normalize and store a relationship through the engine."""
+
+        source = self._normalize(node.source)
+        target = self._normalize(node.target)
+        kind = self._normalize(node.kind)
+
+        if not source:
+            self.project.warnings.append(
+                "Relationship rejected: empty source."
+            )
+            return None
+
+        if not target:
+            self.project.warnings.append(
+                f"Relationship rejected: empty target for {source!r}."
+            )
+            return None
+
+        if not kind:
+            self.project.warnings.append(
+                f"Relationship rejected: empty kind for {source!r}."
+            )
+            return None
+
+        node.source = source
+        node.target = target
+        node.kind = kind
+        node.evidence = node.evidence if node.evidence in EVIDENCE_STATUS else "UNKNOWN"
+
+        if node.source_location is not None:
+            node.source_location = dict(node.source_location)
+
+        if node.metadata is None:
+            node.metadata = {}
+
+        key = (
+            node.source,
+            node.target,
+            node.kind,
+            node.source_file,
+        )
+
+        if key in self._seen:
+            return None
+
         self._seen.add(key)
-
-        self.project.add_relationship(node)
-
-        self._outgoing.setdefault(source, []).append(node)
-        self._incoming.setdefault(target, []).append(node)
+        self.project.relationships.append(node)
+        self._outgoing.setdefault(node.source, []).append(node)
+        self._incoming.setdefault(node.target, []).append(node)
 
         return node
 
@@ -179,6 +224,8 @@ class RelationshipEngine:
                 relationship.kind,
                 source_file=relationship.source_file,
                 metadata=relationship.metadata,
+                source_location=relationship.source_location,
+                evidence=relationship.evidence,
             )
 
             if result is not None:
@@ -316,6 +363,19 @@ class RelationshipEngine:
                     "Relationship has no kind."
                 )
 
+            if relationship.evidence not in EVIDENCE_STATUS:
+                warnings.append(
+                    f"Relationship evidence is invalid for {relationship.kind!r}: {relationship.evidence!r}."
+                )
+
+            if relationship.source_location is not None and not isinstance(
+                relationship.source_location,
+                dict,
+            ):
+                warnings.append(
+                    "Relationship source_location must be a dict when present."
+                )
+
         return warnings
 
     # ========================================================
@@ -365,6 +425,7 @@ def build_relationships(
     """
 
     engine = RelationshipEngine(project)
+    project.relationship_engine = engine
 
     added = engine.add_many(relationships)
 
@@ -387,6 +448,8 @@ def relationship(
     *,
     source_file: str | None = None,
     metadata: dict | None = None,
+    source_location: dict | None = None,
+    evidence: str = "DETECTED",
 ) -> RelationshipNode:
     """
     Convenience constructor for readers and analysis systems.
@@ -397,5 +460,7 @@ def relationship(
         target=target,
         kind=kind,
         source_file=source_file,
+        evidence=evidence,
+        source_location=dict(source_location) if source_location is not None else None,
         metadata=dict(metadata or {}),
     )

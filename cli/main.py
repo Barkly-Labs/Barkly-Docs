@@ -16,6 +16,7 @@ from readers.rust import RustReader
 from readers.javascript import JavaScriptReader
 from readers.ruby import RubyReader
 from readers.java import JavaReader
+from rendering.html import render_project_website
 
 def build_parser() -> argparse.ArgumentParser:
     """
@@ -40,6 +41,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--name",
         default=None,
         help="Optional project name.",
+    )
+
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional output directory for the generated HTML website.",
     )
 
     return parser
@@ -135,7 +144,7 @@ def main() -> int:
         print("-" * 50)
 
         for warning in result.warnings:
-            print(f"⚠ {warning}")
+            print(f"- {warning}")
 
     # --------------------------------------------------------
     # ERRORS
@@ -148,7 +157,24 @@ def main() -> int:
         print("-" * 50)
 
         for error in result.errors:
-            print(f"✗ {error}")
+            print(f"X {error}")
+
+    if args.output is not None:
+        try:
+            output_files = render_project_website(project, args.output)
+            print()
+            print("HTML WEBSITE")
+            print("-" * 50)
+            print(f"Output directory: {args.output}")
+            print(f"Index page:       {output_files[0]}")
+            print(f"Entities page:    {output_files[1]}")
+            print(f"Relationships:    {output_files[2]}")
+        except Exception as exc:
+            print()
+            print("HTML WEBSITE ERROR")
+            print("-" * 50)
+            print(f"{exc}")
+            return 1
 
     print()
 

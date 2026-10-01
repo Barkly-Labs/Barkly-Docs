@@ -9,7 +9,17 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from analysis.discovery import ProjectDiscovery
-from model.project import ClassNode, FileNode, FunctionNode, MethodNode, ModuleNode, Project
+from model.project import (
+    ClassNode,
+    FileNode,
+    FunctionNode,
+    MethodNode,
+    ModuleNode,
+    Project,
+    RelationshipNode,
+)
+from model.relationships import RelationshipEngine, RELATIONSHIP_KINDS
+from rendering.html import render_project_website
 from readers.java import JavaReader
 from readers.javascript import JavaScriptReader
 from readers.python import PythonReader
@@ -141,6 +151,56 @@ def test_supported_readers_do_not_crash_on_ordinary_source_files(tmp_path):
         assert result.success is True, (filename, result.errors)
 
 
+def test_relationship_engine_adds_unique_relationships_with_provenance():
+    project = Project(name="demo", root="/tmp/demo")
+    engine = RelationshipEngine(project)
+
+    relationship = engine.add(
+        "module.alpha",
+        "module.beta",
+        "imports",
+        source_file="module_alpha.py",
+        source_location={"line": 12, "column": 1},
+    )
+
+    assert relationship is not None
+    assert relationship.evidence == "DETECTED"
+    assert relationship.source_location == {"line": 12, "column": 1}
+    assert len(project.relationships) == 1
+    assert engine.incoming("module.beta", kind="imports") == [relationship]
+
+    duplicate = engine.add(
+        "module.alpha",
+        "module.beta",
+        "imports",
+        source_file="module_alpha.py",
+    )
+    assert duplicate is None
+    assert len(project.relationships) == 1
+
+
+def test_relationship_validation_handles_invalid_endpoints_and_evidence():
+    project = Project(name="demo", root="/tmp/demo")
+    engine = RelationshipEngine(project)
+
+    assert engine.add("", "module.beta", "imports") is None
+    assert engine.add("module.alpha", "", "imports") is None
+    assert engine.add("module.alpha", "module.beta", "") is None
+
+    relationship = RelationshipNode(
+        source="module.alpha",
+        target="module.beta",
+        kind="imports",
+        evidence="UNSUPPORTED",
+        source_location={"line": 3},
+    )
+    project.add_relationship(relationship)
+    assert relationship.evidence == "UNKNOWN"
+    assert engine.validate() == []
+
+    assert "imports" in RELATIONSHIP_KINDS
+
+
 def test_cli_runs_on_a_small_project_and_returns_zero(tmp_path):
     project_dir = tmp_path / "fixture"
     project_dir.mkdir()
@@ -159,4 +219,74 @@ def test_cli_runs_on_a_small_project_and_returns_zero(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert "BARKLY DOCS" in result.stdout
+
+
+def test_html_site_generation_renders_pages_and_relationships(tmp_path):
+    project = Project(name="Widget", root=str(tmp_path))
+    project.add_file(FileNode(path=str(tmp_path / "app.py"), language="Python"))
+    project.add_function(FunctionNode(name="run", path=str(tmp_path / "app.py"), language="Python"))
+    project.add_class(ClassNode(name="WidgetRunner", path=str(tmp_path / "app.py"), language="Python"))
+    project.add_relationship(
+        RelationshipNode(
+            source="WidgetRunner",
+            target="run",
+            kind="calls",
+            source_file="app.py",
+            evidence="DETECTED",
+            source_location={"line": 7, "column": 3},
+        )
+    )
+
+    output_dir = tmp_path / "site"
+    created = render_project_website(project, output_dir)
+
+    assert output_dir.joinpath("index.html").exists()
+    assert output_dir.joinpath("entities.html").exists()
+    assert output_dir.joinpath("relationships.html").exists()
+    assert output_dir.joinpath("assets", "site.css").exists()
+
+    index_html = output_dir.joinpath("index.html").read_text(encoding="utf-8")
+    assert "Widget" in index_html
+    assert "Project overview" in index_html
+    assert "assets/site.css" in index_html
+
+    relationships_html = output_dir.joinpath("relationships.html").read_text(encoding="utf-8")
+    assert "WidgetRunner" in relationships_html
+    assert "DETECTED" in relationships_html
+
+
+def test_html_renderer_escapes_special_characters_and_empty_project(tmp_path):
+    project = Project(name="<script>alert('boom')</script>", root=str(tmp_path))
+    output_dir = tmp_path / "safe-site"
+    render_project_website(project, output_dir)
+    html_content = output_dir.joinpath("index.html").read_text(encoding="utf-8")
+    assert "&lt;script&gt;alert('boom')&lt;/script&gt;" in html_content or "&lt;script&gt;alert(&#x27;boom&#x27;)&lt;/script&gt;" in html_content
+
+    empty_project = Project(name="Empty", root=str(tmp_path / "empty"))
+    empty_dir = tmp_path / "empty-site"
+    render_project_website(empty_project, empty_dir)
+    empty_html = empty_dir.joinpath("index.html").read_text(encoding="utf-8")
+    assert "No project files were discovered." in empty_html or "No project entities were detected." in empty_html
+
+
+def test_cli_can_generate_html_site(tmp_path):
+    project_dir = tmp_path / "fixture"
+    project_dir.mkdir()
+    (project_dir / "example.py").write_text(
+        "def run():\n    return 7\n",
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "site-output"
+
+    result = subprocess.run(
+        [sys.executable, "-m", "cli", str(project_dir), "--name", "Fixture", "--output", str(output_dir)],
+        capture_output=True,
+        text=True,
+        cwd=str(REPO_ROOT),
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert output_dir.joinpath("index.html").exists()
+    assert "HTML WEBSITE" in result.stdout
     assert "Project: Fixture" in result.stdout
