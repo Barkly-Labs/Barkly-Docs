@@ -118,6 +118,26 @@ class Greeter:
     assert "VALUE" in variable_names
 
 
+def test_python_reader_uses_shared_project_deduplication_for_declared_symbols(tmp_path):
+    path = tmp_path / "demo.py"
+    path.write_text(
+        "def run():\n    return 7\n\nclass Worker:\n    def run(self):\n        return 7\n",
+        encoding="utf-8",
+    )
+
+    project = Project(name="demo", root=str(tmp_path))
+    reader = PythonReader()
+
+    reader.read(path, project)
+    reader.read(path, project)
+
+    assert len(project.functions) == 1
+    assert len(project.methods) == 1
+    assert len(project.classes) == 1
+    assert project.summary()["functions"] == 1
+    assert project.summary()["methods"] == 1
+
+
 def test_supported_readers_do_not_crash_on_ordinary_source_files(tmp_path):
     cases = [
         (

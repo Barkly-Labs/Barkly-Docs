@@ -228,7 +228,7 @@ class PythonReader(LanguageReader):
                     class_name=None,
                 )
 
-                project.functions.append(function)
+                project.add_function(function)
                 self._record_call_relationships(
                     node=node,
                     path=path,
@@ -252,7 +252,7 @@ class PythonReader(LanguageReader):
                     module_node=module_node,
                 )
 
-                project.classes.append(class_node)
+                project.add_class(class_node)
                 file_node.classes.append(class_node.name)
                 module_node.classes.append(class_node.name)
 
@@ -518,7 +518,7 @@ class PythonReader(LanguageReader):
                     class_name=node.name,
                 )
 
-                project.methods.append(method)
+                project.add_method(method)
                 self._record_call_relationships(
                     node=child,
                     path=path,
@@ -700,7 +700,7 @@ class PythonReader(LanguageReader):
                 )
             )
 
-            project.variables.append(
+            project.add_variable(
                 VariableNode(
                     name=name,
                     path=str(path),
