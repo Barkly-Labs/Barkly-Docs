@@ -78,12 +78,22 @@ class RelationshipEngine:
     def __init__(self, project: Project):
         self.project = project
 
-        # Used to prevent duplicate relationships.
-        self._seen: set[tuple[str, str, str, str | None]] = set()
+        # Used to prevent duplicate relationships while still allowing
+        # distinct call sites or same logical edge at different locations.
+        self._seen: set[tuple[str, str, str, str | None, tuple[tuple[str, str], ...] | None]] = set()
 
         # Fast indexes.
         self._outgoing: dict[str, list[RelationshipNode]] = {}
         self._incoming: dict[str, list[RelationshipNode]] = {}
+
+    def evidence_summary(self) -> dict[str, int]:
+        """Return relationship counts grouped by evidence label."""
+
+        counts = {label: 0 for label in EVIDENCE_STATUS}
+        for relationship in self.project.relationships:
+            key = relationship.evidence if relationship.evidence in EVIDENCE_STATUS else "UNKNOWN"
+            counts[key] = counts.get(key, 0) + 1
+        return counts
 
     # ========================================================
     # ADD
@@ -184,15 +194,48 @@ class RelationshipEngine:
         if node.metadata is None:
             node.metadata = {}
 
+        location_key = None
+        if node.source_location is not None:
+            location_key = tuple(
+                sorted(
+                    (str(key), str(value))
+                    for key, value in node.source_location.items()
+                )
+            )
+
         key = (
             node.source,
             node.target,
             node.kind,
             node.source_file,
+            location_key,
         )
 
         if key in self._seen:
             return None
+
+        if node.source_location is None:
+            for relationship in self.project.relationships:
+                if (
+                    relationship.source == node.source
+                    and relationship.target == node.target
+                    and relationship.kind == node.kind
+                    and relationship.source_file == node.source_file
+                ):
+                    return None
+        else:
+            for relationship in self.project.relationships:
+                if (
+                    relationship.source == node.source
+                    and relationship.target == node.target
+                    and relationship.kind == node.kind
+                    and relationship.source_file == node.source_file
+                    and (
+                        relationship.source_location == node.source_location
+                        or relationship.source_location is None
+                    )
+                ):
+                    return None
 
         self._seen.add(key)
         self.project.relationships.append(node)

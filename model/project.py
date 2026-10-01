@@ -87,24 +87,44 @@ class Project:
         self.relationship_engine = RelationshipEngine(self)
 
     def add_file(self, node: "FileNode") -> None:
+        if any(existing.path == node.path for existing in self.files):
+            return
         self.files.append(node)
 
     def add_module(self, node: "ModuleNode") -> None:
+        if any(existing.name == node.name and existing.path == node.path for existing in self.modules):
+            return
         self.modules.append(node)
 
     def add_function(self, node: "FunctionNode") -> None:
+        if any(existing.name == node.name and existing.path == node.path and getattr(existing, "line_start", None) == getattr(node, "line_start", None) for existing in self.functions):
+            return
         self.functions.append(node)
 
     def add_method(self, node: "MethodNode") -> None:
+        if any(
+            existing.name == node.name
+            and existing.path == node.path
+            and getattr(existing, "class_name", None) == getattr(node, "class_name", None)
+            and getattr(existing, "line_start", None) == getattr(node, "line_start", None)
+            for existing in self.methods
+        ):
+            return
         self.methods.append(node)
 
     def add_class(self, node: "ClassNode") -> None:
+        if any(existing.name == node.name and existing.path == node.path for existing in self.classes):
+            return
         self.classes.append(node)
 
     def add_variable(self, node: "VariableNode") -> None:
+        if any(existing.name == node.name and existing.path == node.path and existing.line == node.line for existing in self.variables):
+            return
         self.variables.append(node)
 
     def add_import(self, node: "ImportNode") -> None:
+        if any(existing.source_file == node.source_file and existing.target == node.target and existing.alias == node.alias for existing in self.imports):
+            return
         self.imports.append(node)
 
     def add_relationship(self, node: "RelationshipNode") -> None:
@@ -112,6 +132,15 @@ class Project:
             self.__post_init__()
 
         self.relationship_engine.store(node)
+
+    def evidence_summary(self) -> dict[str, int]:
+        """Return relationship totals by evidence label."""
+
+        counts = {label: 0 for label in EVIDENCE_STATUS}
+        for relationship in self.relationships:
+            key = relationship.evidence if relationship.evidence in EVIDENCE_STATUS else "UNKNOWN"
+            counts[key] = counts.get(key, 0) + 1
+        return counts
 
     def add_component(self, node: "ComponentNode") -> None:
         self.components.append(node)

@@ -290,6 +290,49 @@ def test_html_site_generation_renders_pages_and_relationships(tmp_path):
     assert "graph TD" in relationships_html
 
 
+def test_project_counts_and_evidence_summary_remain_consistent():
+    project = Project(name="demo", root="/tmp/demo")
+    file_node = FileNode(path="/tmp/demo/app.py", language="Python")
+    project.add_file(file_node)
+    project.add_file(FileNode(path="/tmp/demo/app.py", language="Python"))
+    project.add_module(ModuleNode(name="app", path="/tmp/demo/app.py", language="Python"))
+    project.add_relationship(
+        RelationshipNode(
+            source="com.example.A",
+            target="com.example.B",
+            kind="inherits",
+            source_file="app.java",
+            evidence="DECLARED",
+        )
+    )
+    project.add_relationship(
+        RelationshipNode(
+            source="caller",
+            target="callee",
+            kind="calls",
+            source_file="app.py",
+            evidence="DETECTED",
+            source_location={"line": 10},
+        )
+    )
+    project.add_relationship(
+        RelationshipNode(
+            source="caller",
+            target="callee",
+            kind="calls",
+            source_file="app.py",
+            evidence="DETECTED",
+            source_location={"line": 11},
+        )
+    )
+
+    assert len(project.files) == 1
+    assert len(project.modules) == 1
+    assert len(project.relationships) == 3
+    assert project.evidence_summary()["DECLARED"] == 1
+    assert project.evidence_summary()["DETECTED"] == 2
+
+
 def test_html_renderer_escapes_special_characters_and_empty_project(tmp_path):
     project = Project(name="<script>alert('boom')</script>", root=str(tmp_path))
     output_dir = tmp_path / "safe-site"

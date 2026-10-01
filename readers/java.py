@@ -595,6 +595,7 @@ class JavaReader(LanguageReader):
                             ],
                             kind="inherits",
                             source_file=str(path),
+                            evidence="DECLARED",
                         )
                     )
 
@@ -612,6 +613,7 @@ class JavaReader(LanguageReader):
                                 else "extends"
                             ),
                             source_file=str(path),
+                            evidence="DECLARED",
                         )
                     )
 
@@ -676,6 +678,7 @@ class JavaReader(LanguageReader):
                             target=method["name"],
                             kind="contains",
                             source_file=str(path),
+                            evidence="DECLARED",
                         )
                     )
 
@@ -1625,6 +1628,7 @@ class JavaReader(LanguageReader):
                     target=name,
                     kind="imports",
                     source_file=str(path),
+                    evidence="DECLARED",
                 )
             )
 
