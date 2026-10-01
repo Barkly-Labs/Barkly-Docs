@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import html
+import re
 from pathlib import Path
 
 from model.project import Project
@@ -70,7 +71,11 @@ header.site-header .container {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
+.paw { width: 26px; height: 26px; display: inline-block; vertical-align: middle; }
 nav.site-nav { display: flex; gap: 16px; flex-wrap: wrap; }
 nav.site-nav a {
   color: var(--muted);
@@ -209,6 +214,37 @@ nav.site-nav a.active { color: var(--text); background: rgba(141, 211, 255, 0.08
 }
 """
 
+PAW_SVG = '''
+<svg viewBox="0 0 100 100" aria-hidden="true">
+  <path d="
+    M30 43
+    C19 43 12 35 14 25
+    C16 16 24 12 31 16
+    C38 20 40 31 37 37
+    C35 41 33 43 30 43
+
+    M70 43
+    C81 43 88 35 86 25
+    C84 16 76 12 69 16
+    C62 20 60 31 63 37
+    C65 41 67 43 70 43
+
+    M50 36
+    C42 36 37 29 39 22
+    C41 15 47 12 52 15
+    C58 18 59 26 56 32
+    C55 35 53 36 50 36
+
+    M50 52
+    C35 52 24 62 24 75
+    C24 87 34 92 45 88
+    C49 87 52 87 56 88
+    C67 92 76 87 76 75
+    C76 62 65 52 50 52
+  "/>
+</svg>
+'''
+
 
 def _escape(value: object) -> str:
     return html.escape(str(value or ""), quote=False)
@@ -337,6 +373,74 @@ def _render_entity_summary(project: Project) -> str:
     return '<div class="entity-list">' + ''.join(items) + '</div>'
 
 
+def _render_method_reference(project: Project) -> str:
+    """Render method and function references with signatures and source evidence."""
+
+    entries: list[str] = []
+    class_map: dict[str, list] = {}
+    for method in project.methods:
+        class_map.setdefault(method.class_name or "module", []).append(method)
+
+    for function in project.functions:
+        class_map.setdefault("module", []).append(function)
+
+    for name in sorted(class_map):
+        group = class_map[name]
+        items = []
+        for item in sorted(group, key=lambda node: getattr(node, "name", "")):
+            signature = item.name
+            if hasattr(item, "parameters") and item.parameters:
+                signature = f"{item.name}({', '.join(item.parameters)})"
+            if getattr(item, "return_type", None):
+                signature = f"{signature} -> {item.return_type}"
+            doc = getattr(item, "documentation", None) or "No source documentation available."
+            line = getattr(item, "line_start", None)
+            location = f"{item.path}:{line}" if line else item.path
+            items.append(
+                f"""
+                <div class="entity-item">
+                  <h3>{_escape(signature)}</h3>
+                  <div class="meta">{_escape(name)} · {_escape(location)}</div>
+                  <p>{_escape(doc[:220])}</p>
+                </div>
+                """
+            )
+        if items:
+            entries.append(
+                f"<div class='section'><h3>{_escape(name)}</h3><div class='entity-list'>{''.join(items)}</div></div>"
+            )
+
+    if not entries:
+        return '<div class="empty-state">No source-level method or function references were detected.</div>'
+    return ''.join(entries)
+
+
+def _mermaid_label(value: str) -> str:
+    value = str(value or "node").replace('"', '\\"')
+    return value
+
+
+def _relationship_map_mermaid(project: Project) -> str:
+    if not project.relationships:
+        return "graph TD\n  node0[No relationships discovered]"
+
+    nodes: dict[str, str] = {}
+    lines = ["graph TD"]
+    for relationship in project.relationships:
+        for label in (relationship.source, relationship.target):
+            if label not in nodes:
+                safe = re.sub(r"[^A-Za-z0-9_]", "_", label) or "node"
+                if safe in {"graph", "subgraph"}:
+                    safe = f"_{safe}"
+                nodes[label] = safe
+        source_id = nodes[relationship.source]
+        target_id = nodes[relationship.target]
+        lines.append(
+            f'  {source_id}["{_mermaid_label(relationship.source)}"] -->|{relationship.kind}| {target_id}["{_mermaid_label(relationship.target)}"]'
+        )
+    return "\n".join(lines)
+
+
 def _render_relationships(project: Project) -> str:
     if not project.relationships:
         return '<div class="empty-state">No relationships were discovered in the shared relationship model.</div>'
@@ -359,7 +463,15 @@ def _render_relationships(project: Project) -> str:
             </div>
             """
         )
-    return '<div class="relationship-list">' + ''.join(items) + '</div>'
+    mermaid = (
+        '<div class="section">'
+        '<h3>Relationship map</h3>'
+        '<pre class="code" aria-label="Mermaid relationship map">'
+        f'{_escape(_relationship_map_mermaid(project))}'
+        '</pre>'
+        '</div>'
+    )
+    return '<div class="relationship-list">' + ''.join(items) + '</div>' + mermaid
 
 
 def _render_files(project: Project) -> str:
@@ -393,7 +505,7 @@ def _page_shell(title: str, current: str, body: str) -> str:
   <a class="skip-link" href="#main-content">Skip to main content</a>
   <header class="site-header">
     <div class="container">
-      <div class="brand">Barkly Docs</div>
+      <div class="brand"><span class="paw">{PAW_SVG}</span> Barkly Docs</div>
       <nav class="site-nav" aria-label="Main navigation">{_nav(current)}</nav>
     </div>
   </header>
@@ -469,6 +581,11 @@ def _render_entities_page(project: Project) -> str:
         '<h2>Entities</h2>'
         '<div class="section-subtitle">Classes, functions, and methods discovered in the project model.</div>'
         + _render_entity_summary(project)
+        + '</section>'
+        + '<section class="section">'
+        '<h2>Method and function reference</h2>'
+        '<div class="section-subtitle">Source-level signatures and documentation recovered from the shared model.</div>'
+        + _render_method_reference(project)
         + '</section>'
     )
     return _page_shell(f"Entities — {_project_name(project)}", "entities", body)

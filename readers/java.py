@@ -505,6 +505,9 @@ class JavaReader(LanguageReader):
                 name = structure["name"]
                 kind = structure["kind"]
 
+                # Use a package-qualified name for classes when possible.
+                fq_name = f"{package_name}.{name}" if package_name else name
+
                 bases = []
 
                 if structure.get("superclass"):
@@ -539,7 +542,7 @@ class JavaReader(LanguageReader):
                 )
 
                 class_node = ClassNode(
-                    name=name,
+                    name=fq_name,
                     path=str(path),
                     language=self.language,
                     bases=bases,
@@ -555,6 +558,7 @@ class JavaReader(LanguageReader):
                     metadata={
                         "java_kind": kind,
                         "package": package_name,
+                        "simple_name": name,
                         "superclass": structure.get(
                             "superclass"
                         ),
@@ -574,8 +578,9 @@ class JavaReader(LanguageReader):
 
                 project.add_class(class_node)
 
-                file_node.classes.append(name)
-                file_module.classes.append(name)
+                # Record class membership using the qualified name.
+                file_node.classes.append(fq_name)
+                file_module.classes.append(fq_name)
 
                 # --------------------------------------------
                 # INHERITANCE / IMPLEMENTATION
@@ -584,7 +589,7 @@ class JavaReader(LanguageReader):
                 if structure.get("superclass"):
                     project.add_relationship(
                         RelationshipNode(
-                            source=name,
+                            source=fq_name,
                             target=structure[
                                 "superclass"
                             ],
@@ -599,7 +604,7 @@ class JavaReader(LanguageReader):
                 ):
                     project.add_relationship(
                         RelationshipNode(
-                            source=name,
+                            source=fq_name,
                             target=interface,
                             kind=(
                                 "implements"
@@ -641,7 +646,7 @@ class JavaReader(LanguageReader):
                         line_end=method[
                             "line_end"
                         ],
-                        class_name=name,
+                        class_name=fq_name,
                         metadata={
                             "java_kind": method.get(
                                 "java_kind",
@@ -667,7 +672,7 @@ class JavaReader(LanguageReader):
 
                     project.add_relationship(
                         RelationshipNode(
-                            source=name,
+                            source=fq_name,
                             target=method["name"],
                             kind="contains",
                             source_file=str(path),
@@ -696,7 +701,7 @@ class JavaReader(LanguageReader):
                                 "java_kind": (
                                     "record_component"
                                 ),
-                                "class": name,
+                                "class": fq_name,
                             },
                         )
                     )
@@ -742,7 +747,7 @@ class JavaReader(LanguageReader):
                     "java_version": "unknown",
                     "package": package_name,
                     "classes": [
-                        structure["name"]
+                        (f"{package_name}.{structure['name']}" if package_name else structure['name'])
                         for structure in classes
                     ],
                     "imports": [

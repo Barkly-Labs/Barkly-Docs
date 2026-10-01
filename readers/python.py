@@ -28,6 +28,7 @@ from model.project import (
     MethodNode,
     ModuleNode,
     Project,
+    RelationshipNode,
     VariableNode,
 )
 
@@ -228,6 +229,12 @@ class PythonReader(LanguageReader):
                 )
 
                 project.functions.append(function)
+                self._record_call_relationships(
+                    node=node,
+                    path=path,
+                    project=project,
+                    source_name=node.name,
+                )
                 file_node.functions.append(function.name)
                 module_node.functions.append(function.name)
 
@@ -299,6 +306,12 @@ class PythonReader(LanguageReader):
         """
         Convert a Python function or method into a Barkly node.
         """
+
+        source_name = (
+            f"{class_name}.{node.name}"
+            if class_name is not None
+            else node.name
+        )
 
         parameters = [
             self._format_argument(argument)
@@ -403,7 +416,7 @@ class PythonReader(LanguageReader):
                     ast.AsyncFunctionDef,
                 ),
                 class_name=class_name,
-                metadata=metadata,
+                metadata={**metadata, "qualified_name": source_name},
             )
 
         # --------------------------------------------------------
@@ -432,7 +445,7 @@ class PythonReader(LanguageReader):
                 node,
                 ast.AsyncFunctionDef,
             ),
-            metadata=metadata,
+            metadata={**metadata, "qualified_name": source_name},
         )
 
     # ============================================================
@@ -506,6 +519,12 @@ class PythonReader(LanguageReader):
                 )
 
                 project.methods.append(method)
+                self._record_call_relationships(
+                    node=child,
+                    path=path,
+                    project=project,
+                    source_name=f"{node.name}.{child.name}",
+                )
 
                 class_node.methods.append(
                     method.name
@@ -699,6 +718,69 @@ class PythonReader(LanguageReader):
                     },
                 )
             )
+
+    # ============================================================
+    # CALL RELATIONSHIPS
+    # ============================================================
+
+    def _record_call_relationships(
+        self,
+        node: ast.AST,
+        path: Path,
+        project: Project | None,
+        source_name: str,
+    ) -> None:
+        """
+        Record statically discovered function and method calls.
+
+        This is intentionally conservative: it only records direct calls
+        that are visible in the AST and does not execute the target code.
+        """
+
+        for child in ast.walk(node):
+            if not isinstance(child, ast.Call):
+                continue
+
+            target_name = self._call_target_name(child.func)
+            if not target_name:
+                continue
+
+            if project is None:
+                continue
+
+            project.add_relationship(
+                RelationshipNode(
+                    source=source_name,
+                    target=target_name,
+                    kind="calls",
+                    source_file=str(path),
+                    evidence="DETECTED",
+                    source_location={
+                        "line": getattr(child, "lineno", None),
+                        "column": getattr(child, "col_offset", None),
+                    },
+                )
+            )
+
+    def _call_target_name(self, node: ast.AST | None) -> str | None:
+        """Resolve a callable target name from a call expression."""
+
+        if node is None:
+            return None
+
+        if isinstance(node, ast.Name):
+            return node.id
+
+        if isinstance(node, ast.Attribute):
+            attr_name = self._call_target_name(node.value)
+            if attr_name:
+                return f"{attr_name}.{node.attr}"
+            return node.attr
+
+        if isinstance(node, ast.Call):
+            return self._call_target_name(node.func)
+
+        return None
 
     # ============================================================
     # HELPERS

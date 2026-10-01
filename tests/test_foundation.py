@@ -227,8 +227,35 @@ def test_cli_runs_on_a_small_project_and_returns_zero(tmp_path):
 def test_html_site_generation_renders_pages_and_relationships(tmp_path):
     project = Project(name="Widget", root=str(tmp_path))
     project.add_file(FileNode(path=str(tmp_path / "app.py"), language="Python"))
-    project.add_function(FunctionNode(name="run", path=str(tmp_path / "app.py"), language="Python"))
-    project.add_class(ClassNode(name="WidgetRunner", path=str(tmp_path / "app.py"), language="Python"))
+    project.add_function(
+        FunctionNode(
+            name="run",
+            path=str(tmp_path / "app.py"),
+            language="Python",
+            parameters=["value"],
+            return_type="int",
+            documentation="Run a widget.",
+        )
+    )
+    project.add_class(
+        ClassNode(
+            name="WidgetRunner",
+            path=str(tmp_path / "app.py"),
+            language="Python",
+            methods=["run"],
+        )
+    )
+    project.add_method(
+        MethodNode(
+            name="run",
+            path=str(tmp_path / "app.py"),
+            language="Python",
+            class_name="WidgetRunner",
+            parameters=["value"],
+            return_type="int",
+            documentation="Execute the widget runner.",
+        )
+    )
     project.add_relationship(
         RelationshipNode(
             source="WidgetRunner",
@@ -253,9 +280,14 @@ def test_html_site_generation_renders_pages_and_relationships(tmp_path):
     assert "Project overview" in index_html
     assert "assets/site.css" in index_html
 
+    entities_html = output_dir.joinpath("entities.html").read_text(encoding="utf-8")
+    assert "Method and function reference" in entities_html
+    assert "Run a widget." in entities_html or "Execute the widget runner." in entities_html
+
     relationships_html = output_dir.joinpath("relationships.html").read_text(encoding="utf-8")
     assert "WidgetRunner" in relationships_html
     assert "DETECTED" in relationships_html
+    assert "graph TD" in relationships_html
 
 
 def test_html_renderer_escapes_special_characters_and_empty_project(tmp_path):
