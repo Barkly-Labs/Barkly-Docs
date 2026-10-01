@@ -138,6 +138,50 @@ def test_python_reader_uses_shared_project_deduplication_for_declared_symbols(tm
     assert project.summary()["methods"] == 1
 
 
+def test_java_reader_keeps_constructor_and_method_counts_isolated_per_file(tmp_path):
+    alpha = tmp_path / "Alpha.java"
+    alpha.write_text(
+        "public class Alpha {\n"
+        "    public Alpha() {}\n"
+        "    public int add(int value) {\n"
+        "        return value + 1;\n"
+        "    }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    beta = tmp_path / "Beta.java"
+    beta.write_text(
+        "public class Beta {\n"
+        "    public Beta() {}\n"
+        "    public void run() {}\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    alpha_project = Project(name="alpha", root=str(tmp_path))
+    JavaReader().read(alpha, alpha_project)
+    assert alpha_project.summary()["classes"] == 1
+    assert alpha_project.summary()["methods"] == 2
+    assert {method.name for method in alpha_project.methods} == {"Alpha", "add"}
+
+    beta_project = Project(name="beta", root=str(tmp_path))
+    JavaReader().read(beta, beta_project)
+    assert beta_project.summary()["classes"] == 1
+    assert beta_project.summary()["methods"] == 2
+    assert {method.name for method in beta_project.methods} == {"Beta", "run"}
+
+    aggregate = Project(name="aggregate", root=str(tmp_path))
+    JavaReader().read(alpha, aggregate)
+    JavaReader().read(beta, aggregate)
+    JavaReader().read(alpha, aggregate)
+
+    assert aggregate.summary()["files"] == 2
+    assert aggregate.summary()["classes"] == 2
+    assert aggregate.summary()["methods"] == 4
+    assert {method.name for method in aggregate.methods} == {"Alpha", "add", "Beta", "run"}
+
+
 def test_supported_readers_do_not_crash_on_ordinary_source_files(tmp_path):
     cases = [
         (

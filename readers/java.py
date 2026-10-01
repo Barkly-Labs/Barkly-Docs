@@ -1189,6 +1189,75 @@ class JavaReader(LanguageReader):
                 continue
 
             # ------------------------------------------------
+            # CONSTRUCTOR
+            # ------------------------------------------------
+
+            constructor = (
+                self._CONSTRUCTOR_RE.match(
+                    clean_line
+                )
+            )
+
+            if constructor:
+                if (
+                    constructor.group(
+                        "name"
+                    )
+                    == class_name
+                ):
+                    method = {
+                        "name": class_name,
+                        "params": (
+                            constructor.group(
+                                "params"
+                            )
+                            or ""
+                        ),
+                        "return_type": None,
+                        "throws": (
+                            constructor.group(
+                                "throws"
+                            )
+                        ),
+                        "annotations": self._parse_annotations(
+                            constructor.group(
+                                "annotations"
+                            )
+                        ),
+                        "modifiers": self._parse_modifiers(
+                            constructor.group(
+                                "modifiers"
+                            )
+                        ),
+                        "line_start": (
+                            self._line_number_from_offset(
+                                body,
+                                offsets[index],
+                            )
+                        ),
+                        "line_end": (
+                            self._find_block_end(
+                                lines,
+                                index,
+                            )
+                        ),
+                        "documentation": (
+                            self._documentation_before(
+                                lines,
+                                index,
+                            )
+                        ),
+                        "constructor": True,
+                        "java_kind": "constructor",
+                    }
+
+                    methods.append(
+                        method
+                    )
+
+                    continue
+
+            # ------------------------------------------------
             # METHOD
             # ------------------------------------------------
 
@@ -1264,75 +1333,6 @@ class JavaReader(LanguageReader):
                 methods.append(method)
 
                 continue
-
-            # ------------------------------------------------
-            # CONSTRUCTOR
-            # ------------------------------------------------
-
-            constructor = (
-                self._CONSTRUCTOR_RE.match(
-                    clean_line
-                )
-            )
-
-            if constructor:
-                if (
-                    constructor.group(
-                        "name"
-                    )
-                    == class_name
-                ):
-                    method = {
-                        "name": class_name,
-                        "params": (
-                            constructor.group(
-                                "params"
-                            )
-                            or ""
-                        ),
-                        "return_type": None,
-                        "throws": (
-                            constructor.group(
-                                "throws"
-                            )
-                        ),
-                        "annotations": self._parse_annotations(
-                            constructor.group(
-                                "annotations"
-                            )
-                        ),
-                        "modifiers": self._parse_modifiers(
-                            constructor.group(
-                                "modifiers"
-                            )
-                        ),
-                        "line_start": (
-                            self._line_number_from_offset(
-                                body,
-                                offsets[index],
-                            )
-                        ),
-                        "line_end": (
-                            self._find_block_end(
-                                lines,
-                                index,
-                            )
-                        ),
-                        "documentation": (
-                            self._documentation_before(
-                                lines,
-                                index,
-                            )
-                        ),
-                        "constructor": True,
-                        "java_kind": "constructor",
-                    }
-
-                    methods.append(
-                        method
-                    )
-
-                    continue
 
             brace_depth += (
                 clean_line.count("{")
