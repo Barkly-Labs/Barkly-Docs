@@ -259,6 +259,13 @@ nav.site-nav a.active { color: var(--text); background: rgba(141, 211, 255, 0.08
   color: var(--text);
   padding: 10px 14px;
 }
+.graph-tools select {
+  background: rgba(255,255,255,0.03);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 12px;
+}
 .graph-tools button {
   background: rgba(141, 211, 255, 0.12);
   color: var(--text);
@@ -398,15 +405,22 @@ document.addEventListener("DOMContentLoaded", () => {
   const svg = document.getElementById("relation-map-canvas");
   const details = document.getElementById("relation-map-details");
   const searchInput = document.getElementById("relation-map-search");
+  const depthInput = document.getElementById("relation-map-depth");
   const nodeTypeFilters = Array.from(document.querySelectorAll("input[data-filter-node]"));
   const edgeTypeFilters = Array.from(document.querySelectorAll("input[data-filter-edge]"));
+  const directionFilters = Array.from(document.querySelectorAll("input[data-filter-direction]"));
   const buttons = Array.from(document.querySelectorAll("[data-graph-action]"));
+  const nodeMap = new Map((graphData.nodes || []).map((node) => [node.id, node]));
+  const edgeMap = new Map((graphData.edges || []).map((edge) => [edge.id, edge]));
   const state = {
     selectedNodeId: null,
     selectedEdgeId: null,
     search: "",
     nodeTypes: new Set(nodeTypeFilters.filter((input) => input.checked).map((input) => input.value)),
     edgeTypes: new Set(edgeTypeFilters.filter((input) => input.checked).map((input) => input.value)),
+    showIncoming: true,
+    showOutgoing: true,
+    hopDepth: Number(depthInput?.value || 1),
     scale: 1,
     offsetX: 0,
     offsetY: 0,
@@ -430,95 +444,222 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+  const nodeRadius = (node) => Math.max(18, Math.min(54, 10 + (node.label || "").length * 1.2));
 
   function matchQuery(node, query) {
     if (!query) return true;
-    const text = `${node.label || ""} ${node.qualified_name || ""} ${node.path || ""}`.toLowerCase();
+    const text = `${node.label || ""} ${node.qualified_name || ""} ${node.path || ""} ${node.source_file || ""}`.toLowerCase();
     return text.includes(query.toLowerCase());
   }
 
   function getVisibleNodes() {
-    const search = state.search.trim();
-    return (graphData.nodes || []).filter((node) => {
+    const query = state.search.trim();
+    const baseNodes = (graphData.nodes || []).filter((node) => {
       if (!state.nodeTypes.has(node.kind)) return false;
-      return matchQuery(node, search);
+      return matchQuery(node, query);
     });
+
+    if (!state.selectedNodeId) {
+      return baseNodes;
+    }
+
+    const focusNode = nodeMap.get(state.selectedNodeId);
+    if (!focusNode) {
+      return baseNodes;
+    }
+
+    const matching = new Set(baseNodes.map((node) => node.id));
+    const visited = new Set([focusNode.id]);
+    const queue = [{ id: focusNode.id, depth: 0 }];
+
+    while (queue.length) {
+      const current = queue.shift();
+      if (!current) continue;
+      const edges = (graphData.edges || []).filter((edge) => {
+        if (!state.edgeTypes.has(edge.kind)) return false;
+        if (edge.source === current.id && state.showOutgoing) return true;
+        if (edge.target === current.id && state.showIncoming) return true;
+        return false;
+      });
+      for (const edge of edges) {
+        const next = edge.source === current.id ? edge.target : edge.source;
+        if (next === current.id) continue;
+        if (visited.has(next)) continue;
+        const nextDepth = current.depth + 1;
+        if (nextDepth > state.hopDepth) continue;
+        visited.add(next);
+        queue.push({ id: next, depth: nextDepth });
+        matching.add(next);
+      }
+    }
+
+    return baseNodes.filter((node) => matching.has(node.id) || node.id === focusNode.id);
   }
 
   function getVisibleEdges() {
     const visibleNodeIds = new Set(getVisibleNodes().map((node) => node.id));
-    const selectedEdgeKinds = state.edgeTypes;
-    return (graphData.edges || []).filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target) && selectedEdgeKinds.has(edge.kind));
+    return (graphData.edges || []).filter((edge) => {
+      if (!state.edgeTypes.has(edge.kind)) return false;
+      if (!visibleNodeIds.has(edge.source) || !visibleNodeIds.has(edge.target)) return false;
+      const sourceToTarget = edge.source === state.selectedNodeId || edge.target === state.selectedNodeId;
+      if (state.selectedNodeId && !sourceToTarget && state.hopDepth <= 1) {
+        return false;
+      }
+      if (edge.source === state.selectedNodeId && !state.showOutgoing) return false;
+      if (edge.target === state.selectedNodeId && !state.showIncoming) return false;
+      return true;
+    });
+  }
+
+  function ensureNodePositions(nodes) {
+    const positions = new Map();
+    if (!nodes.length) return positions;
+    const centerX = 420;
+    const centerY = 260;
+    if (nodes.length === 1) {
+      positions.set(nodes[0].id, { x: centerX, y: centerY, vx: 0, vy: 0 });
+      return positions;
+    }
+
+    const angleStep = (Math.PI * 2) / nodes.length;
+    nodes.forEach((node, index) => {
+      const angle = angleStep * index;
+      const radius = Math.min(180, 90 + nodes.length * 6);
+      positions.set(node.id, {
+        x: centerX + Math.cos(angle) * radius,
+        y: centerY + Math.sin(angle) * radius,
+        vx: 0,
+        vy: 0,
+      });
+    });
+    return positions;
   }
 
   function computeLayout() {
     const visibleNodes = getVisibleNodes();
-    const buckets = new Map();
-    for (const node of visibleNodes) {
-      if (!buckets.has(node.kind)) buckets.set(node.kind, []);
-      buckets.get(node.kind).push(node);
-    }
+    const visibleEdges = getVisibleEdges();
+    if (!visibleNodes.length) return new Map();
 
-    const positions = new Map();
-    let column = 0;
-    for (const kind of Object.keys(kindColors)) {
-      const bucket = buckets.get(kind) || [];
-      if (bucket.length === 0) continue;
-      for (let index = 0; index < bucket.length; index += 1) {
-        const node = bucket[index];
-        const x = 180 + column * 240 + (index % 3) * 80;
-        const y = 120 + Math.floor(index / 3) * 120;
-        positions.set(node.id, { x, y });
+    const positions = ensureNodePositions(visibleNodes);
+    const centerNode = state.selectedNodeId ? nodeMap.get(state.selectedNodeId) : null;
+    const focusPos = centerNode ? positions.get(centerNode.id) || { x: 420, y: 260 } : { x: 420, y: 260 };
+
+    for (let iteration = 0; iteration < 120; iteration += 1) {
+      const forces = new Map();
+      for (const node of visibleNodes) {
+        forces.set(node.id, { x: 0, y: 0 });
       }
-      column += 1;
-    }
 
-    const remaining = visibleNodes.filter((node) => !positions.has(node.id));
-    for (let index = 0; index < remaining.length; index += 1) {
-      const node = remaining[index];
-      positions.set(node.id, { x: 160 + (index % 4) * 180, y: 180 + Math.floor(index / 4) * 140 });
+      for (let index = 0; index < visibleNodes.length; index += 1) {
+        for (let otherIndex = index + 1; otherIndex < visibleNodes.length; otherIndex += 1) {
+          const a = visibleNodes[index];
+          const b = visibleNodes[otherIndex];
+          const pa = positions.get(a.id);
+          const pb = positions.get(b.id);
+          if (!pa || !pb) continue;
+          const dx = pb.x - pa.x;
+          const dy = pb.y - pa.y;
+          const distSq = dx * dx + dy * dy + 0.0001;
+          const dist = Math.sqrt(distSq);
+          const repulse = (1200 / distSq) * 1.3;
+          const fx = (dx / dist) * repulse;
+          const fy = (dy / dist) * repulse;
+          forces.get(a.id).x -= fx;
+          forces.get(a.id).y -= fy;
+          forces.get(b.id).x += fx;
+          forces.get(b.id).y += fy;
+        }
+      }
+
+      for (const edge of visibleEdges) {
+        const source = positions.get(edge.source);
+        const target = positions.get(edge.target);
+        if (!source || !target) continue;
+        const dx = target.x - source.x;
+        const dy = target.y - source.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const spring = (dist - 110) * 0.035;
+        const fx = (dx / dist) * spring;
+        const fy = (dy / dist) * spring;
+        forces.get(edge.source).x += fx;
+        forces.get(edge.source).y += fy;
+        forces.get(edge.target).x -= fx;
+        forces.get(edge.target).y -= fy;
+      }
+
+      for (const node of visibleNodes) {
+        const pos = positions.get(node.id);
+        const force = forces.get(node.id);
+        if (!pos || !force) continue;
+        pos.vx = (pos.vx + force.x) * 0.72;
+        pos.vy = (pos.vy + force.y) * 0.72;
+        pos.x += pos.vx;
+        pos.y += pos.vy;
+
+        if (node.id === centerNode?.id) {
+          pos.x += (focusPos.x - pos.x) * 0.30;
+          pos.y += (focusPos.y - pos.y) * 0.30;
+        }
+
+        pos.x = clamp(pos.x, 40, 860);
+        pos.y = clamp(pos.y, 40, 520);
+      }
     }
 
     return positions;
+  }
+
+  function buildRelatedList(nodeId) {
+    const relations = (graphData.edges || []).filter((edge) => edge.source === nodeId || edge.target === nodeId);
+    const names = relations.map((edge) => {
+      const other = edge.source === nodeId ? edge.target : edge.source;
+      const entry = nodeMap.get(other) || { label: other, qualified_name: other };
+      return `<li><a href="#" data-select-node="${other}">${entry.label || entry.qualified_name || other}</a> <span class="badge ${edge.evidence.toLowerCase()}">${edge.evidence}</span> <span class="code">${edge.kind}</span></li>`;
+    });
+    return names.length ? `<ul>${names.join('')}</ul>` : '<div class="meta">No adjacent links in the current scope.</div>';
   }
 
   function setDetailsPanel(target) {
     if (!details || !target) {
       return;
     }
-    const htmlParts = [];
-    if (target.kind) {
-      htmlParts.push(`<div class="meta"><span class="badge detected">${target.kind}</span></div>`);
-    }
-    if (target.qualified_name) {
-      htmlParts.push(`<h3>${target.qualified_name}</h3>`);
-    }
-    if (target.path || target.source_file) {
-      htmlParts.push(`<div class="meta">Source: ${target.path || target.source_file || "unknown"}</div>`);
-    }
-    if (target.line) {
-      htmlParts.push(`<div class="meta">Line: ${target.line}</div>`);
-    }
-    if (target.evidence) {
-      htmlParts.push(`<div class="meta">Evidence: <span class="badge ${target.evidence.toLowerCase()}">${target.evidence}</span></div>`);
-    }
-    if (target.metadata && Object.keys(target.metadata).length > 0) {
-      htmlParts.push(`<div class="meta">Metadata: ${Object.entries(target.metadata).slice(0, 6).map(([key, value]) => `${key}: ${String(value)}`).join(" · ")}</div>`);
-    }
-    if (target.relationships && target.relationships.length) {
-      htmlParts.push(`<div class="meta">Relationships: ${target.relationships.length}</div>`);
-    }
-    if (target.explanation) {
-      htmlParts.push(`<p>${target.explanation}</p>`);
-    }
+    const incoming = (graphData.edges || []).filter((edge) => edge.target === target.id && state.edgeTypes.has(edge.kind));
+    const outgoing = (graphData.edges || []).filter((edge) => edge.source === target.id && state.edgeTypes.has(edge.kind));
+
+    const related = buildRelatedList(target.id);
+    const htmlParts = [
+      `<div class="meta"><span class="badge detected">${target.kind || "entity"}</span></div>`,
+      `<h3>${target.qualified_name || target.label || target.id}</h3>`,
+      target.path || target.source_file ? `<div class="meta">Source: ${target.path || target.source_file || "unknown"}</div>` : "",
+      target.line ? `<div class="meta">Line: ${target.line}</div>` : "",
+      target.evidence ? `<div class="meta">Evidence: <span class="badge ${target.evidence.toLowerCase()}">${target.evidence}</span></div>` : "",
+      `<div class="meta">Incoming: ${incoming.length} · Outgoing: ${outgoing.length}</div>`,
+      `<div class="section"><h4>Connected entities</h4>${related}</div>`,
+    ];
+
     details.innerHTML = htmlParts.join("");
+
+    details.querySelectorAll("[data-select-node]").forEach((anchor) => {
+      anchor.addEventListener("click", (event) => {
+        event.preventDefault();
+        const relatedId = anchor.getAttribute("data-select-node");
+        if (relatedId) {
+          state.selectedNodeId = relatedId;
+          state.selectedEdgeId = null;
+          renderGraph();
+        }
+      });
+    });
   }
 
   function renderGraph() {
     const visibleNodes = getVisibleNodes();
     const visibleEdges = getVisibleEdges();
     const positionMap = computeLayout();
+
     svg.innerHTML = "";
+    const root = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    root.setAttribute("transform", `translate(${state.offsetX} ${state.offsetY}) scale(${state.scale})`);
 
     if (!visibleNodes.length) {
       svg.innerHTML = '<text x="20" y="30" fill="#a4b3c9" font-size="16">No matching nodes.</text>';
@@ -531,16 +672,14 @@ document.addEventListener("DOMContentLoaded", () => {
     marker.setAttribute("id", "arrowhead");
     marker.setAttribute("markerWidth", "8");
     marker.setAttribute("markerHeight", "8");
-    marker.setAttribute("refX", "6");
-    marker.setAttribute("refY", "3");
+    marker.setAttribute("refX", "7");
+    marker.setAttribute("refY", "3.5");
     marker.setAttribute("orient", "auto");
-    marker.innerHTML = '<path d="M0,0 L0,6 L6,3 z" fill="#a4b3c9"></path>';
+    marker.innerHTML = '<path d="M0,0 L7,3.5 L0,7 z" fill="#a4b3c9"></path>';
     defs.appendChild(marker);
-    svg.appendChild(defs);
+    root.appendChild(defs);
 
     const edgeGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    const nodeGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
-
     for (const edge of visibleEdges) {
       const source = positionMap.get(edge.source);
       const target = positionMap.get(edge.target);
@@ -549,21 +688,22 @@ document.addEventListener("DOMContentLoaded", () => {
       const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
       const dx = target.x - source.x;
       const dy = target.y - source.y;
-      const curve = Math.max(40, Math.abs(dx) * 0.25);
+      const curve = Math.max(40, Math.abs(dx) * 0.18);
       const d = `M ${source.x} ${source.y} C ${source.x + curve} ${source.y}, ${target.x - curve} ${target.y}, ${target.x} ${target.y}`;
       path.setAttribute("d", d);
       path.setAttribute("class", `graph-edge ${state.selectedEdgeId === edge.id ? "selected" : ""}`.trim());
-      path.setAttribute("stroke", "#a4b3c9");
+      path.setAttribute("stroke", edge.evidence === "DECLARED" ? "#7af0b6" : edge.evidence === "INFERRED" ? "#ffd166" : edge.evidence === "UNKNOWN" ? "#ff7b8c" : "#a4b3c9");
+      path.setAttribute("stroke-width", edge.evidence === "UNKNOWN" ? "1.1" : "1.5");
+      path.setAttribute("fill", "none");
       path.setAttribute("marker-end", "url(#arrowhead)");
       path.dataset.edgeId = edge.id;
       path.addEventListener("click", () => {
         state.selectedEdgeId = edge.id;
         state.selectedNodeId = null;
-        const edgeRecord = graphData.edges.find((item) => item.id === edge.id);
-        if (edgeRecord) {
-          details.innerHTML = `<h3>${edgeRecord.kind}</h3><div class="meta">${edgeRecord.source} → ${edgeRecord.target}</div><div class="meta">Evidence: <span class="badge ${edgeRecord.evidence.toLowerCase()}">${edgeRecord.evidence}</span></div><p>${edgeRecord.explanation || "Source evidence recorded by the project analysis pipeline."}</p><div class="meta">File: ${edgeRecord.source_file || "unknown"}</div>`;
+        const edgeItem = edgeMap.get(edge.id);
+        if (edgeItem) {
+          details.innerHTML = `<h3>${edgeItem.kind}</h3><div class="meta">${edgeItem.source} → ${edgeItem.target}</div><div class="meta">Evidence: <span class="badge ${String(edgeItem.evidence || "UNKNOWN").toLowerCase()}">${edgeItem.evidence || "UNKNOWN"}</span></div><div class="meta">File: ${edgeItem.source_file || "unknown"}</div><p>${edgeItem.explanation || "Static relationship recorded during project analysis."}</p>`;
         }
-        renderGraph();
       });
       edgeGroup.appendChild(path);
 
@@ -574,24 +714,27 @@ document.addEventListener("DOMContentLoaded", () => {
       label.textContent = edge.kind;
       edgeGroup.appendChild(label);
     }
+    root.appendChild(edgeGroup);
 
+    const nodeGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
     for (const node of visibleNodes) {
-      const position = positionMap.get(node.id) || { x: 160, y: 140 };
+      const position = positionMap.get(node.id) || { x: 300, y: 200 };
       const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
       group.setAttribute("class", `graph-node ${state.selectedNodeId === node.id ? "selected" : ""}`.trim());
       group.dataset.nodeId = node.id;
 
+      const width = Math.max(88, nodeRadius(node) * 3.6);
+      const height = 34;
       const body = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-      const width = Math.max(100, 12 + (node.label.length * 6));
-      const height = 32;
       body.setAttribute("class", "node-body");
       body.setAttribute("x", String(position.x - width / 2));
       body.setAttribute("y", String(position.y - height / 2));
-      body.setAttribute("rx", "10");
+      body.setAttribute("rx", "12");
       body.setAttribute("width", String(width));
       body.setAttribute("height", String(height));
       body.setAttribute("fill", kindColors[node.kind] || kindColors.unknown);
-      body.setAttribute("stroke", "rgba(255,255,255,0.2)");
+      body.setAttribute("stroke", "rgba(255,255,255,0.3)");
+      body.setAttribute("stroke-width", state.selectedNodeId === node.id ? "2.8" : "1.2");
       group.appendChild(body);
 
       const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
@@ -599,7 +742,8 @@ document.addEventListener("DOMContentLoaded", () => {
       text.setAttribute("y", String(position.y + 4));
       text.setAttribute("text-anchor", "middle");
       text.setAttribute("class", "node-label");
-      text.textContent = node.label.length > 24 ? `${node.label.slice(0, 22)}…` : node.label;
+      const labelText = (node.label || node.qualified_name || node.id).slice(0, 26);
+      text.textContent = labelText;
       group.appendChild(text);
 
       group.addEventListener("click", () => {
@@ -608,50 +752,61 @@ document.addEventListener("DOMContentLoaded", () => {
         setDetailsPanel(node);
         renderGraph();
       });
-
       nodeGroup.appendChild(group);
     }
-
-    svg.appendChild(edgeGroup);
-    svg.appendChild(nodeGroup);
-    const transform = `translate(${state.offsetX}px, ${state.offsetY}px) scale(${state.scale})`;
-    svg.setAttribute("transform", transform);
+    root.appendChild(nodeGroup);
+    svg.appendChild(root);
 
     if (details && !state.selectedNodeId && !state.selectedEdgeId) {
       const summaryNode = visibleNodes[0];
-      if (summaryNode) {
-        setDetailsPanel(summaryNode);
-      }
+      if (summaryNode) setDetailsPanel(summaryNode);
     }
   }
 
   function applyFilters() {
     state.nodeTypes = new Set(nodeTypeFilters.filter((input) => input.checked).map((input) => input.value));
     state.edgeTypes = new Set(edgeTypeFilters.filter((input) => input.checked).map((input) => input.value));
+    state.showIncoming = directionFilters.some((input) => input.dataset.filterDirection === "incoming" && input.checked);
+    state.showOutgoing = directionFilters.some((input) => input.dataset.filterDirection === "outgoing" && input.checked);
     renderGraph();
   }
 
-  searchInput.addEventListener("input", (event) => {
+  function handleButtonAction(action) {
+    if (action === "zoom-in") {
+      state.scale = clamp(state.scale * 1.2, 0.35, 2.5);
+    } else if (action === "zoom-out") {
+      state.scale = clamp(state.scale / 1.2, 0.35, 2.5);
+    } else if (action === "reset") {
+      state.scale = 1;
+      state.offsetX = 0;
+      state.offsetY = 0;
+      state.selectedNodeId = null;
+      state.selectedEdgeId = null;
+      state.hopDepth = Number(depthInput?.value || 1);
+    } else if (action === "expand") {
+      if (state.selectedNodeId) {
+        state.hopDepth = Math.min(4, Number(state.hopDepth) + 1);
+        if (depthInput) depthInput.value = String(state.hopDepth);
+      }
+    } else if (action === "focus") {
+      state.selectedNodeId = state.selectedNodeId || (graphData.nodes || [])[0]?.id || null;
+    }
+    renderGraph();
+  }
+
+  searchInput?.addEventListener("input", (event) => {
     state.search = event.target.value;
+    renderGraph();
+  });
+  depthInput?.addEventListener("change", (event) => {
+    state.hopDepth = Number(event.target.value) || 1;
     renderGraph();
   });
   nodeTypeFilters.forEach((input) => input.addEventListener("change", applyFilters));
   edgeTypeFilters.forEach((input) => input.addEventListener("change", applyFilters));
-
+  directionFilters.forEach((input) => input.addEventListener("change", applyFilters));
   buttons.forEach((button) => {
-    button.addEventListener("click", () => {
-      const action = button.dataset.graphAction;
-      if (action === "zoom-in") {
-        state.scale = clamp(state.scale * 1.2, 0.3, 2.5);
-      } else if (action === "zoom-out") {
-        state.scale = clamp(state.scale / 1.2, 0.3, 2.5);
-      } else if (action === "reset") {
-        state.scale = 1;
-        state.offsetX = 0;
-        state.offsetY = 0;
-      }
-      renderGraph();
-    });
+    button.addEventListener("click", () => handleButtonAction(button.dataset.graphAction));
   });
 
   svg.addEventListener("pointerdown", (event) => {
@@ -665,12 +820,8 @@ document.addEventListener("DOMContentLoaded", () => {
     state.offsetY = event.clientY - state.dragStartY;
     renderGraph();
   });
-  svg.addEventListener("pointerup", () => {
-    state.dragging = false;
-  });
-  svg.addEventListener("pointerleave", () => {
-    state.dragging = false;
-  });
+  svg.addEventListener("pointerup", () => { state.dragging = false; });
+  svg.addEventListener("pointerleave", () => { state.dragging = false; });
 
   renderGraph();
 });
@@ -952,22 +1103,33 @@ def _render_relation_map_page(project: Project) -> str:
     body = (
         '<section class="section">'
         '<h2>Relation Map</h2>'
-        '<div class="section-subtitle">A normalized graph built from the current scan results and evidence-labeled relationships.</div>'
+        '<div class="section-subtitle">A force-directed spider-web graph built from the current scan results and evidence-labeled relationships.</div>'
         + (f'<div class="meta">Graph nodes: {len(graph.nodes)} · edges: {len(graph.edges)} · unresolved: {len(graph.unresolved)}</div>' if graph.nodes or graph.edges else '')
+        + (f'<div class="meta">{_escape(graph.warnings[0])}</div>' if graph.warnings else '')
         + '<div id="relation-map-shell">'
         '  <div id="relation-map-panel" class="card">'
         '    <div class="graph-tools">'
         '      <input id="relation-map-search" type="search" placeholder="Search by file path or symbol name" aria-label="Search graph" />'
+        '      <label class="filter-chip"><input type="checkbox" data-filter-direction="incoming" checked /> Incoming</label>'
+        '      <label class="filter-chip"><input type="checkbox" data-filter-direction="outgoing" checked /> Outgoing</label>'
+        '      <select id="relation-map-depth" aria-label="Relationship hop depth">'
+        '        <option value="1">1 hop</option>'
+        '        <option value="2">2 hops</option>'
+        '        <option value="3">3 hops</option>'
+        '        <option value="4">4 hops</option>'
+        '      </select>'
+        '      <button type="button" data-graph-action="focus">Center</button>'
+        '      <button type="button" data-graph-action="expand">Expand</button>'
         '      <button type="button" data-graph-action="zoom-in">Zoom+</button>'
         '      <button type="button" data-graph-action="zoom-out">Zoom-</button>'
-        '      <button type="button" data-graph-action="reset">Reset view</button>'
+        '      <button type="button" data-graph-action="reset">Reset</button>'
         '    </div>'
         '    <div class="graph-filters">' + filter_boxes + '</div>'
-        '    <svg id="relation-map-canvas" aria-label="Relation map graph"></svg>'
+        '    <svg id="relation-map-canvas" aria-label="Relation map graph" viewBox="0 0 900 560"></svg>'
         '  </div>'
         '  <aside id="relation-map-details" class="card">'
         '    <h3>Node details</h3>'
-        '    <div class="meta">Select a node or edge to inspect its evidence.</div>'
+        '    <div class="meta">Select a node or edge to inspect its evidence and relationships.</div>'
         '  </aside>'
         '</div>'
         + '<div class="section">'
