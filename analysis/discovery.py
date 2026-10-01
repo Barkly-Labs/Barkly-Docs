@@ -146,6 +146,15 @@ class ProjectDiscovery:
                     )
                 continue
 
+            # Snapshot project counts before the reader runs so file-level
+            # counts can be computed reliably without mixing in other files.
+            pre_counts = {
+                "classes": len(project.classes),
+                "functions": len(project.functions),
+                "methods": len(project.methods),
+                "relationships": len(project.relationships),
+            }
+
             start_time = __import__("time").perf_counter()
             try:
                 reader_result = reader.read(
@@ -187,7 +196,45 @@ class ProjectDiscovery:
                         reader=reader.language,
                     )
 
+                # Compute per-file counts. Prefer explicit metadata supplied
+                # by a reader (readers MAY provide file-level counts in
+                # reader_result.metadata). Fall back to the delta between
+                # project counts before/after the read. Also include the
+                # project-level summary separately so logs can show both.
+                post_counts = {
+                    "classes": len(project.classes),
+                    "functions": len(project.functions),
+                    "methods": len(project.methods),
+                    "relationships": len(project.relationships),
+                }
+
+                delta = {
+                    key: post_counts[key] - pre_counts.get(key, 0)
+                    for key in post_counts
+                }
+
+                per_file_counts = {
+                    "classes": reader_result.metadata.get("classes")
+                    if reader_result.metadata and "classes" in reader_result.metadata
+                    else delta["classes"],
+                    "functions": reader_result.metadata.get("functions")
+                    if reader_result.metadata and "functions" in reader_result.metadata
+                    else delta["functions"],
+                    "methods": reader_result.metadata.get("methods")
+                    if reader_result.metadata and "methods" in reader_result.metadata
+                    else delta["methods"],
+                    "relationships": reader_result.metadata.get("relationships")
+                    if reader_result.metadata and "relationships" in reader_result.metadata
+                    else delta["relationships"],
+                }
+
+                project_totals = project.summary()
+
                 if event_logger is not None:
+                    # Emit explicit per-file counts and the project-level
+                    # aggregates together. The file=... field indicates the
+                    # per-file scope; project totals are labeled as such so
+                    # consumers don't misinterpret them.
                     event_logger.file_event(
                         path=path,
                         file_type=path.suffix.lower(),
@@ -196,16 +243,49 @@ class ProjectDiscovery:
                         phase="analysis",
                         duration_ms=duration_ms,
                         counts={
-                            "classes": len(project.classes),
-                            "functions": len(project.functions),
-                            "methods": len(project.methods),
-                            "relationships": len(project.relationships),
+                            "per_file": per_file_counts,
+                            "project": project_totals,
                         },
                         message=(
                             "File analyzed successfully."
                             if status == "complete"
                             else "File analysis returned warnings or errors."
                         ),
+                    )
+
+            except Exception as exc:
+                result.errors.append(
+                    f"{path}: reader "
+                    f"{reader.language} failed: {exc}"
+                )
+                if progress_callback is not None:
+                    progress_callback(
+                        stage="analysis",
+                        current=index,
+                        total=total,
+                        current_file=str(path),
+                        counts={
+                            "processed": len(result.processed_files),
+                            "skipped": len(result.skipped_files),
+                            "failed": len(result.errors),
+                            "warnings": len(result.warnings),
+                        },
+                        reader=reader.language,
+                    )
+                if event_logger is not None:
+                    event_logger.file_event(
+                        path=path,
+                        file_type=path.suffix.lower(),
+                        reader_name=reader.language,
+                        status="failed",
+                        phase="analysis",
+                        duration_ms=int((__import__("time").perf_counter() - start_time) * 1000),
+                        error=str(exc),
+                        counts={
+                            "processed": len(result.processed_files),
+                            "skipped": len(result.skipped_files),
+                            "failed": len(result.errors),
+                        },
                     )
 
             except Exception as exc:
