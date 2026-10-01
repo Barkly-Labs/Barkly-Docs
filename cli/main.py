@@ -107,6 +107,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--parallel",
+        action="store_true",
+        help="Use process-based parallel parsing for independent source files.",
+    )
+
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="Override the number of worker processes used by parallel discovery. Defaults to CPU core count when parallel is enabled.",
+    )
+
+    parser.add_argument(
         "--log-file",
         type=Path,
         default=None,
@@ -232,6 +245,8 @@ def main() -> int:
             name=args.name,
             event_logger=terminal,
             progress_callback=terminal.render_progress,
+            parallel=args.parallel,
+            workers=args.workers,
         )
     except KeyboardInterrupt:
         terminal.event("pipeline.interrupted", level="WARNING", message="Processing interrupted by user.")
