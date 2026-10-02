@@ -10,26 +10,26 @@ from model.project import Project
 
 CSS = """
 :root {
-  --bg: #0b0d12;
-  --panel: #121822;
-  --panel-alt: #171f2d;
-  --line: #253246;
-  --text: #edf4ff;
-  --muted: #a4b3c9;
-  --accent: #8dd3ff;
-  --success: #7af0b6;
-  --warning: #ffd166;
+  --bg: #080808;
+  --panel: #101010;
+  --panel-alt: #151515;
+  --line: #262626;
+  --text: #f2f2f2;
+  --muted: #9a9a9a;
+  --accent: #ff6b9d;
+  --success: #7dffb2;
+  --warning: #ffd76b;
   --danger: #ff7b8c;
-  --shadow: rgba(1, 5, 10, 0.25);
+  --shadow: rgba(0, 0, 0, 0.28);
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body {
   margin: 0;
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: var(--bg);
   color: var(--text);
-  line-height: 1.5;
+  line-height: 1.6;
 }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -49,16 +49,16 @@ a:hover { text-decoration: underline; }
   border-radius: 8px;
 }
 .container {
-  max-width: 1180px;
+  max-width: 1320px;
   margin: 0 auto;
-  padding: 32px 20px 64px;
+  padding: 32px 18px 72px;
 }
 header.site-header {
-  background: linear-gradient(180deg, rgba(20, 28, 38, 0.95), rgba(14, 18, 25, 0.95));
+  background: rgba(8, 8, 8, 0.92);
   border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 20;
 }
 header.site-header .container {
   display: flex;
@@ -69,16 +69,16 @@ header.site-header .container {
   padding-bottom: 16px;
 }
 .brand {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: -0.03em;
   text-transform: uppercase;
   display: flex;
   align-items: center;
   gap: 10px;
 }
 .paw { width: 26px; height: 26px; display: inline-block; vertical-align: middle; }
-nav.site-nav { display: flex; gap: 16px; flex-wrap: wrap; }
+nav.site-nav { display: flex; gap: 6px; flex-wrap: wrap; }
 nav.site-nav a {
   color: var(--muted);
   font-size: 0.95rem;
@@ -91,24 +91,29 @@ nav.site-nav a:hover, nav.site-nav a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-nav.site-nav a.active { color: var(--text); background: rgba(141, 211, 255, 0.08); }
+nav.site-nav a.active {
+  color: var(--text);
+  background: rgba(255, 107, 157, 0.12);
+}
 .hero {
   display: grid;
-  grid-template-columns: 1.5fr 1fr;
+  grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr);
   gap: 20px;
   margin-top: 32px;
 }
 .card {
-  background: linear-gradient(180deg, var(--panel), var(--panel-alt));
+  background:
+    linear-gradient(135deg, rgba(255, 107, 157, 0.055), transparent 58%),
+    var(--panel);
   border: 1px solid var(--line);
   border-radius: 16px;
   box-shadow: 0 10px 30px var(--shadow);
 }
 .hero-main { padding: 28px; }
 .hero-main h1 {
-  font-size: clamp(2rem, 2.8vw, 3rem);
+  font-size: clamp(2.4rem, 5vw, 4.5rem);
   margin: 0 0 12px;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.06em;
 }
 .hero-main p {
   margin: 0;
@@ -133,13 +138,13 @@ nav.site-nav a.active { color: var(--text); background: rgba(141, 211, 255, 0.08
   padding: 16px 14px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(255,255,255,0.015);
+  background: #0d0d0d;
 }
 .metric-label {
   display: block;
   color: var(--muted);
   font-size: 0.72rem;
-  letter-spacing: 0.08em;
+  letter-spacing: -0.03em;
   text-transform: uppercase;
   margin-bottom: 8px;
 }
@@ -183,9 +188,9 @@ nav.site-nav a.active { color: var(--text); background: rgba(141, 211, 255, 0.08
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.badge.declared { background: rgba(122, 240, 182, 0.15); color: var(--success); }
-.badge.detected { background: rgba(141, 211, 255, 0.15); color: var(--accent); }
-.badge.inferred { background: rgba(255, 209, 102, 0.15); color: var(--warning); }
+.badge.declared { background: rgba(125, 255, 178, 0.12); color: var(--success); }
+.badge.detected { background: rgba(255, 107, 157, 0.15); color: var(--accent); }
+.badge.inferred { background: rgba(255, 215, 107, 0.12); color: var(--warning); }
 .badge.unknown { background: rgba(255, 123, 140, 0.15); color: var(--danger); }
 .code {
   font-family: "Consolas", "SFMono-Regular", monospace;
@@ -197,7 +202,7 @@ nav.site-nav a.active { color: var(--text); background: rgba(141, 211, 255, 0.08
   border-radius: 12px;
   padding: 18px;
   color: var(--muted);
-  background: rgba(255,255,255,0.01);
+  background: #0b0b0b;
 }
 .site-footer {
   margin-top: 40px;
@@ -206,6 +211,10 @@ nav.site-nav a.active { color: var(--text); background: rgba(141, 211, 255, 0.08
   padding-top: 18px;
 }
 @media (max-width: 760px) {
+  .container { padding-left: 16px; padding-right: 16px; }
+  .hero { margin-top: 24px; }
+  .hero-main { padding: 22px; }
+  .section { margin-top: 26px; }
   .hero { grid-template-columns: 1fr; }
   header.site-header .container { align-items: flex-start; flex-direction: column; }
   nav.site-nav { width: 100%; }
@@ -238,7 +247,7 @@ nav.site-nav a.active { color: var(--text); background: rgba(141, 211, 255, 0.08
   display: block;
   background:
     linear-gradient(rgba(255,255,255,0.015), rgba(255,255,255,0.015)),
-    radial-gradient(circle at top, rgba(141,211,255,0.08), transparent 60%);
+    radial-gradient(circle at top, rgba(255,107,157,0.08), transparent 60%);
 }
 #relation-map-details {
   padding: 18px;
@@ -249,25 +258,33 @@ nav.site-nav a.active { color: var(--text); background: rgba(141, 211, 255, 0.08
   gap: 10px;
   padding: 12px 14px;
   border-bottom: 1px solid var(--line);
-  background: rgba(255,255,255,0.02);
+  background: #0d0d0d;
+}
+button, input, select {
+  font: inherit;
+}
+button:focus-visible, input:focus-visible, select:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 .graph-tools input[type="search"] {
   flex: 1 1 220px;
-  background: rgba(255,255,255,0.03);
+  background: #0b0b0b;
   border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--text);
   padding: 10px 14px;
 }
 .graph-tools select {
-  background: rgba(255,255,255,0.03);
+  background: #0b0b0b;
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 8px 12px;
 }
 .graph-tools button {
-  background: rgba(141, 211, 255, 0.12);
+  background: rgba(255, 107, 157, 0.12);
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -303,7 +320,7 @@ nav.site-nav a.active { color: var(--text); background: rgba(141, 211, 255, 0.08
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 10px 12px;
-  background: rgba(255,255,255,0.015);
+  background: #0d0d0d;
 }
 .legend-swatch {
   display: inline-block;
@@ -323,7 +340,7 @@ nav.site-nav a.active { color: var(--text); background: rgba(141, 211, 255, 0.08
   border-radius: 12px;
   padding: 18px;
   color: var(--muted);
-  background: rgba(255,255,255,0.01);
+  background: #0b0b0b;
 }
 .relation-map-error {
   border-color: rgba(255, 123, 140, 0.4);
@@ -432,17 +449,17 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const kindColors = {
-    file: "#8dd3ff",
-    module: "#7af0b6",
-    class: "#ffd166",
-    interface: "#d8a4ff",
-    function: "#8dd3ff",
-    method: "#ff9f7a",
-    endpoint: "#ff7b8c",
-    route: "#9ad3bc",
-    variable: "#7fccff",
-    component: "#a5d6a7",
-    unknown: "#a4b3c9",
+    file: "#ff6b9d",
+    module: "#7dffb2",
+    class: "#ffd76b",
+    interface: "#c4a7ff",
+    function: "#ff6b9d",
+    method: "#ffb38a",
+    endpoint: "#ff8aa1",
+    route: "#7dffb2",
+    variable: "#ff9fc0",
+    component: "#b7e4a8",
+    unknown: "#9a9a9a",
   };
 
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -698,7 +715,7 @@ document.addEventListener("DOMContentLoaded", () => {
     root.setAttribute("transform", `translate(${state.offsetX} ${state.offsetY}) scale(${state.scale})`);
 
     if (!visibleNodes.length) {
-      svg.innerHTML = '<text x="20" y="30" fill="#a4b3c9" font-size="16">No matching nodes.</text>';
+      svg.innerHTML = '<text x="20" y="30" fill="#9a9a9a" font-size="16">No matching nodes.</text>';
       if (details) details.innerHTML = '<div class="relation-map-empty">No matching nodes are available for the selected filters.</div>';
       return;
     }
@@ -711,7 +728,7 @@ document.addEventListener("DOMContentLoaded", () => {
     marker.setAttribute("refX", "7");
     marker.setAttribute("refY", "3.5");
     marker.setAttribute("orient", "auto");
-    marker.innerHTML = '<path d="M0,0 L7,3.5 L0,7 z" fill="#a4b3c9"></path>';
+    marker.innerHTML = '<path d="M0,0 L7,3.5 L0,7 z" fill="#9a9a9a"></path>';
     defs.appendChild(marker);
     root.appendChild(defs);
 
@@ -728,7 +745,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const d = `M ${source.x} ${source.y} C ${source.x + curve} ${source.y}, ${target.x - curve} ${target.y}, ${target.x} ${target.y}`;
       path.setAttribute("d", d);
       path.setAttribute("class", `graph-edge ${state.selectedEdgeId === edge.id ? "selected" : ""}`.trim());
-      path.setAttribute("stroke", edge.evidence === "DECLARED" ? "#7af0b6" : edge.evidence === "INFERRED" ? "#ffd166" : edge.evidence === "UNKNOWN" ? "#ff7b8c" : "#a4b3c9");
+      path.setAttribute("stroke", edge.evidence === "DECLARED" ? "#7dffb2" : edge.evidence === "INFERRED" ? "#ffd76b" : edge.evidence === "UNKNOWN" ? "#ff8aa1" : "#9a9a9a");
       path.setAttribute("stroke-width", edge.evidence === "UNKNOWN" ? "1.1" : "1.5");
       path.setAttribute("fill", "none");
       path.setAttribute("marker-end", "url(#arrowhead)");
@@ -1122,11 +1139,11 @@ def _render_relation_map_page(project: Project) -> str:
     node_types = sorted({node.kind for node in graph.nodes}) or ["file"]
     edge_types = sorted({edge.kind for edge in graph.edges}) or ["imports"]
     legend_items = [
-        ('file', '#8dd3ff'),
-        ('module', '#7af0b6'),
-        ('class', '#ffd166'),
+        ('file', '#ff6b9d'),
+        ('module', '#7dffb2'),
+        ('class', '#ffd76b'),
         ('interface', '#d8a4ff'),
-        ('function', '#8dd3ff'),
+        ('function', '#ff6b9d'),
         ('method', '#ff9f7a'),
         ('endpoint', '#ff7b8c'),
     ]
