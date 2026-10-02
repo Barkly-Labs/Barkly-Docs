@@ -1458,346 +1458,121 @@ def _page_shell(title: str, current: str, body: str) -> str:
 
 
 def _render_project_architecture(project: Project) -> str:
-    """Render a readable, project-only layered architecture overview."""
-    from collections import defaultdict
-    from html import escape
-
+    """Render a native, project-only architecture diagram in Barkly Docs HTML."""
     graph = build_relation_graph(
-        project,
-        view="project_overview",
-        max_nodes=None,
-        max_edges=None,
+        project, view="project_overview", max_nodes=None, max_edges=None
     )
 
-    if not graph.nodes:
-        return """
-        <section class="section project-architecture" id="project-architecture">
-          <h2>Project Architecture</h2>
-          <p class="section-subtitle">
-            No internal project components were found for the overview.
-          </p>
-        </section>
-        """
+    nodes = list(graph.nodes)
+    edges = list(graph.edges)
 
-    def component_text(node, *keys):
-        metadata = getattr(node, "metadata", {}) or {}
-        for key in keys:
-            value = metadata.get(key)
-            if value:
-                return str(value).lower()
-        return ""
+    # A predictable grid keeps the diagram usable without a JavaScript
+    # framework, an external server, or a Docker container.
+    columns = 4
+    node_width = 218
+    node_height = 72
+    horizontal_gap = 54
+    vertical_gap = 78
+    margin_x = 28
+    margin_y = 38
+    rows = max(1, (len(nodes) + columns - 1) // columns)
+    width = margin_x * 2 + columns * node_width + (columns - 1) * horizontal_gap
+    height = margin_y * 2 + rows * node_height + (rows - 1) * vertical_gap
 
-    def layer_for(node):
-        identity = " ".join((
-            str(getattr(node, "id", "")),
-            str(getattr(node, "label", "")),
-            component_text(node, "kind", "type", "category", "path", "module"),
-        )).lower().replace("\\", "/")
+    positions = {}
+    for index, node in enumerate(nodes):
+        column = index % columns
+        row = index // columns
+        x = margin_x + column * (node_width + horizontal_gap)
+        y = margin_y + row * (node_height + vertical_gap)
+        positions[node.id] = (x, y)
 
-        entry_terms = (
-            "entrypoint", "entry_point", "main.py", "main.rs",
-            "app.py", "server.py", "routes", "router",
-            "controller", "endpoint", "cli",
-        )
-        data_terms = (
-            "database", "repository", "repositories", "model",
-            "schema", "storage", "persistence", "migration",
-        )
-
-        if any(term in identity for term in entry_terms):
-            return "entry"
-
-        if any(term in identity for term in data_terms):
-            return "data"
-
-        return "core"
-
-    layers = [
-        ("entry", "Entry points", "Where execution enters the project."),
-        ("core", "Core logic", "The components that perform the main work."),
-        ("data", "Data and persistence", "Project components that manage data."),
+    svg_parts = [
+        f'<svg class="barkly-architecture-svg" viewBox="0 0 {width} {height}" '
+        f'role="img" aria-label="Project component architecture diagram" '
+        f'xmlns="http://www.w3.org/2000/svg">',
+        '<defs><marker id="barkly-arrow" markerWidth="8" markerHeight="8" '
+        'refX="6" refY="3" orient="auto" markerUnits="strokeWidth">'
+        '<path d="M0,0 L0,6 L6,3 z" fill="#7DFFB2"/></marker></defs>',
     ]
 
-    grouped = defaultdict(list)
-
-    for node in graph.nodes:
-        grouped[layer_for(node)].append(node)
-
-    for key in grouped:
-        grouped[key].sort(
-            key=lambda node: str(getattr(node, "label", getattr(node, "id", ""))).lower()
-        )
-
-    node_layer = {
-        str(node.id): layer_for(node)
-        for node in graph.nodes
-    }
-
-    def node_label(node):
-        return escape(str(getattr(node, "label", getattr(node, "id", "Component"))))
-
-    def node_counts(node):
-        metadata = getattr(node, "metadata", {}) or {}
-        counts = []
-
-        for key, label in (
-            ("file_count", "files"),
-            ("class_count", "classes"),
-            ("function_count", "functions"),
-            ("entity_count", "entities"),
-        ):
-            value = metadata.get(key)
-            if isinstance(value, (int, float)) and value:
-                counts.append(f"{int(value)} {label}")
-
-        return " ? ".join(counts)
-
-    layer_sections = []
-
-    for key, title, description in layers:
-        nodes = grouped[key]
-        cards = []
-
-        for node in nodes:
-            label = node_label(node)
-            counts = node_counts(node)
-
-            cards.append(
-                '<div class="architecture-component">'
-                f'<span class="architecture-component-name">{label}</span>'
-                + (
-                    f'<span class="architecture-component-meta">'
-                    f'{escape(counts)}</span>'
-                    if counts else ""
-                )
-                + "</div>"
-            )
-
-        cards_html = "".join(cards)
-        if not cards_html:
-            cards_html = (
-                '<p class="architecture-empty">'
-                'No components assigned to this layer.</p>'
-            )
-
-        section_html = (
-            f'<section class="architecture-layer architecture-layer-{key}">'
-            f'<div class="architecture-layer-heading">'
-            f'<div><h3>{escape(title)}</h3>'
-            f'<p>{escape(description)}</p></div>'
-            f'<span class="architecture-layer-count">'
-            f'{len(nodes)} component(s)</span></div>'
-            f'<div class="architecture-components">'
-            f'{cards_html}</div></section>'
-        )
-        layer_sections.append(section_html)
-
-    internal_edges = []
-    seen_edges = set()
-
-    for edge in graph.edges:
-        source_id = str(edge.source)
-        target_id = str(edge.target)
-
-        if source_id not in node_layer or target_id not in node_layer:
+    # Draw connections behind component cards.
+    for edge in edges:
+        if edge.source not in positions or edge.target not in positions:
             continue
-
-        identity = (source_id, target_id)
-        if identity in seen_edges:
-            continue
-
-        seen_edges.add(identity)
-
-        source_node = next(
-            (node for node in graph.nodes if str(node.id) == source_id),
-            None,
+        sx, sy = positions[edge.source]
+        tx, ty = positions[edge.target]
+        x1, y1 = sx + node_width / 2, sy + node_height / 2
+        x2, y2 = tx + node_width / 2, ty + node_height / 2
+        count = int(edge.metadata.get("relationship_count", 1) or 1)
+        kinds = ", ".join(
+            str(kind) for kind in edge.metadata.get("relationship_kinds", [])
         )
-        target_node = next(
-            (node for node in graph.nodes if str(node.id) == target_id),
-            None,
-        )
-
-        if source_node is None or target_node is None:
-            continue
-
-        metadata = getattr(edge, "metadata", {}) or {}
-        relation = (
-            metadata.get("kind")
-            or metadata.get("type")
-            or metadata.get("relationship")
-            or "connects to"
+        tooltip = _escape(f"{count} relationship(s)" + (f": {kinds}" if kinds else ""))
+        svg_parts.append(
+            f'<line x1="{x1:g}" y1="{y1:g}" x2="{x2:g}" y2="{y2:g}" '
+            f'stroke="#7DFFB2" stroke-opacity="0.55" stroke-width="1.7" '
+            f'marker-end="url(#barkly-arrow)"><title>{tooltip}</title></line>'
         )
 
-        internal_edges.append(
-            f'<li><span>{node_label(source_node)}</span>'
-            f'<span class="architecture-relation-type">'
-            f'{escape(str(relation))}</span>'
-            f'<span>{node_label(target_node)}</span></li>'
+    # Draw only project-level components, never individual symbols or
+    # external dependencies.
+    for node in nodes:
+        x, y = positions[node.id]
+        label = str(node.label)
+        display_label = label if len(label) <= 27 else label[:24] + "..."
+        file_count = int(node.metadata.get("file_count", 0) or 0)
+        entity_count = int(node.metadata.get("entity_count", 0) or 0)
+        svg_parts.append(
+            f'<g><title>{_escape(label)}</title>'
+            f'<rect x="{x}" y="{y}" width="{node_width}" height="{node_height}" '
+            'rx="11" fill="#2A1B27" stroke="#FF6B9D" stroke-width="1.5"/>'
+            f'<text x="{x + 13}" y="{y + 27}" fill="#FFD5E6" '
+            'font-size="14" font-weight="600">'
+            f'{_escape(display_label)}</text>'
+            f'<text x="{x + 13}" y="{y + 49}" fill="#D9C5D2" '
+            'font-size="11">'
+            f'{file_count} file(s) ? {entity_count} code element(s)</text>'
+            '</g>'
         )
 
-    connection_details = (
-        '<details class="architecture-details">'
-        '<summary>Detailed connections '
-        f'({len(internal_edges)})</summary>'
-        '<p class="architecture-details-intro">'
-        'Internal component relationships in the project overview. '
-        'The full relationship inventory remains available on its own page.'
-        '</p>'
-        '<ul class="architecture-connection-list">'
-        + "".join(internal_edges)
-        + '</ul></details>'
-    )
+    svg_parts.append("</svg>")
+    diagram = "".join(svg_parts)
 
     return f"""
     <section class="section project-architecture" id="project-architecture">
       <h2>Project Architecture</h2>
       <div class="section-subtitle">
-        A readable overview of the project's own components.
-        Follow the layers first; expand detailed connections when needed.
+        A map of this project's major components and their internal connections.
+        Individual functions and methods are summarized within their project areas.
+        External dependencies are excluded.
       </div>
-      <div class="card architecture-map" style="padding:20px;margin-top:16px">
-        <div class="meta">
-          {len(graph.nodes)} project component(s) ?
-          {len(seen_edges)} internal connection(s)
+      <div class="card" style="padding:18px;margin-top:16px">
+        <div class="meta">{len(nodes)} project component(s) ? {len(edges)} component connection(s)</div>
+        <div style="margin-top:16px;border:1px solid var(--line);border-radius:12px;
+                    overflow:auto;background:#171117;padding:12px">
+          <style>
+            .barkly-architecture-svg {{
+              display: block;
+              width: 100%;
+              height: auto;
+              min-width: 760px;
+            }}
+            @media (max-width: 700px) {{
+              .barkly-architecture-svg {{ min-width: 900px; }}
+            }}
+          </style>
+          {diagram}
         </div>
-        <style>
-          .architecture-map {{
-            color: var(--text);
-          }}
-          .architecture-flow {{
-            display: grid;
-            grid-template-columns: minmax(0, 1fr);
-            gap: 12px;
-            margin-top: 18px;
-          }}
-          .architecture-layer {{
-            border: 1px solid var(--line);
-            border-radius: 12px;
-            padding: 16px;
-            min-width: 0;
-          }}
-          .architecture-layer-entry {{
-            background: rgba(239, 160, 207, 0.07);
-            border-color: rgba(239, 160, 207, 0.35);
-          }}
-          .architecture-layer-core {{
-            background: rgba(110, 220, 165, 0.06);
-            border-color: rgba(110, 220, 165, 0.35);
-          }}
-          .architecture-layer-data {{
-            background: rgba(150, 170, 255, 0.06);
-            border-color: rgba(150, 170, 255, 0.35);
-          }}
-          .architecture-layer-heading {{
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            gap: 12px;
-            flex-wrap: wrap;
-            margin-bottom: 12px;
-          }}
-          .architecture-layer-heading h3 {{
-            margin: 0 0 4px;
-          }}
-          .architecture-layer-heading p {{
-            margin: 0;
-            color: var(--muted);
-            font-size: 0.9rem;
-          }}
-          .architecture-layer-count {{
-            color: var(--muted);
-            font-size: 0.82rem;
-            white-space: nowrap;
-          }}
-          .architecture-components {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-            gap: 9px;
-          }}
-          .architecture-component {{
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-            min-width: 0;
-            padding: 11px 12px;
-            border: 1px solid var(--line);
-            border-radius: 9px;
-            background: var(--card, rgba(0, 0, 0, 0.16));
-            overflow-wrap: anywhere;
-          }}
-          .architecture-component-name {{
-            font-weight: 600;
-          }}
-          .architecture-component-meta,
-          .architecture-empty {{
-            color: var(--muted);
-            font-size: 0.8rem;
-          }}
-          .architecture-layer-arrow {{
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 9px;
-            color: #63dca0;
-            font-size: 0.85rem;
-            font-weight: 600;
-          }}
-          .architecture-layer-arrow span {{
-            font-size: 1.3rem;
-          }}
-          .architecture-details {{
-            margin-top: 18px;
-            border-top: 1px solid var(--line);
-            padding-top: 14px;
-          }}
-          .architecture-details summary {{
-            cursor: pointer;
-            font-weight: 600;
-          }}
-          .architecture-details-intro {{
-            color: var(--muted);
-            font-size: 0.9rem;
-          }}
-          .architecture-connection-list {{
-            display: grid;
-            gap: 7px;
-            padding-left: 20px;
-          }}
-          .architecture-connection-list li {{
-            overflow-wrap: anywhere;
-          }}
-          .architecture-relation-type {{
-            color: var(--muted);
-            font-size: 0.85rem;
-            padding: 0 7px;
-          }}
-          @media (max-width: 600px) {{
-            .architecture-map {{
-              padding: 12px !important;
-            }}
-            .architecture-layer {{
-              padding: 12px;
-            }}
-            .architecture-components {{
-              grid-template-columns: minmax(0, 1fr);
-            }}
-          }}
-        </style>
-        <div class="architecture-flow">
-          {layer_sections[0]}
-          <div class="architecture-layer-arrow">
-            <span aria-hidden="true">?</span> Entry points lead into core logic
-          </div>
-          {layer_sections[1]}
-          <div class="architecture-layer-arrow">
-            <span aria-hidden="true">?</span> Core logic may use data components
-          </div>
-          {layer_sections[2]}
-        </div>
-        {connection_details}
+        <p class="meta" style="margin-top:12px">
+          Connections represent aggregated relationships between project areas.
+          Hover over a connection or component for more detail.
+          This diagram is rendered directly in Barkly Docs; Docker is not required.
+        </p>
       </div>
     </section>
     """
+
 
 
 def _render_index(project: Project, graph_generated: bool = True) -> str:
