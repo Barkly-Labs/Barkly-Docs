@@ -1891,137 +1891,6 @@ def _render_project_architecture(project: Project) -> str:
     </section>
     """
 
-
-def _render_three_layer_architecture(project: Project) -> str:
-    """Show entry points, core project structure, and supporting systems."""
-    from pathlib import PurePosixPath
-
-    def esc(value: object) -> str:
-        return html.escape(str(value or ""), quote=True)
-
-    files = list(getattr(project, "files", []) or [])
-    modules = list(getattr(project, "modules", []) or [])
-    classes = list(getattr(project, "classes", []) or [])
-    functions = list(getattr(project, "functions", []) or [])
-    methods = list(getattr(project, "methods", []) or [])
-    data_items = list(getattr(project, "data", []) or [])
-
-    def get(item: object, *names: str) -> str:
-        for name in names:
-            value = item.get(name) if isinstance(item, dict) else getattr(item, name, None)
-            if value:
-                return str(value)
-        return ""
-
-    def path_of(item: object) -> str:
-        value = get(item, "path", "file_path", "source_file", "filename")
-        return value.replace("\\", "/")
-
-    def card(title: str, description: str, kind: str) -> str:
-        return (
-            '<article class="card" style="margin:.5rem 0;padding:1rem">'
-            f'<div class="kicker">{esc(kind)}</div>'
-            f'<strong>{esc(title)}</strong>'
-            f'<p style="margin:.35rem 0 0;color:var(--muted,#aaa)">'
-            f'{esc(description)}</p></article>'
-        )
-
-    def section(number: int, title: str, description: str, content: str) -> str:
-        return (
-            '<section class="card" style="margin:1rem 0;padding:1rem">'
-            f'<div class="kicker">Layer {number}</div>'
-            f'<h2>{esc(title)}</h2><p>{esc(description)}</p>'
-            f'{content}</section>'
-        )
-
-    entry_names = {
-        "main.py", "__main__.py", "app.py", "server.py", "manage.py",
-        "cli.py", "main.rs", "main.go", "index.js", "index.ts",
-        "server.js", "server.ts", "program.cs", "startup.cs",
-        "application.java",
-    }
-    entry_files = []
-    for item in files:
-        p = path_of(item)
-        name = PurePosixPath(p).name.lower()
-        if name in entry_names or any(
-            f"/{part}/" in f"/{p.lower().strip('/')}/"
-            for part in ("routes", "routers", "controllers")
-        ):
-            entry_files.append(item)
-
-    entry_functions = [
-        item for item in functions
-        if get(item, "name", "qualified_name").split(".")[-1].lower()
-        in {"main", "run", "cli", "app", "create_app", "createapp",
-            "serve", "start_server", "main_cli"}
-    ]
-
-    def render_items(items: list, kind: str, limit: int = 12) -> str:
-        if not items:
-            return card("No records detected", "The current scan did not provide records for this category.", kind)
-        result = []
-        for item in items[:limit]:
-            name = get(item, "qualified_name", "name", "label", "module") or path_of(item) or "(unnamed)"
-            description = get(item, "description", "docstring", "summary") or path_of(item)
-            result.append(card(name, description or "Detected by the project scanner.", kind))
-        if len(items) > limit:
-            result.append(
-                f'<p class="muted">Showing {limit} of {len(items)} records. '
-                'See the project structure and relationship inventory for more.</p>'
-            )
-        return "".join(result)
-
-    layer1_items = []
-    seen = set()
-    for item in entry_files + entry_functions:
-        p = path_of(item)
-        name = get(item, "qualified_name", "name", "label") or p or "(unnamed entry point)"
-        key = (name, p)
-        if key in seen:
-            continue
-        seen.add(key)
-        description = get(item, "description", "docstring", "summary") or p or (
-            "Candidate entry point based on its name; verify by inspecting the code."
-        )
-        layer1_items.append(card(name, description, "Entry-point candidate"))
-
-    layer1 = "".join(layer1_items) or card(
-        "No entry points identified",
-        "The scan did not identify a conventional entry point. This does not prove that none exists.",
-        "Needs inspection",
-    )
-
-    core_items = []
-    core_items.append(render_items(modules, "Module", 12))
-    core_items.append(render_items(classes, "Class", 8))
-    core_items.append(render_items(functions, "Function", 8))
-    core_items.append(render_items(methods, "Method", 8))
-    layer2 = "".join(core_items)
-
-    support_files = [
-        item for item in files
-        if any(word in path_of(item).lower() for word in (
-            "config", "setting", "database", "repository", "migration",
-            "schema", "storage", "persist", "model"
-        ))
-    ]
-    layer3 = render_items(data_items, "Data record", 12)
-    if support_files:
-        layer3 += render_items(support_files, "Supporting file candidate", 12)
-
-    return (
-        '<section id="project-architecture-layers">'
-        '<h2>Project architecture</h2>'
-        '<p>Three views of how the project is organized. Candidates are based on scan evidence '
-        'and may need confirmation.</p>'
-        f'{section(1, "Entry points", "Where execution or requests may enter the project.", layer1)}'
-        f'{section(2, "Main project and modules", "The modules and code symbols that make up the core project.", layer2)}'
-        f'{section(3, "Data and supporting systems", "Detected data records and files that may support configuration, persistence, or schemas.", layer3)}'
-        '</section>'
-    )
-
-
 def _render_index(project: Project, graph_generated: bool = True) -> str:
     description = _project_description(project)
     languages = _languages(project)
@@ -2042,6 +1911,7 @@ def _render_index(project: Project, graph_generated: bool = True) -> str:
         + _stat_card("Relationships", str(len(project.relationships)))
         + '</div>'
     )
+    architecture_section = _render_project_architecture(project)
     overview = (
         '<div class="section">'
         '<h2>Project overview</h2>'
@@ -2086,7 +1956,7 @@ def _render_index(project: Project, graph_generated: bool = True) -> str:
   
     body = (
         f'<section class="hero">{project_summary}{stats}</section>'
-        f'{_render_three_layer_architecture(project)}'
+        f'{architecture_section}'
         f'{overview}{evidence}{documentation}{structure}{json_section}'
     )
     return _page_shell(
