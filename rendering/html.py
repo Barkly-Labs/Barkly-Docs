@@ -642,6 +642,18 @@ a:focus-visible {
   .entity-disclosure-button { justify-self: start; }
 }
 
+/* Relationships page: reuse the Entities explorer presentation and controls. */
+.relationship-search-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(210px, .34fr); gap: 12px; align-items: end; }
+.relationship-filter-row { display: grid; gap: 7px; }
+.relationship-filter-row label { margin: 0; font-weight: 650; }
+.relationship-filter-row select { width: 100%; background: #080808; color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px; }
+.relationship-primary .entity-row-name { font-weight: 650; }
+.relationship-direction { margin: 7px 0 14px; overflow-wrap: anywhere; }
+.relationship-metadata { margin-top: 14px; }
+.relationship-map-link { display: inline-flex; align-items: center; text-decoration: none; }
+.relationship-map-link:hover { text-decoration: none; }
+@media (max-width: 760px) { .relationship-search-controls { grid-template-columns: 1fr; } }
+
 /* Reference Layer documentation enhancement; existing sections remain unchanged. */
 .index-reference-docs{margin:18px 0 0}
 .index-reference-docs>h3{margin:0 0 5px;font-size:1rem}
