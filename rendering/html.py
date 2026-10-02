@@ -1459,78 +1459,6 @@ def _render_full_spider_map(project: Project) -> str:
     """
 
 
-def _render_relation_map_page(project: Project) -> str:
-    """Render the full, searchable, card-based relationship explorer."""
-    graph = build_relation_graph(project, max_nodes=None, max_edges=None)
-    graph_data = graph.as_dict()
-
-    # Prevent a project string containing HTML/script markup from closing the
-    # JSON script element when embedded in the page.
-    payload = json.dumps(graph_data, ensure_ascii=False)
-    payload = (
-        payload.replace("&", "\\u0026").replace("<", "\\u003c").replace(">", "\\u003e")
-    )
-
-    body = (
-        '<section class="subpage-header">'
-        '<div class="kicker">Barkly Docs · Project explorer</div>'
-        "<h1>Relationship Map</h1>"
-        "<p>Explore files, modules, classes, functions, methods, and their "
-        "detected relationships. Expand a card to inspect details and follow connections.</p>"
-        "</section>"
-        '<section class="card" style="margin:1rem 0;padding:1rem">'
-        '<div class="relation-map-controls">'
-        '<label for="relation-map-search">Search names, descriptions, and paths</label>'
-        '<input id="relation-map-search" type="search" '
-        'aria-label="Search relationship map" '
-        'placeholder="Search the project…" autocomplete="off" />'
-        '<label for="relation-map-kind">Filter by item type</label>'
-        '<select id="relation-map-kind"><option value="">All types</option></select>'
-        '<button type="button" id="relation-map-reset">Reset filters</button>'
-        "</div>"
-        '<p id="relation-map-count" class="muted" aria-live="polite"></p>'
-        "</section>"
-        '<div id="relation-card-grid" class="relation-card-grid" '
-        'aria-live="polite"></div>'
-        '<nav id="relation-map-pagination" class="relation-pagination" '
-        'aria-label="Relationship map pages"></nav>'
-        '<p class="muted">Descriptions and evidence reflect the scan output. '
-        "Missing descriptions are shown as unavailable rather than guessed. "
-        '<a href="relationships.html">Open the complete relationship inventory</a>.</p>'
-        '<script id="relation-map-data" type="application/json">'
-        + payload
-        + "</script>"
-        '<script src="assets/relation-map.js" defer></script>'
-        "<style>"
-        ".relation-map-controls{display:grid;grid-template-columns:1fr;gap:.5rem}"
-        ".relation-map-controls input,.relation-map-controls select{width:100%;"
-        "box-sizing:border-box;padding:.7rem;border:1px solid var(--border,#383838);"
-        "border-radius:.5rem;background:var(--panel,#101010);color:inherit}"
-        ".relation-map-controls button,.relation-pagination button,.relation-link{"
-        "padding:.45rem .7rem;border:1px solid var(--border,#383838);"
-        "border-radius:.5rem;background:var(--panel-alt,#151515);color:inherit;cursor:pointer}"
-        ".relation-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:1rem;align-items:start}"
-        ".relation-card{min-width:0;overflow-wrap:anywhere}"
-        ".relation-card-heading{display:flex;justify-content:space-between;gap:.5rem;align-items:center;flex-wrap:wrap}"
-        ".relation-card h3{margin:.75rem 0 .25rem;font-size:1.05rem}"
-        ".relation-path,.muted{color:var(--muted,#aaa);font-size:.9rem}"
-        ".relation-details{margin-top:.8rem;border-top:1px solid var(--border,#383838);padding-top:.7rem}"
-        ".relation-details summary{cursor:pointer;font-weight:600}"
-        ".relation-detail-body{padding-top:.5rem}"
-        ".relation-links{padding-left:1.2rem}"
-        ".relation-links li{margin:.4rem 0;overflow-wrap:anywhere}"
-        ".relation-link{text-align:left;max-width:100%;overflow-wrap:anywhere}"
-        ".relation-pagination{display:flex;align-items:center;justify-content:center;gap:1rem;padding:1.25rem 0}"
-        ".relation-pagination button:disabled{opacity:.45;cursor:not-allowed}"
-        "@media(min-width:700px){.relation-map-controls{grid-template-columns:1fr 1fr;align-items:center}"
-        ".relation-map-controls label{align-self:end}}"
-        "</style>"
-    )
-    return _page_shell(
-        f"Relationship Map ? {_project_name(project)}",
-        "relation-map",
-        body,
-    )
 
 
 def _render_files(project: Project) -> str:
@@ -2761,176 +2689,20 @@ def _render_three_layer_architecture(project: Project) -> str:
     )
 
 
-def _render_index(project: Project, graph_generated: bool = True) -> str:
-    description = _project_description(project)
-    languages = _languages(project)
-    project_summary = (
-        '<div class="card hero-main">'
-        '<div class="kicker">Project documentation</div>'
-        f"<h1>{_escape(_project_name(project))}</h1>"
-        f"<p>{_escape(description)}</p>"
-        "</div>"
-    )
-    stats = (
-        '<div class="card metrics">'
-        + _stat_card("Files", str(len(project.files)))
-        + _stat_card("Modules", str(len(project.modules)))
-        + _stat_card("Classes", str(len(project.classes)))
-        + _stat_card("Functions", str(len(project.functions)))
-        + _stat_card("Methods", str(len(project.methods)))
-        + _stat_card("Relationships", str(len(project.relationships)))
-        + "</div>"
-    )
-
-    # Human-first orientation: answer the basic project questions before exposing
-    # architecture and source-level detail. No project data is removed.
-    overview = (
-        '<section class="index-glance" aria-labelledby="at-a-glance-title">'
-        '<div class="index-glance-head"><div>'
-        '<h2 id="at-a-glance-title">Project at a glance</h2>'
-        '<p>Start here. The essential project facts are grouped together so the page can be understood before exploring implementation detail.</p>'
-        '</div></div>'
-        '<div class="index-glance-grid">'
-        f'<article class="index-glance-card"><h3>Languages</h3><p>{_escape(", ".join(languages) if languages else "Unknown")}</p></article>'
-        f'<article class="index-glance-card"><h3>Documentation</h3><p>{_escape("README present" if _readme_path(project) else "README not discovered")}</p></article>'
-        f'<article class="index-glance-card"><h3>Project root</h3><p>{_escape(project.root)}</p></article>'
-        '<article class="index-glance-card"><h3>Analysis basis</h3><p>Static project evidence with declared, detected, inferred, and unknown states kept separate.</p></article>'
-        '</div>'
-        '<div class="index-evidence">'
-        '<h3>Evidence and limits</h3>'
-        '<p>Confidence stays visible without competing with the main project summary.</p>'
-        + _evidence_summary(project)
-        + '</div>'
-        '</section>'
-    )
-
-    documentation = (
-        '<details class="card documentation-card">'
-        '<summary>'
-        '<div class="documentation-card-heading">'
-        '<div class="documentation-card-title">'
-        '<h2>Documentation references</h2>'
-        '<div class="section-subtitle">Read the project README and its preserved Markdown structure when you need source documentation.</div>'
-        '</div>'
-        '<span class="documentation-card-action" aria-hidden="true">View documentation ↓</span>'
-        '</div>'
-        '</summary>'
-        '<div class="documentation-card-body">'
-        + _render_readme(project)
-        + '<div class="tile" style="margin-top:12px;"><h3>Evidence labels</h3><p>DECLARED = explicitly stated in source or project metadata; DETECTED = directly identified through static analysis; INFERRED = derived but not directly observed; UNKNOWN = not established by available evidence.</p></div>'
-        + '</div></details>'
-    )
-
-    other_files_section = _render_index_data_section(
-        "Other project files",
-        "All discovered non-JSON files, kept separate so file browsing stays predictable.",
-        "Explore files",
-        _render_other_files(project),
-    )
-    classes_section = _render_index_data_section(
-        "Classes",
-        "Discovered classes in one consistent source-oriented view.",
-        "Explore classes",
-        _render_entity_group(_collect_project_entities(project, "classes"), "No classes were discovered."),
-    )
-
-    functions_section = _render_index_data_section(
-        "Functions",
-        "Discovered functions kept separate from classes and file data.",
-        "Explore functions",
-        _render_entity_group(_collect_project_entities(project, "functions"), "No functions were discovered."),
-    )
-
-    methods_section = _render_index_data_section(
-        "Methods",
-        "Methods are grouped separately so class behavior is easier to scan.",
-        "Explore methods",
-        _render_entity_group(_collect_project_entities(project, "methods"), "No methods were discovered."),
-    )
-
-    modules_section = _render_index_data_section(
-        "Modules",
-        "Detected modules and source units that organize the project.",
-        "Explore modules",
-        _render_entity_group(_collect_project_entities(project, "modules"), "No modules were discovered."),
-    )
-
-    dependencies_section = _render_index_data_section(
-        "Dependencies",
-        "Project dependencies are separated from source entities and relationships.",
-        "Explore dependencies",
-        _render_entity_group(_collect_project_entities(project, "dependencies"), "No dependencies were discovered."),
-    )
-
-    relationships_section = _render_index_data_section(
-        "Relationships",
-        "Detected connections between project entities, kept distinct from inferred meaning.",
-        "Explore relationships",
-        _render_relationship_group(_collect_relationships(project)),
-    )
-
-    json_section = _render_index_data_section(
-        "JSON",
-        "JSON files only. Source symbols and other file types stay in their own sections.",
-        "Explore JSON",
-        _render_json_data(project),
-    )
-
-    body = (
-        f'<section class="hero">{project_summary}{stats}</section>'
-        f'{overview}'
-        f'{_render_three_layer_architecture(project)}'
-        f'{documentation}'
-        '<div class="index-deep-label">Reference layer</div>'
-        '<h2 class="index-deep-title">Deeper project detail</h2>'
-        '<p class="index-deep-copy">The overview stays calm by default. Classes, functions, methods, modules, dependencies, relationships, JSON, and files are separated into predictable sections so each type of project data has one clear place.</p>'
-        f'<div class="index-human-flow">{classes_section}{functions_section}{methods_section}{modules_section}{dependencies_section}{relationships_section}{json_section}{other_files_section}</div>'
-    )
-    return _page_shell(
-        f"{_project_name(project)} — Barkly Docs",
-        "index",
-        body,
-    )
 
 
-def _render_entities_page(project: Project) -> str:
-    body = (
-        '<section class="subpage-header">'
-        '<div class="kicker">Barkly Docs · Project entities</div>'
-        "<h1>Entities</h1>"
-        "<p>Classes, functions, and methods discovered in the project model.</p>"
-        "</section>"
-        '<section class="section">'
-        "<h2>Entity overview</h2>"
-        + _render_entity_summary(project)
-        + "</section>"
-        + '<section class="section">'
-        "<h2>Method and function reference</h2>"
-        '<div class="section-subtitle">Source-level signatures and documentation recovered from the shared model.</div>'
-        + _render_method_reference(project)
-        + "</section>"
-    )
-    return _page_shell(f"Entities — {_project_name(project)}", "entities", body)
 
-
-def _render_relationships_page(project: Project) -> str:
-    body = (
-        '<section class="subpage-header">'
-        '<div class="kicker">Barkly Docs · Project relationships</div>'
-        "<h1>Relationships</h1>"
-        "<p>Evidence-labeled relationships between project entities.</p>"
-        "</section>"
-        '<section class="section">'
-        "<h2>Relationship inventory</h2>"
-        + _render_relationships(project)
-        + "</section>"
-    )
-    return _page_shell(
-        f"Relationships — {_project_name(project)}", "relationships", body
-    )
 
 
 def render_project_website(project: Project, output_dir: str | Path) -> list[Path]:
+    # Page renderers live in separate modules so each page can evolve independently.
+    # Imports are intentionally local: page modules reuse shared helpers from this
+    # module without creating an import-time circular dependency.
+    from rendering.index_page import render_index
+    from rendering.entities_page import render_entities_page
+    from rendering.relationships_page import render_relationships_page
+    from rendering.relation_map_page import render_relation_map_page
+
     project_obj = project
     build_relation_graph(project_obj)
     output_path = Path(output_dir)
@@ -2945,14 +2717,10 @@ def render_project_website(project: Project, output_dir: str | Path) -> list[Pat
     relationships_path = output_path / "relationships.html"
     relation_map_path = output_path / "relation-map.html"
 
-    index_path.write_text(_render_index(project_obj), encoding="utf-8")
-    entities_path.write_text(_render_entities_page(project_obj), encoding="utf-8")
-    relationships_path.write_text(
-        _render_relationships_page(project_obj), encoding="utf-8"
-    )
-    relation_map_path.write_text(
-        _render_relation_map_page(project_obj), encoding="utf-8"
-    )
+    index_path.write_text(render_index(project_obj), encoding="utf-8")
+    entities_path.write_text(render_entities_page(project_obj), encoding="utf-8")
+    relationships_path.write_text(render_relationships_page(project_obj), encoding="utf-8")
+    relation_map_path.write_text(render_relation_map_page(project_obj), encoding="utf-8")
 
     return [
         index_path,
@@ -2962,7 +2730,6 @@ def render_project_website(project: Project, output_dir: str | Path) -> list[Pat
         assets_dir / "site.css",
         assets_dir / "relation-map.js",
     ]
-
 
 def generate_html_website(project: Project, output_dir: str | Path) -> list[Path]:
     return render_project_website(project, output_dir)
