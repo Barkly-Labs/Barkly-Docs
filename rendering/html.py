@@ -378,6 +378,153 @@ a:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+/* Barkly relationship pipeline */
+.pipeline-list {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.pipeline-group {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.pipeline-group-header {
+  padding: 14px 18px;
+  background: var(--panel-alt);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pipeline-group-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.pipeline-step {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pipeline-step:last-child {
+  border-bottom: 0;
+}
+
+.pipeline-entity {
+  min-width: 0;
+  padding: 12px;
+  background: #0b0b0b;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.pipeline-entity.source {
+  border-left: 3px solid var(--accent);
+}
+
+.pipeline-entity.target {
+  border-left: 3px solid var(--success);
+}
+
+.pipeline-entity .entity-role {
+  display: block;
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 5px;
+}
+
+.pipeline-entity .entity-name {
+  display: block;
+  overflow-wrap: anywhere;
+  font-family: Consolas, "SFMono-Regular", monospace;
+  font-size: 0.88rem;
+}
+
+.pipeline-connector {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  color: var(--accent);
+  text-align: center;
+}
+
+.pipeline-connector .relation-kind {
+  font-size: 0.76rem;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.pipeline-connector .arrow {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.pipeline-meta {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.graph-disclosure {
+  margin-top: 28px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.graph-disclosure > summary {
+  cursor: pointer;
+  padding: 18px 20px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--panel-alt);
+}
+
+.graph-disclosure > summary:hover {
+  background: #1b171a;
+}
+
+.graph-disclosure[open] > .graph-description {
+  padding: 0 20px;
+  color: var(--muted);
+}
+
+.graph-disclosure #relation-map-shell {
+  margin: 16px;
+}
+
+@media (max-width: 600px) {
+  .pipeline-step {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .pipeline-connector {
+    grid-template-columns: auto 1fr;
+    justify-items: start;
+    text-align: left;
+  }
+
+  .pipeline-connector .arrow {
+    transform: rotate(90deg);
+  }
+}
 """
 
 PAW_SVG = '''
@@ -1132,6 +1279,95 @@ def _render_relationships(project: Project) -> str:
     )
     return '<div class="relationship-list">' + ''.join(items) + '</div>' + mermaid
 
+def _render_relationship_pipeline(graph) -> str:
+    """Render discovered graph edges as readable source-to-target pipelines."""
+
+    if not graph.edges:
+        return (
+            '<div class="empty-state">'
+            'No relationships were detected for the current scan.'
+            '</div>'
+        )
+
+    # Group by source file so the relationships are easier to browse.
+    grouped: dict[str, list] = {}
+
+    for edge in graph.edges:
+        source_file = str(edge.source_file or "Unknown source file")
+        grouped.setdefault(source_file, []).append(edge)
+
+    groups = []
+
+    for source_file in sorted(grouped):
+        edges = sorted(
+            grouped[source_file],
+            key=lambda edge: (
+                str(edge.source).lower(),
+                str(edge.kind).lower(),
+                str(edge.target).lower(),
+            ),
+        )
+
+        steps = []
+
+        for edge in edges:
+            evidence = str(edge.evidence or "UNKNOWN").upper()
+            evidence_css = evidence.lower()
+
+            explanation = str(
+                edge.explanation
+                or "Relationship recorded during static analysis."
+            )
+
+            steps.append(
+                f"""
+                <article class="pipeline-step">
+                  <div class="pipeline-entity source">
+                    <span class="entity-role">Source</span>
+                    <span class="entity-name">
+                      {_escape(edge.source)}
+                    </span>
+                  </div>
+
+                  <div class="pipeline-connector">
+                    <span class="relation-kind">
+                      {_escape(edge.kind or "related to")}
+                    </span>
+                    <span class="arrow" aria-hidden="true">→</span>
+                  </div>
+
+                  <div class="pipeline-entity target">
+                    <span class="entity-role">Target</span>
+                    <span class="entity-name">
+                      {_escape(edge.target)}
+                    </span>
+                  </div>
+
+                  <div class="pipeline-meta">
+                    {_relationship_badge(evidence)}
+                    <span>Source file: {_escape(edge.source_file or "Unknown")}</span>
+                    <p>{_escape(explanation)}</p>
+                  </div>
+                </article>
+                """
+            )
+
+        groups.append(
+            f"""
+            <section class="pipeline-group">
+              <div class="pipeline-group-header">
+                <h3>{_escape(source_file)}</h3>
+                <span class="badge detected">
+                  {len(edges)} relationship(s)
+                </span>
+              </div>
+              {''.join(steps)}
+            </section>
+            """
+        )
+
+    return '<div class="pipeline-list">' + "".join(groups) + "</div>"
+
 
 def _render_relation_map_page(project: Project) -> str:
     graph = build_relation_graph(project, view="relation_map", max_nodes=None, max_edges=None)
@@ -1171,7 +1407,7 @@ def _render_relation_map_page(project: Project) -> str:
             f'<div class="relationship-item"><h3>{_escape(edge.source)} → {_escape(edge.target)}</h3><div class="meta">{_relationship_badge(edge.evidence)} <span class="code">{_escape(edge.kind)}</span></div><div class="meta">{_escape(edge.source_file or "Unknown file")}</div><p>{_escape(edge.explanation or "Static relationship discovered during source analysis.")}</p></div>'
             for edge in graph.edges[:20]
         )
-        relationship_listing = f'<div class="relationship-list">{edges}</div>'
+        relationship_listing = _render_relationship_pipeline(graph)
     else:
         relationship_listing = '<div class="relation-map-empty">No relationships were detected for the current scan.</div>'
 
