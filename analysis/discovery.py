@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import time
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -213,11 +214,26 @@ class ProjectDiscovery:
         ".venv",
         "env",
         ".env",
+        # Installed Python packages and environment contents are dependencies,
+        # not source belonging to the project being documented.
+        "site-packages",
+        "dist-packages",
+        # Common vendored / downloaded dependency trees.
+        "vendor",
+        "vendors",
+        "third_party",
+        "third-party",
+        "external",
+        "deps",
+        # Generated/build output can be very large and is not project source.
         "dist",
         "build",
+        "target",
         "coverage",
         ".pytest_cache",
         ".mypy_cache",
+        ".docs-check",
+        ".barkly-docs-site",
         ".ruff_cache",
     }
 
@@ -463,6 +479,20 @@ class ProjectDiscovery:
                 failed=len(result.errors),
             )
 
+        relationship_input_counts = {
+            "files": len(project.files),
+            "modules": len(project.modules),
+            "classes": len(project.classes),
+            "interfaces": len(project.interfaces),
+            "functions": len(project.functions),
+            "methods": len(project.methods),
+            "routes": len(project.routes),
+            "endpoints": len(project.endpoints),
+            "imports": len(project.imports),
+            "dependencies": len(project.dependencies),
+            "declared_relationships": len(project.relationships),
+        }
+        relationship_started = time.perf_counter()
         if event_logger is not None:
             event_logger.stage_start(
                 "relationship_map",
@@ -470,15 +500,36 @@ class ProjectDiscovery:
                 processed=len(result.processed_files),
                 skipped=len(result.skipped_files),
                 failed=len(result.errors),
+                **relationship_input_counts,
             )
 
-        graph = build_relation_graph(project)
+        last_progress_log = {"stage": None, "current": 0}
+
+        def log_relationship_progress(substage: str, current: int, stage_total: int) -> None:
+            # Emit actual work-loop progress, not timer-based/fabricated progress.
+            if event_logger is None:
+                return
+            if current == 0 or current == stage_total or current % 250 == 0:
+                event_logger.event(
+                    "relationship_map.progress",
+                    level="INFO",
+                    stage_id="relationship_map",
+                    substage=substage,
+                    current=current,
+                    total=stage_total,
+                    elapsed_ms=int((time.perf_counter() - relationship_started) * 1000),
+                    message=f"Relationship map: {substage} {current}/{stage_total}",
+                )
+
+        graph = build_relation_graph(project, progress_callback=log_relationship_progress)
+        graph_duration_ms = int((time.perf_counter() - relationship_started) * 1000)
         result.project.metadata["relation_graph"] = graph.as_dict()
         result.project.metadata["relation_graph_unresolved"] = list(graph.unresolved)
 
         if event_logger is not None:
             event_logger.stage_complete(
                 "relationship_map",
+                duration_ms=graph_duration_ms,
                 nodes=len(graph.nodes),
                 edges=len(graph.edges),
                 unresolved=len(graph.unresolved),
@@ -664,6 +715,20 @@ class ProjectDiscovery:
                 failed=len(result.errors),
             )
 
+        relationship_input_counts = {
+            "files": len(project.files),
+            "modules": len(project.modules),
+            "classes": len(project.classes),
+            "interfaces": len(project.interfaces),
+            "functions": len(project.functions),
+            "methods": len(project.methods),
+            "routes": len(project.routes),
+            "endpoints": len(project.endpoints),
+            "imports": len(project.imports),
+            "dependencies": len(project.dependencies),
+            "declared_relationships": len(project.relationships),
+        }
+        relationship_started = time.perf_counter()
         if event_logger is not None:
             event_logger.stage_start(
                 "relationship_map",
@@ -671,15 +736,36 @@ class ProjectDiscovery:
                 processed=len(result.processed_files),
                 skipped=len(result.skipped_files),
                 failed=len(result.errors),
+                **relationship_input_counts,
             )
 
-        graph = build_relation_graph(project)
+        last_progress_log = {"stage": None, "current": 0}
+
+        def log_relationship_progress(substage: str, current: int, stage_total: int) -> None:
+            # Emit actual work-loop progress, not timer-based/fabricated progress.
+            if event_logger is None:
+                return
+            if current == 0 or current == stage_total or current % 250 == 0:
+                event_logger.event(
+                    "relationship_map.progress",
+                    level="INFO",
+                    stage_id="relationship_map",
+                    substage=substage,
+                    current=current,
+                    total=stage_total,
+                    elapsed_ms=int((time.perf_counter() - relationship_started) * 1000),
+                    message=f"Relationship map: {substage} {current}/{stage_total}",
+                )
+
+        graph = build_relation_graph(project, progress_callback=log_relationship_progress)
+        graph_duration_ms = int((time.perf_counter() - relationship_started) * 1000)
         result.project.metadata["relation_graph"] = graph.as_dict()
         result.project.metadata["relation_graph_unresolved"] = list(graph.unresolved)
 
         if event_logger is not None:
             event_logger.stage_complete(
                 "relationship_map",
+                duration_ms=graph_duration_ms,
                 nodes=len(graph.nodes),
                 edges=len(graph.edges),
                 unresolved=len(graph.unresolved),
@@ -699,18 +785,23 @@ class ProjectDiscovery:
 
         files: list[Path] = []
 
-        for path in root.rglob("*"):
-
-            if not path.is_file():
-                continue
-
-            if self._is_ignored(path, root):
-                continue
-
-            files.append(path)
+        # Prune ignored directories before walking into them. Filtering the
+        # results of Path.rglob() is too late: it still traverses huge trees
+        # such as site-packages and vendored dependencies, wasting time and
+        # potentially allowing their files into downstream analysis.
+        ignored = {name.casefold() for name in self.ignored_directories}
+        for current, directory_names, file_names in os.walk(root, topdown=True):
+            directory_names[:] = sorted(
+                name for name in directory_names
+                if name.casefold() not in ignored
+            )
+            current_path = Path(current)
+            for filename in file_names:
+                path = current_path / filename
+                if not self._is_ignored(path, root):
+                    files.append(path)
 
         files.sort()
-
         return files
 
     def _is_ignored(
@@ -727,10 +818,8 @@ class ProjectDiscovery:
         except ValueError:
             return True
 
-        return any(
-            part in self.ignored_directories
-            for part in relative.parts
-        )
+        ignored = {name.casefold() for name in self.ignored_directories}
+        return any(part.casefold() in ignored for part in relative.parts)
 
     def _find_reader(
         self,
