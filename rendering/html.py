@@ -5,6 +5,17 @@ import json
 import re
 import shutil
 from pathlib import Path
+from html.parser import HTMLParser
+
+try:
+    from markdown_it import MarkdownIt
+except ImportError:  # Keep Barkly usable when the optional renderer is unavailable.
+    MarkdownIt = None
+
+try:
+    import bleach
+except ImportError:  # Safe fallback uses Barkly's existing escaping renderer.
+    bleach = None
 
 from analysis.graph import build_relation_graph
 from model.project import Project
@@ -575,6 +586,14 @@ a:focus-visible {
   .entity-row-summary { grid-template-columns: 1fr auto; }
   .entity-row-summary .meta { grid-column: 1 / -1; }
 }
+
+/* Reference Layer documentation enhancement; existing sections remain unchanged. */
+.index-reference-docs{margin:18px 0 0}
+.index-reference-docs>h3{margin:0 0 5px;font-size:1rem}
+.index-reference-docs>.muted{margin:0 0 12px;font-size:.82rem}
+.index-reference-docs .tile ul{margin:0;padding-left:18px}
+.index-reference-docs .tile li{margin:7px 0}
+.readme-content img{max-width:100%;height:auto}
 """
 
 PAW_SVG = """
@@ -717,6 +736,137 @@ def _normalize_readme_markdown(text: str) -> str:
     return text.strip()
 
 
+_README_SAFE_TAGS = {
+    "a", "abbr", "b", "blockquote", "br", "code", "del", "details", "div",
+    "em", "figcaption", "figure", "h1", "h2", "h3", "h4", "h5", "h6", "hr",
+    "i", "img", "kbd", "li", "ol", "p", "pre", "s", "span", "strong", "sub",
+    "summary", "sup", "table", "tbody", "td", "th", "thead", "tr", "ul",
+}
+_README_SAFE_ATTRIBUTES = {
+    "a": ["href", "title"],
+    "img": ["src", "alt", "title", "width", "height"],
+    "th": ["align"], "td": ["align"],
+    "details": ["open"],
+}
+_README_SAFE_PROTOCOLS = ["http", "https", "mailto"]
+
+
+def _readme_asset_map(project: Project) -> dict[str, str]:
+    metadata = getattr(project, "metadata", None)
+    if not isinstance(metadata, dict):
+        return {}
+    value = metadata.get("_barkly_readme_assets")
+    return value if isinstance(value, dict) else {}
+
+
+def _rewrite_readme_asset_urls(project: Project, text: str) -> str:
+    """Rewrite copied local README image references to generated asset URLs."""
+    asset_map = _readme_asset_map(project)
+    if not asset_map:
+        return text
+
+    def mapped(raw: str) -> str:
+        decoded = html.unescape(raw.strip())
+        key = decoded.split("#", 1)[0].split("?", 1)[0].replace("\\", "/")
+        return asset_map.get(key, raw)
+
+    text = re.sub(
+        r'(!\[[^\]]*\]\(\s*<?)([^)\s>]+)(>?[^)]*\))',
+        lambda m: m.group(1) + mapped(m.group(2)) + m.group(3),
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r'(<img\b[^>]*?\bsrc\s*=\s*["\'])([^"\']+)(["\'])',
+        lambda m: m.group(1) + html.escape(mapped(m.group(2)), quote=True) + m.group(3),
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    return text
+
+
+def _render_markdown_established(text: str) -> str | None:
+    """Render GFM-like Markdown with safe HTML when optional established libs exist."""
+    if MarkdownIt is None or bleach is None:
+        return None
+    parser = MarkdownIt("commonmark", {"html": True, "linkify": True})
+    try:
+        parser.enable("table")
+    except Exception:
+        pass
+    rendered = parser.render(_normalize_readme_markdown(text))
+    return bleach.clean(
+        rendered,
+        tags=_README_SAFE_TAGS,
+        attributes=_README_SAFE_ATTRIBUTES,
+        protocols=_README_SAFE_PROTOCOLS,
+        strip=True,
+    )
+
+
+class _SafeReadmeHTMLParser(HTMLParser):
+    """Preserve safe README HTML when optional Markdown libraries are unavailable."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+
+    @staticmethod
+    def _safe_url(value: str) -> bool:
+        value = value.strip().lower()
+        return not value.startswith(("javascript:", "vbscript:", "data:"))
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
+        if tag not in _README_SAFE_TAGS:
+            return
+        allowed = set(_README_SAFE_ATTRIBUTES.get(tag, []))
+        clean: list[str] = []
+        for name, value in attrs:
+            name = name.lower()
+            if name not in allowed or value is None:
+                continue
+            if name in {"href", "src"} and not self._safe_url(value):
+                continue
+            clean.append(f' {name}="{html.escape(value, quote=True)}"')
+        self.parts.append(f"<{tag}{''.join(clean)}>")
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        if tag in _README_SAFE_TAGS and tag not in {"br", "hr", "img"}:
+            self.parts.append(f"</{tag}>")
+
+    def handle_data(self, data: str) -> None:
+        self.parts.append(html.escape(data, quote=False))
+
+    def handle_entityref(self, name: str) -> None:
+        self.parts.append(f"&{name};")
+
+    def handle_charref(self, name: str) -> None:
+        self.parts.append(f"&#{name};")
+
+
+def _safe_readme_html_fragment(value: str) -> str:
+    parser = _SafeReadmeHTMLParser()
+    try:
+        parser.feed(value)
+        parser.close()
+    except Exception:
+        return html.escape(value, quote=False)
+    return "".join(parser.parts)
+
+
+def _looks_like_readme_html(value: str) -> bool:
+    return bool(re.match(
+        r"^\s*</?(?:a|abbr|b|blockquote|br|code|del|details|div|em|figcaption|figure|h[1-6]|hr|i|img|kbd|li|ol|p|pre|s|span|strong|sub|summary|sup|table|tbody|td|th|thead|tr|ul)\b",
+        value,
+        flags=re.IGNORECASE,
+    ))
+
+
 def _render_markdown(text: str) -> str:
     """Convert README Markdown into structured HTML at generation time."""
     lines = _normalize_readme_markdown(text).split("\n")
@@ -832,6 +982,17 @@ def _render_markdown(text: str) -> str:
             flush_list()
             flush_quote()
             flush_table()
+            continue
+
+        # Common READMEs mix Markdown with raw HTML for centered logos, badges,
+        # navigation links, tables, and images. Preserve only Barkly's allowlisted
+        # tags/attributes in the dependency-free fallback instead of escaping them.
+        if _looks_like_readme_html(line):
+            flush_paragraph()
+            flush_list()
+            flush_quote()
+            flush_table()
+            out.append(_safe_readme_html_fragment(line))
             continue
 
         heading = re.match(r"^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$", line)
@@ -962,7 +1123,7 @@ def _project_description(project: Project) -> str:
                 continue
             if stripped.startswith("```") or stripped.startswith(
                 (">", "- ", "* ", "+ ")
-            ):
+            ) or re.match(r"^</?[A-Za-z][^>]*>", stripped):
                 if lead:
                     break
                 continue
@@ -1204,6 +1365,112 @@ def _prepare_readme_title_image(project: Project, output_path: Path) -> None:
     metadata["_barkly_readme_title_image_alt"] = alt
 
 
+def _prepare_readme_assets(project: Project, output_path: Path) -> None:
+    """Copy local README images without executing or otherwise interpreting files."""
+    metadata = getattr(project, "metadata", None)
+    readme = _readme_path(project)
+    text = _read_readme(project)
+    if not isinstance(metadata, dict):
+        return
+    metadata["_barkly_readme_assets"] = {}
+    if readme is None or not text:
+        return
+
+    refs: set[str] = set()
+    refs.update(
+        m.group(1) for m in re.finditer(
+            r'!\[[^\]]*\]\(\s*<?([^)\s>]+)', text, flags=re.IGNORECASE
+        )
+    )
+    refs.update(
+        m.group(1) for m in re.finditer(
+            r'<img\b[^>]*?\bsrc\s*=\s*["\']([^"\']+)["\']',
+            text, flags=re.IGNORECASE | re.DOTALL,
+        )
+    )
+
+    root = Path(project.root).resolve()
+    target_dir = output_path / "assets" / "readme"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    mapping: dict[str, str] = {}
+    allowed = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
+
+    for raw in sorted(refs):
+        src = html.unescape(raw.strip())
+        if not src or src.startswith(("http://", "https://", "//", "data:", "#")):
+            continue
+        key = src.split("#", 1)[0].split("?", 1)[0].replace("\\", "/")
+        candidate = (readme.parent / Path(key)).resolve()
+        try:
+            relative = candidate.relative_to(root)
+        except ValueError:
+            continue
+        if not candidate.is_file() or candidate.suffix.lower() not in allowed:
+            continue
+        safe_parts = [re.sub(r"[^A-Za-z0-9._-]+", "-", part) for part in relative.parts]
+        target = target_dir.joinpath(*safe_parts)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(candidate, target)
+        mapping[key] = target.relative_to(output_path).as_posix()
+
+    metadata["_barkly_readme_assets"] = mapping
+
+
+def _render_reference_documentation(project: Project) -> str:
+    """Render discovered project documentation inside the existing Reference Layer."""
+    readme = _readme_path(project)
+    sections = _readme_sections(project)
+    readme_topics = [key for key in sections if key != "__intro__"]
+
+    docs: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for node in getattr(project, "documentation", []) or []:
+        path = str(getattr(node, "path", "") or "").strip()
+        title = str(getattr(node, "title", "") or Path(path).name or "Documentation").strip()
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        docs.append((title, path))
+
+    if readme is None and not docs:
+        return (
+            '<section class="index-reference-docs">'
+            '<h3>Project documentation context</h3>'
+            '<p class="muted">No repository documentation was discovered for this reference layer.</p>'
+            '</section>'
+        )
+
+    parts = [
+        '<section class="index-reference-docs">',
+        '<h3>Project documentation context</h3>',
+        '<p class="muted">Documentation discovered in the repository, with README content rendered for deeper project context.</p>',
+        '<div class="grid">',
+    ]
+    if readme is not None:
+        topic_text = ", ".join(readme_topics[:12]) if readme_topics else "No named sections detected"
+        readme_text = _read_readme(project)
+        readme_body = _rewrite_readme_asset_urls(project, readme_text)
+        rendered_readme = _render_markdown_established(readme_body)
+        if not rendered_readme:
+            rendered_readme = _render_markdown(readme_body)
+        parts.append(
+            '<article class="tile"><h3>README topics</h3>'
+            f'<p>{_escape(topic_text)}</p>'
+            f'<div class="readme-content">{rendered_readme}</div></article>'
+        )
+    if docs:
+        doc_items = "".join(
+            f'<li><span class="code">{_escape(title)}</span><br><span class="muted">{_escape(path)}</span></li>'
+            for title, path in docs[:20]
+        )
+        parts.append(
+            '<article class="tile"><h3>Repository documentation</h3>'
+            f'<ul>{doc_items}</ul></article>'
+        )
+    parts.extend(['</div>', '</section>'])
+    return "".join(parts)
+
+
 def _render_readme_title_image(project: Project) -> str:
     """Render the prepared README image inside the main title card."""
     metadata = getattr(project, "metadata", None)
@@ -1240,7 +1507,10 @@ def _render_readme(project: Project) -> str:
             continue
         body_lines.append(line)
 
-    rendered = _render_markdown("\n".join(body_lines))
+    readme_body = _rewrite_readme_asset_urls(project, "\n".join(body_lines))
+    rendered = _render_markdown_established(readme_body)
+    if rendered is None:
+        rendered = _render_markdown(readme_body)
     if not rendered.strip():
         return '<div class="empty-state">README is present but contains no readable content.</div>'
 
@@ -3262,6 +3532,7 @@ def render_project_website(project: Project, output_dir: str | Path) -> list[Pat
     assets_dir.mkdir(exist_ok=True)
     (assets_dir / "site.css").write_text(CSS, encoding="utf-8")
     (assets_dir / "relation-map.js").write_text(RELATION_MAP_JS, encoding="utf-8")
+    _prepare_readme_assets(project_obj, output_path)
     _prepare_readme_title_image(project_obj, output_path)
 
     index_path = output_path / "index.html"
