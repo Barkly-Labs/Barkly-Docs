@@ -1,0 +1,205 @@
+{
+  "summary": {
+    "PASS": 22,
+    "WARN": 5,
+    "FAIL": 1
+  },
+  "findings": [
+    {
+      "rule": "BARKLY-STRUCTURE-001",
+      "state": "PASS",
+      "message": "Page has a document title.",
+      "source": "entities.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-STRUCTURE-002",
+      "state": "WARN",
+      "message": "Page has no H1 primary heading.",
+      "source": "entities.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-CONTENT-001",
+      "state": "PASS",
+      "message": "No unresolved undefined/null values were rendered.",
+      "source": "entities.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-A11Y-001",
+      "state": "PASS",
+      "message": "Images provide alt attributes.",
+      "source": "entities.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-A11Y-002",
+      "state": "PASS",
+      "message": "Search controls have accessible labels.",
+      "source": "entities.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-EVIDENCE-001",
+      "state": "WARN",
+      "message": "Missing evidence labels: DETECTED, INFERRED",
+      "source": "entities.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-UX-001",
+      "state": "PASS",
+      "message": "Large detected data sections provide progressive disclosure/search where measurable.",
+      "source": "entities.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-STRUCTURE-001",
+      "state": "PASS",
+      "message": "Page has a document title.",
+      "source": "index.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-STRUCTURE-002",
+      "state": "PASS",
+      "message": "Page has a primary heading.",
+      "source": "index.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-CONTENT-001",
+      "state": "PASS",
+      "message": "No unresolved undefined/null values were rendered.",
+      "source": "index.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-A11Y-001",
+      "state": "PASS",
+      "message": "Images provide alt attributes.",
+      "source": "index.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-A11Y-002",
+      "state": "PASS",
+      "message": "Search controls have accessible labels.",
+      "source": "index.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-EVIDENCE-001",
+      "state": "PASS",
+      "message": "DECLARED, DETECTED, INFERRED, and UNKNOWN remain visibly distinguishable.",
+      "source": "index.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-UX-001",
+      "state": "PASS",
+      "message": "Large detected data sections provide progressive disclosure/search where measurable.",
+      "source": "index.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-STRUCTURE-001",
+      "state": "PASS",
+      "message": "Page has a document title.",
+      "source": "relation-map.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-STRUCTURE-002",
+      "state": "PASS",
+      "message": "Page has a primary heading.",
+      "source": "relation-map.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-CONTENT-001",
+      "state": "PASS",
+      "message": "No unresolved undefined/null values were rendered.",
+      "source": "relation-map.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-A11Y-001",
+      "state": "PASS",
+      "message": "Images provide alt attributes.",
+      "source": "relation-map.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-A11Y-002",
+      "state": "FAIL",
+      "message": "1 search input(s) lack accessible labels.",
+      "source": "relation-map.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-EVIDENCE-001",
+      "state": "WARN",
+      "message": "Missing evidence labels: DECLARED, INFERRED, UNKNOWN",
+      "source": "relation-map.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-UX-001",
+      "state": "PASS",
+      "message": "Large detected data sections provide progressive disclosure/search where measurable.",
+      "source": "relation-map.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-STRUCTURE-001",
+      "state": "PASS",
+      "message": "Page has a document title.",
+      "source": "relationships.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-STRUCTURE-002",
+      "state": "WARN",
+      "message": "Page has no H1 primary heading.",
+      "source": "relationships.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-CONTENT-001",
+      "state": "PASS",
+      "message": "No unresolved undefined/null values were rendered.",
+      "source": "relationships.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-A11Y-001",
+      "state": "PASS",
+      "message": "Images provide alt attributes.",
+      "source": "relationships.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-A11Y-002",
+      "state": "PASS",
+      "message": "Search controls have accessible labels.",
+      "source": "relationships.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-EVIDENCE-001",
+      "state": "WARN",
+      "message": "Missing evidence labels: INFERRED, UNKNOWN",
+      "source": "relationships.html",
+      "evidence": null
+    },
+    {
+      "rule": "BARKLY-UX-001",
+      "state": "PASS",
+      "message": "Large detected data sections provide progressive disclosure/search where measurable.",
+      "source": "relationships.html",
+      "evidence": null
+    }
+  ]
+}
