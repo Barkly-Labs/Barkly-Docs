@@ -1778,11 +1778,18 @@ def _render_index(project: Project) -> str:
         + _render_json_data(project)
         + '</div>'
     )
+  
     body = (
         f'<section class="hero">{project_summary}{stats}</section>'
         f'{relationship_preview}'
-        f'{overview}{evidence}{documentation}{structure}{json_section}'),
-    return _page_shell(f"{_project_name(project)} — Barkly Docs", "index", body)
+        f'{overview}{evidence}{documentation}{structure}{json_section}'
+    )
+    return _page_shell(
+        f"{_project_name(project)} — Barkly Docs",
+        "index",
+        body,
+    )
+   
 
 
 def _render_entities_page(project: Project) -> str:
@@ -1821,6 +1828,9 @@ def render_project_website(project: Project, output_dir: str | Path) -> list[Pat
     assets_dir.mkdir(exist_ok=True)
     (assets_dir / "site.css").write_text(CSS, encoding="utf-8")
     (assets_dir / "relation-map.js").write_text(RELATION_MAP_JS, encoding="utf-8")
+
+    pipeline_png = assets_dir / "relationship-pipeline.png"
+    _write_relationship_pipeline_png(project_obj, pipeline_png)
 
     index_path = output_path / "index.html"
     entities_path = output_path / "entities.html"
