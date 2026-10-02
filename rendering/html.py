@@ -1530,6 +1530,184 @@ def _page_shell(title: str, current: str, body: str) -> str:
 </html>'''
 
 
+
+
+def _render_relationship_preview(project: Project) -> str:
+        if not project.relationships:
+            return (
+                '<div class="empty-state">'
+                'No relationships were discovered for this project yet.'
+                '</div>'
+            )
+
+        return f"""
+        <div class="relationship-preview">
+        <a href="relationships.html"
+            aria-label="Open the complete relationship list">
+            <img
+            src="assets/relationship-pipeline.png"
+            alt="Relationship pipeline preview showing source entities, '
+                'relationship types, and target entities"
+            loading="lazy"
+            />
+        </a>
+        <p class="meta">
+            Preview of up to 8 detected relationships.
+            <a href="relationships.html">Explore all {len(project.relationships)}
+            relationships</a>.
+            <a href="relation-map.html">Open interactive relationship map</a>.
+        </p>
+        </div>
+        """
+
+def _write_relationship_pipeline_png(project: Project, output_path: Path) -> bool:
+    """Generate a compact PNG preview of actual project relationships."""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        return False
+
+    relationships = sorted(
+        project.relationships,
+        key=lambda rel: (
+            str(rel.source).lower(),
+            str(rel.kind).lower(),
+            str(rel.target).lower(),
+        ),
+    )
+
+    if not relationships:
+        return False
+
+    # Keep the overview readable; the full list remains on relationships.html.
+    preview = relationships[:8]
+    width = 1440
+    row_height = 88
+    header_height = 120
+    footer_height = 55
+    height = header_height + len(preview) * row_height + footer_height
+
+    image = Image.new("RGB", (width, height), "#080808")
+    draw = ImageDraw.Draw(image)
+
+    try:
+        title_font = ImageFont.truetype("arial.ttf", 30)
+        body_font = ImageFont.truetype("arial.ttf", 19)
+        small_font = ImageFont.truetype("arial.ttf", 15)
+    except OSError:
+        title_font = ImageFont.load_default()
+        body_font = ImageFont.load_default()
+        small_font = ImageFont.load_default()
+
+    pink = "#ff6b9d"
+    green = "#7dffb2"
+    yellow = "#ffd76b"
+    muted = "#9a9a9a"
+    text = "#f2f2f2"
+    panel = "#101010"
+    border = "#262626"
+
+    draw.text((40, 24), "BARKLY DOCS  /  RELATIONSHIP PIPELINE",
+              font=title_font, fill=pink)
+    draw.text(
+        (42, 70),
+        f"{len(project.relationships)} relationships discovered · "
+        f"Showing {len(preview)} preview rows",
+        font=small_font,
+        fill=muted,
+    )
+
+    def shorten(value: object, limit: int = 36) -> str:
+        value = str(value or "Unknown")
+        return value if len(value) <= limit else value[:limit - 3] + "..."
+
+    for index, rel in enumerate(preview):
+        y = header_height + index * row_height
+        evidence = str(rel.evidence or "UNKNOWN").upper()
+
+        draw.rounded_rectangle(
+            (30, y, width - 30, y + 70),
+            radius=12,
+            fill=panel,
+            outline=border,
+            width=1,
+        )
+
+        # Source entity
+        draw.rounded_rectangle(
+            (48, y + 13, 490, y + 57),
+            radius=8,
+            fill="#191219",
+            outline=pink,
+            width=2,
+        )
+        draw.text(
+            (62, y + 25),
+            shorten(rel.source, 37),
+            font=body_font,
+            fill=text,
+        )
+
+        # Relationship type
+        draw.text((505, y + 25), "->", font=body_font, fill=pink)
+        draw.rounded_rectangle(
+            (550, y + 13, 865, y + 57),
+            radius=8,
+            fill="#19170f",
+            outline=yellow,
+            width=1,
+        )
+        draw.text(
+            (565, y + 25),
+            shorten(rel.kind, 26),
+            font=body_font,
+            fill=yellow,
+        )
+        draw.text((878, y + 25), "->", font=body_font, fill=pink)
+
+        # Target entity
+        draw.rounded_rectangle(
+            (920, y + 13, 1385, y + 57),
+            radius=8,
+            fill="#101b15",
+            outline=green,
+            width=2,
+        )
+        draw.text(
+            (934, y + 25),
+            shorten(rel.target, 39),
+            font=body_font,
+            fill=text,
+        )
+
+        evidence_color = {
+            "DECLARED": green,
+            "DETECTED": pink,
+            "INFERRED": yellow,
+            "UNKNOWN": "#ff7b8c",
+        }.get(evidence, muted)
+
+        draw.text(
+            (50, y + 60),
+            evidence,
+            font=small_font,
+            fill=evidence_color,
+        )
+
+    if len(relationships) > len(preview):
+        draw.text(
+            (42, height - 38),
+            f"+ {len(relationships) - len(preview)} more relationships "
+            "— open Relationships for the complete list.",
+            font=small_font,
+            fill=muted,
+        )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(output_path, format="PNG", optimize=True)
+    return True
+
+
 def _render_index(project: Project) -> str:
     description = _project_description(project)
     languages = _languages(project)
@@ -1548,6 +1726,15 @@ def _render_index(project: Project) -> str:
         + _stat_card("Functions", str(len(project.functions)))
         + _stat_card("Methods", str(len(project.methods)))
         + _stat_card("Relationships", str(len(project.relationships)))
+        + '</div>'
+    )
+    relationship_preview = (
+        '<div class="section">'
+        '<h2>Relationship Pipeline</h2>'
+        '<div class="section-subtitle">'
+        'A visual summary of how discovered project entities connect.'
+        '</div>'
+        + _render_relationship_preview(project)
         + '</div>'
     )
     overview = (
@@ -1591,7 +1778,10 @@ def _render_index(project: Project) -> str:
         + _render_json_data(project)
         + '</div>'
     )
-    body = f'<section class="hero">{project_summary}{stats}</section>{overview}{evidence}{documentation}{structure}{json_section}'
+    body = (
+        f'<section class="hero">{project_summary}{stats}</section>'
+        f'{relationship_preview}'
+        f'{overview}{evidence}{documentation}{structure}{json_section}'),
     return _page_shell(f"{_project_name(project)} — Barkly Docs", "index", body)
 
 
