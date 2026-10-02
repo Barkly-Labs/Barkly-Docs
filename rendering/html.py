@@ -1532,40 +1532,97 @@ def _page_shell(title: str, current: str, body: str) -> str:
 
 
 
-def _render_relationship_preview(project: Project) -> str:
-        if not project.relationships:
-            return (
-                '<div class="empty-state">'
-                'No relationships were discovered for this project yet.'
-                '</div>'
-            )
+def _render_relationship_preview(project: Project, graph_generated: bool = True) -> str:
+    if not project.relationships:
+        return (
+            '<div class="empty-state">'
+            'No relationships were discovered for this project yet.'
+            '</div>'
+        )
 
-        return f"""
-        <div class="relationship-preview">
-        <a href="relationships.html"
-            aria-label="Open the complete relationship list">
-            <img
-            src="assets/relationship-pipeline.png"
-            alt="Relationship pipeline preview showing source entities, '
-                'relationship types, and target entities"
-            loading="lazy"
-            />
-        </a>
-        <p class="meta">
-            Preview of up to 8 detected relationships.
-            <a href="relationships.html">Explore all {len(project.relationships)}
-            relationships</a>.
-            <a href="relation-map.html">Open interactive relationship map</a>.
-        </p>
-        </div>
-        """
+    if not graph_generated:
+        return (
+            '<div class="empty-state">'
+            'The relationship graph could not be generated. '
+            'Install Graphviz and the Python graphviz package, then regenerate the docs.'
+            '</div>'
+        )
 
-def _write_relationship_pipeline_png(project: Project, output_path: Path) -> bool:
-    """Generate a compact PNG preview of actual project relationships."""
+    return f"""
+    <div class="relationship-preview">
+      <a href="relationships.html" aria-label="Open the complete relationship list">
+        <img
+          src="assets/relationship-graph.png"
+          alt="Graphviz diagram of detected relationships between project entities"
+          loading="lazy"
+        />
+      </a>
+      <p class="meta">
+        Graphviz diagram of {len(project.relationships)} detected relationships.
+        <a href="relationships.html">Explore the complete relationship list</a>.
+        <a href="relation-map.html">Open interactive relationship map</a>.
+      </p>
+    </div>
+    """
+
+
+def _write_relationship_graph_png(project: Project, output_path: Path) -> bool:
+    """Render the project's actual relationship model as a Graphviz PNG."""
+    if not project.relationships:
+        return False
+
     try:
-        from PIL import Image, ImageDraw, ImageFont
+        from graphviz import Digraph
     except ImportError:
         return False
+
+    graph = Digraph(
+        name="BarklyRelationships",
+        format="png",
+        engine="dot",
+        graph_attr={
+            "bgcolor": "#080808",
+            "rankdir": "LR",
+            "splines": "true",
+            "overlap": "false",
+            "pad": "0.35",
+            "nodesep": "0.45",
+            "ranksep": "0.8",
+            "fontname": "Arial",
+            "fontsize": "20",
+            "fontcolor": "#ff6b9d",
+            "label": "BARKLY DOCS  /  RELATIONSHIP GRAPH",
+            "labelloc": "t",
+        },
+        node_attr={
+            "shape": "box",
+            "style": "rounded,filled",
+            "fillcolor": "#101010",
+            "color": "#ff6b9d",
+            "fontcolor": "#f2f2f2",
+            "fontname": "Arial",
+            "fontsize": "10",
+            "margin": "0.16,0.10",
+        },
+        edge_attr={
+            "color": "#9a9a9a",
+            "fontcolor": "#ffd76b",
+            "fontname": "Arial",
+            "fontsize": "8",
+            "arrowsize": "0.7",
+        },
+    )
+
+    evidence_colors = {
+        "DECLARED": "#7dffb2",
+        "DETECTED": "#ff6b9d",
+        "INFERRED": "#ffd76b",
+        "UNKNOWN": "#ff7b8c",
+    }
+
+    def node_id(value: object) -> str:
+        # Graphviz IDs are generated from labels, avoiding unsafe raw identifiers.
+        return str(value or "Unknown").strip() or "Unknown"
 
     relationships = sorted(
         project.relationships,
@@ -1576,139 +1633,37 @@ def _write_relationship_pipeline_png(project: Project, output_path: Path) -> boo
         ),
     )
 
-    if not relationships:
-        return False
-
-    # Keep the overview readable; the full list remains on relationships.html.
-    preview = relationships[:8]
-    width = 1440
-    row_height = 88
-    header_height = 120
-    footer_height = 55
-    height = header_height + len(preview) * row_height + footer_height
-
-    image = Image.new("RGB", (width, height), "#080808")
-    draw = ImageDraw.Draw(image)
-
-    try:
-        title_font = ImageFont.truetype("arial.ttf", 30)
-        body_font = ImageFont.truetype("arial.ttf", 19)
-        small_font = ImageFont.truetype("arial.ttf", 15)
-    except OSError:
-        title_font = ImageFont.load_default()
-        body_font = ImageFont.load_default()
-        small_font = ImageFont.load_default()
-
-    pink = "#ff6b9d"
-    green = "#7dffb2"
-    yellow = "#ffd76b"
-    muted = "#9a9a9a"
-    text = "#f2f2f2"
-    panel = "#101010"
-    border = "#262626"
-
-    draw.text((40, 24), "BARKLY DOCS  /  RELATIONSHIP PIPELINE",
-              font=title_font, fill=pink)
-    draw.text(
-        (42, 70),
-        f"{len(project.relationships)} relationships discovered · "
-        f"Showing {len(preview)} preview rows",
-        font=small_font,
-        fill=muted,
-    )
-
-    def shorten(value: object, limit: int = 36) -> str:
-        value = str(value or "Unknown")
-        return value if len(value) <= limit else value[:limit - 3] + "..."
-
-    for index, rel in enumerate(preview):
-        y = header_height + index * row_height
+    for rel in relationships:
+        source = node_id(rel.source)
+        target = node_id(rel.target)
+        kind = str(rel.kind or "related to")
         evidence = str(rel.evidence or "UNKNOWN").upper()
+        edge_color = evidence_colors.get(evidence, "#9a9a9a")
 
-        draw.rounded_rectangle(
-            (30, y, width - 30, y + 70),
-            radius=12,
-            fill=panel,
-            outline=border,
-            width=1,
-        )
-
-        # Source entity
-        draw.rounded_rectangle(
-            (48, y + 13, 490, y + 57),
-            radius=8,
-            fill="#191219",
-            outline=pink,
-            width=2,
-        )
-        draw.text(
-            (62, y + 25),
-            shorten(rel.source, 37),
-            font=body_font,
-            fill=text,
-        )
-
-        # Relationship type
-        draw.text((505, y + 25), "->", font=body_font, fill=pink)
-        draw.rounded_rectangle(
-            (550, y + 13, 865, y + 57),
-            radius=8,
-            fill="#19170f",
-            outline=yellow,
-            width=1,
-        )
-        draw.text(
-            (565, y + 25),
-            shorten(rel.kind, 26),
-            font=body_font,
-            fill=yellow,
-        )
-        draw.text((878, y + 25), "->", font=body_font, fill=pink)
-
-        # Target entity
-        draw.rounded_rectangle(
-            (920, y + 13, 1385, y + 57),
-            radius=8,
-            fill="#101b15",
-            outline=green,
-            width=2,
-        )
-        draw.text(
-            (934, y + 25),
-            shorten(rel.target, 39),
-            font=body_font,
-            fill=text,
-        )
-
-        evidence_color = {
-            "DECLARED": green,
-            "DETECTED": pink,
-            "INFERRED": yellow,
-            "UNKNOWN": "#ff7b8c",
-        }.get(evidence, muted)
-
-        draw.text(
-            (50, y + 60),
-            evidence,
-            font=small_font,
-            fill=evidence_color,
-        )
-
-    if len(relationships) > len(preview):
-        draw.text(
-            (42, height - 38),
-            f"+ {len(relationships) - len(preview)} more relationships "
-            "— open Relationships for the complete list.",
-            font=small_font,
-            fill=muted,
+        graph.node(source, label=source, color="#ff6b9d", fillcolor="#191219")
+        graph.node(target, label=target, color="#7dffb2", fillcolor="#101b15")
+        graph.edge(
+            source,
+            target,
+            label=f"{kind} · {evidence}",
+            color=edge_color,
+            fontcolor=edge_color,
+            tooltip=str(getattr(rel, "explanation", "") or kind),
         )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    image.save(output_path, format="PNG", optimize=True)
-    return True
+    try:
+        # Graphviz appends the selected format extension; cleanup removes its .gv source.
+        rendered = Path(graph.render(filename=output_path.stem, directory=str(output_path.parent), cleanup=True))
+        if rendered != output_path and rendered.exists():
+            rendered.replace(output_path)
+        return output_path.exists()
+    except Exception:
+        # Missing Graphviz system executable or another render error: keep HTML generation alive.
+        return False
 
 
-def _render_index(project: Project) -> str:
+def _render_index(project: Project, graph_generated: bool = True) -> str:
     description = _project_description(project)
     languages = _languages(project)
     project_summary = (
@@ -1734,7 +1689,7 @@ def _render_index(project: Project) -> str:
         '<div class="section-subtitle">'
         'A visual summary of how discovered project entities connect.'
         '</div>'
-        + _render_relationship_preview(project)
+        + _render_relationship_preview(project, graph_generated)
         + '</div>'
     )
     overview = (
@@ -1829,15 +1784,15 @@ def render_project_website(project: Project, output_dir: str | Path) -> list[Pat
     (assets_dir / "site.css").write_text(CSS, encoding="utf-8")
     (assets_dir / "relation-map.js").write_text(RELATION_MAP_JS, encoding="utf-8")
 
-    pipeline_png = assets_dir / "relationship-pipeline.png"
-    _write_relationship_pipeline_png(project_obj, pipeline_png)
+    relationship_graph_png = assets_dir / "relationship-graph.png"
+    graph_generated = _write_relationship_graph_png(project_obj, relationship_graph_png)
 
     index_path = output_path / "index.html"
     entities_path = output_path / "entities.html"
     relationships_path = output_path / "relationships.html"
     relation_map_path = output_path / "relation-map.html"
 
-    index_path.write_text(_render_index(project_obj), encoding="utf-8")
+    index_path.write_text(_render_index(project_obj, graph_generated), encoding="utf-8")
     entities_path.write_text(_render_entities_page(project_obj), encoding="utf-8")
     relationships_path.write_text(_render_relationships_page(project_obj), encoding="utf-8")
     relation_map_path.write_text(_render_relation_map_page(project_obj), encoding="utf-8")
