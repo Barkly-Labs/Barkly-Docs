@@ -1580,14 +1580,119 @@ def _render_entity_group(items, empty_message: str) -> str:
     return '<div class="entity-list">' + "".join(rendered) + "</div>"
 
 
-def _project_items(project: Project, attribute: str):
-    value = getattr(project, attribute, None)
-    if value is None:
+def _collect_project_entities(project: Project, kind: str):
+    """Collect one semantic entity type without mixing it into other cards."""
+    wanted = kind.lower().rstrip("s")
+    aliases = {
+        "class": {"class"},
+        "function": {"function", "func"},
+        "method": {"method"},
+        "module": {"module", "package"},
+        "dependency": {"dependency", "import", "include", "require"},
+        "relationship": {"relationship"},
+    }
+    accepted = aliases.get(wanted, {wanted})
+    found = []
+    seen = set()
+
+    def add(item):
+        if item is None:
+            return
+        key = (
+            str(getattr(item, "path", "") or ""),
+            str(getattr(item, "name", "") or ""),
+            str(getattr(item, "line", "") or ""),
+            str(getattr(item, "kind", "") or item.__class__.__name__),
+        )
+        if key not in seen:
+            seen.add(key)
+            found.append(item)
+
+    # Prefer explicit normalized Project Model collections when present.
+    for attr in (kind, kind.rstrip("s"), kind + "s"):
+        value = getattr(project, attr, None)
+        if value is not None and not isinstance(value, (str, bytes, dict)):
+            try:
+                for item in value:
+                    add(item)
+            except TypeError:
+                pass
+
+    # Some readers attach symbols/entities to their source file.
+    for file_item in getattr(project, "files", []) or []:
+        for attr in ("entities", "symbols", "members", "items"):
+            values = getattr(file_item, attr, None)
+            if values is None or isinstance(values, (str, bytes, dict)):
+                continue
+            try:
+                iterator = iter(values)
+            except TypeError:
+                continue
+            for item in iterator:
+                raw_kind = str(
+                    getattr(item, "kind", "")
+                    or getattr(item, "type", "")
+                    or item.__class__.__name__
+                ).lower().replace("_", " ").strip()
+                singular = raw_kind.rstrip("s")
+                if singular in accepted:
+                    add(item)
+
+    return found
+
+
+def _collect_relationships(project: Project):
+    """Use the relationship model itself; never render a missing value as 'Unknown'."""
+    relationships = getattr(project, "relationships", None)
+    if relationships is None:
+        graph = getattr(project, "graph", None)
+        relationships = getattr(graph, "relationships", None) if graph is not None else None
+    if relationships is None:
         return []
     try:
-        return list(value)
+        return list(relationships)
     except TypeError:
         return []
+
+
+def _render_relationship_group(items) -> str:
+    if not items:
+        return '<div class="empty-state">No relationships were discovered.</div>'
+
+    rendered = []
+    for rel in items:
+        source = (
+            getattr(rel, "source", None)
+            or getattr(rel, "from_entity", None)
+            or getattr(rel, "from_", None)
+            or getattr(rel, "source_name", None)
+            or "Unknown source"
+        )
+        target = (
+            getattr(rel, "target", None)
+            or getattr(rel, "to_entity", None)
+            or getattr(rel, "to", None)
+            or getattr(rel, "target_name", None)
+            or "Unknown target"
+        )
+        relation = (
+            getattr(rel, "kind", None)
+            or getattr(rel, "type", None)
+            or getattr(rel, "relationship_type", None)
+            or "relationship"
+        )
+
+        def label(value):
+            return str(getattr(value, "name", None) or getattr(value, "path", None) or value)
+
+        rendered.append(
+            '<div class="entity-item">'
+            f'<h3>{_escape(label(source))} → {_escape(label(target))}</h3>'
+            f'<div class="meta">Relationship: {_escape(str(relation))}</div>'
+            '</div>'
+        )
+    return '<div class="entity-list">' + "".join(rendered) + "</div>"
+
 
 
 def _render_index_data_section(title: str, description: str, action: str, body: str) -> str:
@@ -1640,30 +1745,23 @@ def _render_other_files(project: Project) -> str:
     return '<div class="entity-list">' + "".join(items) + "</div>"
 
 def _render_json_data(project: Project) -> str:
-    if not project.data:
-        return '<div class="empty-state">No JSON data objects or arrays were extracted.</div>'
+    """Render JSON values only from files that are actually JSON."""
+    json_files = [item for item in project.files if _is_json_project_file(item)]
+    if not json_files:
+        return '<div class="empty-state">No JSON data was discovered.</div>'
 
-    items = []
-    for item in sorted(
-        project.data, key=lambda node: (node.metadata.get("path", node.path), node.kind)
-    ):
-        key_summary = ", ".join(item.keys) if item.keys else "(empty)"
-        value_preview = item.value if item.value is not None else ""
-        meta_parts = [
-            f"Type: {_escape(item.value_type or item.kind or 'unknown')}",
-            f"Path: {_escape(item.metadata.get('path', item.path))}",
-        ]
-        if item.keys:
-            meta_parts.append(f"Keys: {_escape(key_summary)}")
-        if value_preview:
-            meta_parts.append(f"Value: {_escape(value_preview)}")
-        items.append(f"""
-            <div class="entity-item">
-              <h3>{_escape(item.name)}</h3>
-              <div class="meta">{' · '.join(meta_parts)}</div>
-            </div>
-            """)
-    return '<div class="entity-list">' + "".join(items) + "</div>"
+    rendered = []
+    for item in sorted(json_files, key=lambda node: node.path):
+        path = getattr(item, "path", "") or ""
+        name = getattr(item, "name", "") or path or "JSON file"
+        rendered.append(
+            '<div class="entity-item">'
+            f'<h3>{_escape(str(name))}</h3>'
+            '<div class="meta">Type: JSON file</div>'
+            f'<div class="meta">Path: {_escape(str(path))}</div>'
+            '</div>'
+        )
+    return '<div class="entity-list">' + "".join(rendered) + "</div>"
 
 
 def _page_shell(title: str, current: str, body: str) -> str:
@@ -2531,42 +2629,42 @@ def _render_index(project: Project, graph_generated: bool = True) -> str:
         "Classes",
         "Discovered classes in one consistent source-oriented view.",
         "Explore classes",
-        _render_entity_group(_project_items(project, "classes"), "No classes were discovered."),
+        _render_entity_group(_collect_project_entities(project, "classes"), "No classes were discovered."),
     )
 
     functions_section = _render_index_data_section(
         "Functions",
         "Discovered functions kept separate from classes and file data.",
         "Explore functions",
-        _render_entity_group(_project_items(project, "functions"), "No functions were discovered."),
+        _render_entity_group(_collect_project_entities(project, "functions"), "No functions were discovered."),
     )
 
     methods_section = _render_index_data_section(
         "Methods",
         "Methods are grouped separately so class behavior is easier to scan.",
         "Explore methods",
-        _render_entity_group(_project_items(project, "methods"), "No methods were discovered."),
+        _render_entity_group(_collect_project_entities(project, "methods"), "No methods were discovered."),
     )
 
     modules_section = _render_index_data_section(
         "Modules",
         "Detected modules and source units that organize the project.",
         "Explore modules",
-        _render_entity_group(_project_items(project, "modules"), "No modules were discovered."),
+        _render_entity_group(_collect_project_entities(project, "modules"), "No modules were discovered."),
     )
 
     dependencies_section = _render_index_data_section(
         "Dependencies",
         "Project dependencies are separated from source entities and relationships.",
         "Explore dependencies",
-        _render_entity_group(_project_items(project, "dependencies"), "No dependencies were discovered."),
+        _render_entity_group(_collect_project_entities(project, "dependencies"), "No dependencies were discovered."),
     )
 
     relationships_section = _render_index_data_section(
         "Relationships",
         "Detected connections between project entities, kept distinct from inferred meaning.",
         "Explore relationships",
-        _render_entity_group(_project_items(project, "relationships"), "No relationships were discovered."),
+        _render_relationship_group(_collect_relationships(project)),
     )
 
     json_section = (
@@ -2574,10 +2672,7 @@ def _render_index(project: Project, graph_generated: bool = True) -> str:
         '<summary><div class="index-section-heading"><h2>JSON</h2>'
         '<p>JSON files and structured JSON values only. Other project files are kept in their own section.</p></div>'
         '<span class="index-section-action" aria-hidden="true">Explore JSON ↓</span></summary>'
-        '<div class="index-section-body">'
-        '<h3>JSON files</h3>' + _render_json_files(project)
-        + '<h3 style="margin-top:18px;">Extracted JSON data</h3>' + _render_json_data(project)
-        + '</div></details>'
+        '<div class="index-section-body">' + _render_json_data(project) + '</div></details>'
     )
 
     body = (
