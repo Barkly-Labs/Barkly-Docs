@@ -32,6 +32,7 @@ from typing import Any
 from model.project import (
     ClassNode,
     DocumentationNode,
+    EndpointNode,
     FileNode,
     FunctionNode,
     ImportNode,
@@ -513,6 +514,17 @@ class RubyReader(LanguageReader):
                 file_module.functions.append(function["name"])
 
             # ------------------------------------------------
+            # HTTP ENDPOINTS
+            # ------------------------------------------------
+
+            endpoints = self._extract_endpoints(
+                source,
+                path,
+                project,
+                structures,
+            )
+
+            # ------------------------------------------------
             # VARIABLES / CONSTANTS
             # ------------------------------------------------
 
@@ -560,6 +572,7 @@ class RubyReader(LanguageReader):
                     "classes": len(classes),
                     "modules": len(modules),
                     "top_level_functions": len(top_level_methods),
+                    "endpoints": len(endpoints),
                 },
             )
 
@@ -1143,6 +1156,219 @@ class RubyReader(LanguageReader):
                 method["line_end"] = len(lines)
 
         return methods
+
+    # ========================================================
+    # HTTP ENDPOINTS
+    # ========================================================
+
+    _HTTP_ROUTE_METHODS = {
+        "get", "post", "put", "patch", "delete", "options", "head",
+        "connect", "trace", "link", "unlink",
+    }
+
+    def _extract_endpoints(
+        self,
+        source: str,
+        path: Path,
+        project: Project,
+        structures: list[dict[str, Any]],
+    ) -> list[EndpointNode]:
+        """Extract statically identifiable Sinatra route declarations.
+
+        Detection is intentionally framework-gated: a method named ``get`` is
+        not considered HTTP routing unless this file declares Sinatra usage or
+        the declaration is enclosed by a Sinatra application class.
+        """
+        lines = source.splitlines()
+        endpoints: list[EndpointNode] = []
+        # Only `require "sinatra"` enables the classic top-level DSL.
+        # `require "sinatra/base"` alone does not, so those files require a
+        # declaration inside a Sinatra::Base/Application subclass.
+        file_uses_sinatra = bool(
+            re.search(
+                r"^\s*require\s+['\"]sinatra['\"]\s*(?:#.*)?$",
+                source,
+                re.MULTILINE,
+            )
+        )
+
+        for index, raw_line in enumerate(lines):
+            stripped = self._strip_ruby_comment(raw_line).strip()
+            match = re.match(
+                r"^(get|post|put|patch|delete|options|head|connect|trace|link|unlink)\b(.*)$",
+                stripped,
+                re.IGNORECASE,
+            )
+            if not match:
+                continue
+
+            method = match.group(1).upper()
+            enclosing = self._endpoint_enclosing_structure(index + 1, structures)
+            superclass = str((enclosing or {}).get("superclass") or "")
+            enclosing_is_sinatra = "Sinatra::" in superclass
+            if not file_uses_sinatra and not enclosing_is_sinatra:
+                continue
+
+            statement, end_index = self._collect_route_statement(lines, index)
+            declaration = self._strip_ruby_comment(statement).strip()
+            route_match = re.match(
+                r"^(?:get|post|put|patch|delete|options|head|connect|trace|link|unlink)\b\s*(.*)$",
+                declaration,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if not route_match:
+                continue
+
+            path_value, remainder = self._parse_route_first_argument(route_match.group(1))
+            if path_value is None:
+                continue
+
+            line_number = index + 1
+            enclosing_name = (enclosing or {}).get("name")
+            endpoint_id = f"{method} {path_value}@{path}:{line_number}"
+            documentation = self._documentation_before(lines, index)
+            metadata = {
+                "id": endpoint_id,
+                "framework": "Sinatra",
+                "line": line_number,
+                "line_end": end_index + 1,
+                "enclosing": enclosing_name,
+                "handler_kind": "route_block",
+                "evidence": "DETECTED",
+                "declaration": declaration,
+            }
+            options = remainder.strip().rstrip("{").strip()
+            options = re.sub(r"\bdo\s*(?:\|.*?\|)?\s*$", "", options).strip()
+            if options.startswith(","):
+                options = options[1:].strip()
+            if options:
+                metadata["route_options"] = options
+
+            endpoint = EndpointNode(
+                path=path_value,
+                method=method,
+                source_file=str(path),
+                handler=None,
+                documentation=documentation,
+                metadata=metadata,
+            )
+            project.add_endpoint(endpoint)
+            endpoints.append(endpoint)
+
+            if enclosing_name:
+                project.add_relationship(
+                    RelationshipNode(
+                        source=enclosing_name,
+                        target=endpoint_id,
+                        kind="contains",
+                        source_file=str(path),
+                        source_location={"line": line_number},
+                        evidence="DETECTED",
+                        metadata={"framework": "Sinatra"},
+                    )
+                )
+
+        return endpoints
+
+    def _endpoint_enclosing_structure(
+        self,
+        line_number: int,
+        structures: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        candidates = [
+            item for item in structures
+            if item.get("line_start")
+            and item.get("line_end")
+            and int(item["line_start"]) <= line_number <= int(item["line_end"])
+        ]
+        if not candidates:
+            return None
+        return max(candidates, key=lambda item: int(item.get("line_start") or 0))
+
+    def _collect_route_statement(
+        self,
+        lines: list[str],
+        start_index: int,
+    ) -> tuple[str, int]:
+        """Collect a possibly multiline route declaration without its body."""
+        parts: list[str] = []
+        paren_depth = 0
+        quote: str | None = None
+        escaped = False
+        for index in range(start_index, min(len(lines), start_index + 20)):
+            line = self._strip_ruby_comment(lines[index])
+            parts.append(line.strip())
+            for char in line:
+                if escaped:
+                    escaped = False
+                    continue
+                if char == "\\":
+                    escaped = True
+                    continue
+                if quote:
+                    if char == quote:
+                        quote = None
+                    continue
+                if char in {"'", '"'}:
+                    quote = char
+                elif char == "(":
+                    paren_depth += 1
+                elif char == ")" and paren_depth:
+                    paren_depth -= 1
+            joined = " ".join(parts)
+            if paren_depth == 0 and (
+                re.search(r"\bdo(?:\s*\|.*?\|)?\s*$", joined)
+                or joined.rstrip().endswith("{")
+                or index == start_index
+            ):
+                return joined, index
+        return " ".join(parts), min(len(lines) - 1, start_index + len(parts) - 1)
+
+    def _parse_route_first_argument(self, value: str) -> tuple[str | None, str]:
+        """Return the first statically readable route pattern and remaining options."""
+        text = value.strip()
+        if text.startswith("("):
+            text = text[1:].lstrip()
+
+        if not text:
+            return None, ""
+
+        if text[0] in {"'", '"'}:
+            quote = text[0]
+            escaped = False
+            chars: list[str] = []
+            for index, char in enumerate(text[1:], start=1):
+                if escaped:
+                    chars.append(char)
+                    escaped = False
+                    continue
+                if char == "\\":
+                    chars.append(char)
+                    escaped = True
+                    continue
+                if char == quote:
+                    return "".join(chars), text[index + 1:].lstrip(" )")
+                chars.append(char)
+            return None, text
+
+        if text.startswith("%r{"):
+            end = text.find("}", 3)
+            if end != -1:
+                return text[: end + 1], text[end + 1:].lstrip(" )")
+
+        if text.startswith("/"):
+            escaped = False
+            for index, char in enumerate(text[1:], start=1):
+                if escaped:
+                    escaped = False
+                    continue
+                if char == "\\":
+                    escaped = True
+                elif char == "/":
+                    return text[: index + 1], text[index + 1:].lstrip(" )")
+
+        # Dynamic expressions are intentionally unresolved rather than guessed.
+        return None, text
 
     # ========================================================
     # IMPORTS

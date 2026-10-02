@@ -587,6 +587,61 @@ a:focus-visible {
   .entity-row-summary .meta { grid-column: 1 / -1; }
 }
 
+
+/* Entities page: searchable, accessible explorer using the established Barkly entity language. */
+.entity-explorer { display: grid; gap: 16px; }
+.entity-explorer-tools {
+  position: sticky; top: 78px; z-index: 8; padding: 16px;
+  border: 1px solid var(--line); border-radius: 14px; background: rgba(13,13,13,.97);
+  box-shadow: 0 10px 24px rgba(0,0,0,.18);
+}
+.entity-explorer-tools label { display: block; margin-bottom: 7px; font-weight: 650; }
+.entity-search-row { display: flex; gap: 10px; }
+.entity-search-row input[type="search"] {
+  min-width: 0; flex: 1; background: #080808; color: var(--text); border: 1px solid var(--line);
+  border-radius: 10px; padding: 11px 13px;
+}
+.entity-search-clear, .entity-disclosure-button {
+  border: 1px solid var(--line); border-radius: 9px; background: rgba(255,107,157,.1);
+  color: var(--text); padding: 8px 12px; cursor: pointer;
+}
+.entity-search-clear:disabled { cursor: default; opacity: .45; }
+.entity-search-status { margin: 9px 0 0; color: var(--muted); font-size: .84rem; }
+.entity-explorer-list { display: grid; gap: 10px; }
+.entity-explorer-item { padding: 0; overflow: hidden; }
+.entity-explorer-row {
+  display: grid; grid-template-columns: minmax(180px,1fr) minmax(260px,1.7fr) auto;
+  gap: 16px; align-items: center; padding: 13px 14px;
+}
+.entity-explorer-primary { display: flex; gap: 9px; align-items: center; min-width: 0; flex-wrap: wrap; }
+.entity-type-tag {
+  display: inline-flex; align-items: center; border: 1px solid rgba(255,107,157,.28);
+  background: rgba(255,107,157,.1); color: var(--accent); border-radius: 999px;
+  padding: 2px 7px; font-size: .68rem; letter-spacing: .04em; text-transform: uppercase;
+}
+.entity-explorer-meta { display: grid; min-width: 0; color: var(--muted); font-size: .76rem; }
+.entity-explorer-meta span { overflow-wrap: anywhere; }
+.entity-disclosure-button { white-space: nowrap; }
+.entity-explorer-item .entity-expanded-view { border-top: 1px solid var(--line); }
+.entity-related { margin-top: 14px; }
+.entity-related ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 7px; }
+.entity-related li { padding: 8px 0; border-bottom: 1px solid #202020; overflow-wrap: anywhere; }
+.entity-related li:last-child { border-bottom: 0; }
+.entity-relation-kind { color: var(--accent); margin: 0 6px; }
+.entity-no-relationships { margin-top: 14px; }
+.entity-search-empty { text-align: center; }
+.entity-explorer-item[hidden] { display: none !important; }
+@media (max-width: 820px) {
+  .entity-explorer-tools { position: static; }
+  .entity-explorer-row { grid-template-columns: 1fr auto; }
+  .entity-explorer-meta { grid-column: 1 / -1; }
+}
+@media (max-width: 560px) {
+  .entity-search-row { align-items: stretch; flex-direction: column; }
+  .entity-explorer-row { grid-template-columns: 1fr; }
+  .entity-disclosure-button { justify-self: start; }
+}
+
 /* Reference Layer documentation enhancement; existing sections remain unchanged. */
 .index-reference-docs{margin:18px 0 0}
 .index-reference-docs>h3{margin:0 0 5px;font-size:1rem}
@@ -2185,12 +2240,18 @@ def _render_entity_group(items, empty_message: str) -> str:
 
     rendered = []
     for item in sorted(items, key=lambda node: (getattr(node, "path", "") or "", getattr(node, "name", "") or "")):
-        name = getattr(item, "name", "") or "Unnamed"
-        path = getattr(item, "path", "") or ""
-        language = getattr(item, "language", "") or "Unknown"
+        metadata = getattr(item, "metadata", {}) or {}
+        if item.__class__.__name__ == "EndpointNode":
+            name = f"{getattr(item, 'method', 'HTTP')} {getattr(item, 'path', '')}".strip()
+            path = getattr(item, "source_file", "") or ""
+            language = "Ruby" if metadata.get("framework") == "Sinatra" else "Unknown"
+        else:
+            name = getattr(item, "name", "") or "Unnamed"
+            path = getattr(item, "path", "") or ""
+            language = getattr(item, "language", "") or "Unknown"
         kind = getattr(item, "kind", "") or item.__class__.__name__
-        line = value(item, "line_start", "start_line", "line", "lineno")
-        end_line = value(item, "line_end", "end_line")
+        line = value(item, "line_start", "start_line", "line", "lineno") or metadata.get("line")
+        end_line = value(item, "line_end", "end_line") or metadata.get("line_end")
         documentation = value(item, "documentation", "docstring", "description", "summary")
         parameters = value(item, "parameters", "params", "arguments")
         return_type = value(item, "return_type", "returns")

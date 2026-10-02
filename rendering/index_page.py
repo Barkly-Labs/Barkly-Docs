@@ -120,6 +120,13 @@ def render_index(project: Project, graph_generated: bool = True) -> str:
         _render_entity_group(_collect_project_entities(project, "modules"), "No modules were discovered."),
     )
 
+    endpoints_section = _render_index_data_section(
+        "Endpoints",
+        "Detected application entry points, with methods and source locations preserved as static-analysis evidence.",
+        "Explore endpoints",
+        _render_entity_group(_collect_project_entities(project, "endpoints"), "No endpoints were discovered."),
+    )
+
     dependencies_section = _render_index_data_section(
         "Dependencies",
         "Project dependencies are separated from source entities and relationships.",
@@ -148,8 +155,8 @@ def render_index(project: Project, graph_generated: bool = True) -> str:
         f'{documentation}'
         '<div class="index-deep-label">Reference layer</div>'
         '<h2 class="index-deep-title">Deeper project detail</h2>'
-        '<p class="index-deep-copy">The overview stays calm by default. Classes, functions, methods, modules, dependencies, relationships, JSON, and files are separated into predictable sections so each type of project data has one clear place.</p>'
-        f'<div class="index-human-flow">{classes_section}{functions_section}{methods_section}{modules_section}{dependencies_section}{relationships_section}{json_section}{other_files_section}</div>'
+        '<p class="index-deep-copy">The overview stays calm by default. Classes, functions, methods, modules, endpoints, dependencies, relationships, JSON, and files are separated into predictable sections so each type of project data has one clear place.</p>'
+        f'<div class="index-human-flow">{classes_section}{functions_section}{methods_section}{modules_section}{endpoints_section}{dependencies_section}{relationships_section}{json_section}{other_files_section}</div>'
     )
     return _page_shell(
         f"{_project_name(project)} — Barkly Docs",

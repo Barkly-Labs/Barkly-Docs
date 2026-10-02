@@ -841,12 +841,15 @@ def build_relation_graph(
     for endpoint in progress_items("endpoints", project.endpoints):
         if not _is_project_source_path(project, _node_source_path(endpoint)):
             continue
-        endpoint_id = endpoint.handler or endpoint.path
+        endpoint_id = (endpoint.metadata or {}).get("id") or endpoint.handler or (
+            f"{endpoint.method} {endpoint.path}@{endpoint.source_file or 'unknown'}:"
+            f"{(endpoint.metadata or {}).get('line', '')}"
+        )
         known_identifiers.add(endpoint_id)
         graph.add_node(
             GraphNode(
                 id=endpoint_id,
-                label=endpoint.handler or endpoint.path,
+                label=f"{endpoint.method} {endpoint.path}",
                 kind="endpoint",
                 qualified_name=endpoint.handler or endpoint.path,
                 path=endpoint.source_file,

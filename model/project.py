@@ -194,6 +194,19 @@ class Project:
         self.routes.append(node)
 
     def add_endpoint(self, node: "EndpointNode") -> None:
+        identity = (node.metadata or {}).get("id")
+        for existing in self.endpoints:
+            existing_identity = (existing.metadata or {}).get("id")
+            if identity and existing_identity == identity:
+                return
+            if (
+                not identity
+                and existing.method == node.method
+                and existing.path == node.path
+                and existing.source_file == node.source_file
+                and (existing.metadata or {}).get("line") == (node.metadata or {}).get("line")
+            ):
+                return
         self.endpoints.append(node)
 
     def add_export(self, node: "ExportNode") -> None:
