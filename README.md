@@ -77,7 +77,8 @@ PROJECT SUMMARY / STRUCTURIZR ARCHITECTURE / HTML RENDERERS
 
 ## Project-level architecture graph (Structurizr)
 
-The generated HTML site includes a **Project Architecture** page backed by a Structurizr DSL workspace. The workspace intentionally contains only top-level project components and aggregated component-to-component dependencies; individual files, classes, functions, and methods are not graph nodes. Detailed code entities and relationships remain available on their separate documentation pages.
+The generated HTML site includes a **Project Architecture** page backed by a Structurizr DSL workspace. The workspace intentionally contains only top-level project components and aggregated component-to-component dependencies; individual files, classes, functions, a
+nd methods are not graph nodes. Detailed code entities and relationships remain available on their separate documentation pages.
 
 The normal CLI workflow generates and builds the Docker services automatically. To start them manually after generating the site:
 
