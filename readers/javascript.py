@@ -73,9 +73,7 @@ class JavaScriptReader(LanguageReader):
                 success=False,
                 project=project,
                 warnings=[],
-                errors=[
-                    f"{path}: unable to read JavaScript source: {exc}"
-                ],
+                errors=[f"{path}: unable to read JavaScript source: {exc}"],
                 metadata={
                     "language": self.language,
                     "reader_version": self.version,
@@ -122,9 +120,7 @@ class JavaScriptReader(LanguageReader):
             statement = match.group(0).strip()
             target = match.group("target")
 
-            names = self._parse_import_names(
-                match.group("names")
-            )
+            names = self._parse_import_names(match.group("names"))
 
             line = self._line_number(
                 source,
@@ -256,9 +252,7 @@ class JavaScriptReader(LanguageReader):
             name = match.group("name")
             kind = match.group("kind")
 
-            default_export = bool(
-                match.group("default")
-            )
+            default_export = bool(match.group("default"))
 
             line = self._line_number(
                 source,
@@ -298,9 +292,7 @@ class JavaScriptReader(LanguageReader):
         # ------------------------------------------------------------
 
         for match in self._EXPORT_LIST_RE.finditer(source):
-            names = self._parse_export_names(
-                match.group("names")
-            )
+            names = self._parse_export_names(match.group("names"))
 
             target = match.group("target")
 
@@ -449,9 +441,7 @@ class JavaScriptReader(LanguageReader):
                 name=name,
                 path=str(path),
                 language=self.language,
-                bases=self._parse_extends(
-                    match.group("extends")
-                ),
+                bases=self._parse_extends(match.group("extends")),
                 decorators=[],
                 methods=methods,
                 attributes=self._extract_class_fields(body),
@@ -460,12 +450,8 @@ class JavaScriptReader(LanguageReader):
                 line_end=line_end,
                 metadata={
                     "javascript_kind": "class",
-                    "exported": bool(
-                        match.group("export")
-                    ),
-                    "default_export": bool(
-                        match.group("default")
-                    ),
+                    "exported": bool(match.group("export")),
+                    "default_export": bool(match.group("default")),
                     "line_start": line_start,
                     "line_end": line_end,
                 },
@@ -496,20 +482,12 @@ class JavaScriptReader(LanguageReader):
             # CLASS METHODS
             # --------------------------------------------------------
 
-            for method_match in self._CLASS_METHOD_RE.finditer(
-                body
-            ):
+            for method_match in self._CLASS_METHOD_RE.finditer(body):
                 method_name = method_match.group("name")
 
-                relative_start = (
-                    match.start("body")
-                    + method_match.start()
-                )
+                relative_start = match.start("body") + method_match.start()
 
-                relative_end = (
-                    match.start("body")
-                    + method_match.end()
-                )
+                relative_end = match.start("body") + method_match.end()
 
                 method_line_start = self._line_number(
                     source,
@@ -521,11 +499,9 @@ class JavaScriptReader(LanguageReader):
                     relative_end,
                 )
 
-                method_documentation = (
-                    self._extract_jsdoc_before(
-                        body,
-                        method_match.start(),
-                    )
+                method_documentation = self._extract_jsdoc_before(
+                    body,
+                    method_match.start(),
                 )
 
                 method_node = MethodNode(
@@ -533,10 +509,7 @@ class JavaScriptReader(LanguageReader):
                     path=str(path),
                     language=self.language,
                     parameters=self._parse_parameters(
-                        method_match.group(
-                            "parameters"
-                        )
-                        or ""
+                        method_match.group("parameters") or ""
                     ),
                     return_type=None,
                     decorators=[],
@@ -546,18 +519,10 @@ class JavaScriptReader(LanguageReader):
                     class_name=name,
                     metadata={
                         "javascript_kind": "class_method",
-                        "static": bool(
-                            method_match.group("static")
-                        ),
-                        "async": bool(
-                            method_match.group("async")
-                        ),
-                        "getter": bool(
-                            method_match.group("getter")
-                        ),
-                        "setter": bool(
-                            method_match.group("setter")
-                        ),
+                        "static": bool(method_match.group("static")),
+                        "async": bool(method_match.group("async")),
+                        "getter": bool(method_match.group("getter")),
+                        "setter": bool(method_match.group("setter")),
                     },
                 )
 
@@ -607,29 +572,18 @@ class JavaScriptReader(LanguageReader):
                 name=name,
                 path=str(path),
                 language=self.language,
-                parameters=self._parse_parameters(
-                    match.group("parameters")
-                    or ""
-                ),
+                parameters=self._parse_parameters(match.group("parameters") or ""),
                 return_type=None,
                 decorators=[],
                 documentation=documentation,
                 line_start=line_start,
                 line_end=line_end,
-                async_function=bool(
-                    match.group("async")
-                ),
+                async_function=bool(match.group("async")),
                 metadata={
                     "javascript_kind": "function",
-                    "exported": bool(
-                        match.group("export")
-                    ),
-                    "default_export": bool(
-                        match.group("default")
-                    ),
-                    "generator": bool(
-                        match.group("generator")
-                    ),
+                    "exported": bool(match.group("export")),
+                    "default_export": bool(match.group("default")),
+                    "generator": bool(match.group("generator")),
                 },
             )
 
@@ -639,20 +593,13 @@ class JavaScriptReader(LanguageReader):
         # ARROW FUNCTIONS
         # ------------------------------------------------------------
 
-        for match in self._ARROW_FUNCTION_RE.finditer(
-            source
-        ):
+        for match in self._ARROW_FUNCTION_RE.finditer(source):
             name = match.group("name")
 
             if match.group("parameters") is not None:
-                raw_parameters = match.group(
-                    "parameters"
-                )
+                raw_parameters = match.group("parameters")
             else:
-                raw_parameters = (
-                    match.group("single_parameter")
-                    or ""
-                )
+                raw_parameters = match.group("single_parameter") or ""
 
             line_start = self._line_number(
                 source,
@@ -673,17 +620,13 @@ class JavaScriptReader(LanguageReader):
                 name=name,
                 path=str(path),
                 language=self.language,
-                parameters=self._parse_parameters(
-                    raw_parameters
-                ),
+                parameters=self._parse_parameters(raw_parameters),
                 return_type=None,
                 decorators=[],
                 documentation=documentation,
                 line_start=line_start,
                 line_end=line_end,
-                async_function=bool(
-                    match.group("async")
-                ),
+                async_function=bool(match.group("async")),
                 metadata={
                     "javascript_kind": "arrow_function",
                     "exported": False,
@@ -696,9 +639,7 @@ class JavaScriptReader(LanguageReader):
         # VARIABLES
         # ------------------------------------------------------------
 
-        for match in self._VARIABLE_RE.finditer(
-            source
-        ):
+        for match in self._VARIABLE_RE.finditer(source):
             keyword = match.group("keyword")
             name = match.group("name")
             value = match.group("value")
@@ -714,11 +655,7 @@ class JavaScriptReader(LanguageReader):
                     path=str(path),
                     language=self.language,
                     type=None,
-                    value=(
-                        value.strip()
-                        if value
-                        else None
-                    ),
+                    value=(value.strip() if value else None),
                     constant=keyword == "const",
                     line=line,
                     metadata={
@@ -733,9 +670,7 @@ class JavaScriptReader(LanguageReader):
         # ------------------------------------------------------------
 
         for match in self._JSDOC_RE.finditer(source):
-            documentation = self._clean_jsdoc(
-                match.group("doc")
-            )
+            documentation = self._clean_jsdoc(match.group("doc"))
 
             if not documentation:
                 continue
@@ -747,9 +682,7 @@ class JavaScriptReader(LanguageReader):
 
             project.add_documentation(
                 DocumentationNode(
-                    title=self._documentation_title(
-                        documentation
-                    ),
+                    title=self._documentation_title(documentation),
                     path=str(path),
                     kind="jsdoc",
                     headings=[],
@@ -777,9 +710,7 @@ class JavaScriptReader(LanguageReader):
                 "path": str(path),
                 "parser": "static-regex-structural",
                 "static_analysis": True,
-                "module_system": self._detect_module_system(
-                    source
-                ),
+                "module_system": self._detect_module_system(source),
             },
         )
 
@@ -787,47 +718,38 @@ class JavaScriptReader(LanguageReader):
     # REGEX PATTERNS
     # ================================================================
 
-    _IMPORT_FROM_RE = re.compile(
-        r"""(?m)^\s*
+    _IMPORT_FROM_RE = re.compile(r"""(?m)^\s*
         import\s+
         (?P<names>.+?)
         \s+from\s+
         ["'](?P<target>[^"']+)["']
         \s*;?
-        """
-    )
+        """)
 
-    _IMPORT_SIDE_EFFECT_RE = re.compile(
-        r"""(?m)^\s*
+    _IMPORT_SIDE_EFFECT_RE = re.compile(r"""(?m)^\s*
         import\s+
         ["'](?P<target>[^"']+)["']
         \s*;?
-        """
-    )
+        """)
 
-    _REQUIRE_RE = re.compile(
-        r"""(?m)^\s*
+    _REQUIRE_RE = re.compile(r"""(?m)^\s*
         (?:(?:const|let|var)\s+)?
         (?P<alias>[A-Za-z_$][\w$]*)
         \s*=\s*
         require\(
             \s*["'](?P<target>[^"']+)["']
         \s*\)
-        """
-    )
+        """)
 
-    _EXPORT_DECLARATION_RE = re.compile(
-        r"""(?m)^\s*
+    _EXPORT_DECLARATION_RE = re.compile(r"""(?m)^\s*
         export\s+
         (?P<default>default\s+)?
         (?P<kind>class|function|const|let|var)
         \s+
         (?P<name>[A-Za-z_$][\w$]*)
-        """
-    )
+        """)
 
-    _EXPORT_LIST_RE = re.compile(
-        r"""(?m)^\s*
+    _EXPORT_LIST_RE = re.compile(r"""(?m)^\s*
         export\s*
         \{\s*
         (?P<names>[^}]+)
@@ -837,26 +759,20 @@ class JavaScriptReader(LanguageReader):
             ["'](?P<target>[^"']+)["']
         )?
         \s*;?
-        """
-    )
+        """)
 
-    _MODULE_EXPORTS_RE = re.compile(
-        r"""(?m)^\s*
+    _MODULE_EXPORTS_RE = re.compile(r"""(?m)^\s*
         module\.exports\s*=\s*
         (?P<name>[A-Za-z_$][\w$]*)
-        """
-    )
+        """)
 
-    _COMMONJS_EXPORT_RE = re.compile(
-        r"""(?m)^\s*
+    _COMMONJS_EXPORT_RE = re.compile(r"""(?m)^\s*
         exports\.
         (?P<name>[A-Za-z_$][\w$]*)
         \s*=
-        """
-    )
+        """)
 
-    _CLASS_RE = re.compile(
-        r"""(?s)
+    _CLASS_RE = re.compile(r"""(?s)
         (?P<export>export\s+)?
         (?P<default>default\s+)?
         class\s+
@@ -868,11 +784,9 @@ class JavaScriptReader(LanguageReader):
         \s*\{
             (?P<body>.*?)
         \}
-        """
-    )
+        """)
 
-    _CLASS_METHOD_RE = re.compile(
-        r"""(?m)
+    _CLASS_METHOD_RE = re.compile(r"""(?m)
         ^\s*
         (?P<static>static\s+)?
         (?P<async>async\s+)?
@@ -883,11 +797,9 @@ class JavaScriptReader(LanguageReader):
             (?P<parameters>[^)]*)
         \)
         \s*\{
-        """
-    )
+        """)
 
-    _FUNCTION_RE = re.compile(
-        r"""(?m)
+    _FUNCTION_RE = re.compile(r"""(?m)
         ^\s*
         (?P<export>export\s+)?
         (?P<default>default\s+)?
@@ -900,11 +812,9 @@ class JavaScriptReader(LanguageReader):
             (?P<parameters>[^)]*)
         \)
         \s*\{
-        """
-    )
+        """)
 
-    _ARROW_FUNCTION_RE = re.compile(
-        r"""(?m)
+    _ARROW_FUNCTION_RE = re.compile(r"""(?m)
         ^\s*
         (?P<async>async\s+)?
         (?:
@@ -917,19 +827,16 @@ class JavaScriptReader(LanguageReader):
             |
             (?P<single_parameter>[A-Za-z_$][\w$]*)
         )
-        \s*=>"""
-    )
+        \s*=>""")
 
-    _VARIABLE_RE = re.compile(
-        r"""(?m)
+    _VARIABLE_RE = re.compile(r"""(?m)
         ^\s*
         (?P<keyword>const|let|var)
         \s+
         (?P<name>[A-Za-z_$][\w$]*)
         (?:\s*=\s*(?P<value>[^;\n]+))?
         \s*;?
-        """
-    )
+        """)
 
     _JSDOC_RE = re.compile(
         r"""/\*\*(?P<doc>.*?)\*/""",
@@ -949,11 +856,14 @@ class JavaScriptReader(LanguageReader):
         source: str,
         offset: int,
     ) -> int:
-        return source.count(
-            "\n",
-            0,
-            offset,
-        ) + 1
+        return (
+            source.count(
+                "\n",
+                0,
+                offset,
+            )
+            + 1
+        )
 
     @staticmethod
     def _parse_parameters(
@@ -976,13 +886,8 @@ class JavaScriptReader(LanguageReader):
                     depth - 1,
                 )
 
-            if (
-                character == ","
-                and depth == 0
-            ):
-                value = "".join(
-                    current
-                ).strip()
+            if character == "," and depth == 0:
+                value = "".join(current).strip()
 
                 if value:
                     parts.append(value)
@@ -992,9 +897,7 @@ class JavaScriptReader(LanguageReader):
 
             current.append(character)
 
-        value = "".join(
-            current
-        ).strip()
+        value = "".join(current).strip()
 
         if value:
             parts.append(value)
@@ -1009,11 +912,7 @@ class JavaScriptReader(LanguageReader):
 
         if names.startswith("{"):
             return [
-                item.strip()
-                for item in names.strip(
-                    "{} "
-                ).split(",")
-                if item.strip()
+                item.strip() for item in names.strip("{} ").split(",") if item.strip()
             ]
 
         if "," in names:
@@ -1022,18 +921,14 @@ class JavaScriptReader(LanguageReader):
                 1,
             )
 
-            result = [
-                first.strip()
-            ]
+            result = [first.strip()]
 
             rest = rest.strip()
 
             if rest.startswith("{"):
                 result.extend(
                     item.strip()
-                    for item in rest.strip(
-                        "{} "
-                    ).split(",")
+                    for item in rest.strip("{} ").split(",")
                     if item.strip()
                 )
 
@@ -1045,9 +940,7 @@ class JavaScriptReader(LanguageReader):
     def _parse_export_names(
         names: str,
     ) -> list[tuple[str, str | None]]:
-        result: list[
-            tuple[str, str | None]
-        ] = []
+        result: list[tuple[str, str | None]] = []
 
         for item in names.split(","):
             item = item.strip()
@@ -1089,11 +982,7 @@ class JavaScriptReader(LanguageReader):
         if not extends:
             return []
 
-        return [
-            item.strip()
-            for item in extends.split(",")
-            if item.strip()
-        ]
+        return [item.strip() for item in extends.split(",") if item.strip()]
 
     @staticmethod
     def _extract_class_methods(
@@ -1101,9 +990,7 @@ class JavaScriptReader(LanguageReader):
     ) -> list[str]:
         return [
             match.group("name")
-            for match in JavaScriptReader
-            ._CLASS_METHOD_RE
-            .finditer(body)
+            for match in JavaScriptReader._CLASS_METHOD_RE.finditer(body)
         ]
 
     @staticmethod
@@ -1125,16 +1012,12 @@ class JavaScriptReader(LanguageReader):
                 continue
 
             match = re.match(
-                r"(?:static\s+)?"
-                r"([A-Za-z_$][\w$]*)"
-                r"\s*(?:=|;)",
+                r"(?:static\s+)?" r"([A-Za-z_$][\w$]*)" r"\s*(?:=|;)",
                 stripped,
             )
 
             if match:
-                fields.append(
-                    match.group(1)
-                )
+                fields.append(match.group(1))
 
         return fields
 
@@ -1160,9 +1043,7 @@ class JavaScriptReader(LanguageReader):
                     lines.append(content)
 
             elif stripped.startswith("///"):
-                lines.append(
-                    stripped[3:].lstrip()
-                )
+                lines.append(stripped[3:].lstrip())
 
         if not lines:
             return None
@@ -1185,9 +1066,7 @@ class JavaScriptReader(LanguageReader):
         if not match:
             return None
 
-        return JavaScriptReader._clean_jsdoc(
-            match.group("doc")
-        )
+        return JavaScriptReader._clean_jsdoc(match.group("doc"))
 
     @staticmethod
     def _clean_jsdoc(
@@ -1231,9 +1110,7 @@ class JavaScriptReader(LanguageReader):
 
         has_commonjs = bool(
             re.search(
-                r"\brequire\s*\("
-                r"|\bmodule\.exports\b"
-                r"|\bexports\.",
+                r"\brequire\s*\(" r"|\bmodule\.exports\b" r"|\bexports\.",
                 source,
             )
         )

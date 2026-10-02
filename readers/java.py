@@ -67,9 +67,7 @@ class JavaReader(LanguageReader):
 
     language = "Java"
 
-    extensions = (
-        ".java",
-    )
+    extensions = (".java",)
 
     version = "0.1.0"
 
@@ -377,13 +375,9 @@ class JavaReader(LanguageReader):
         re.VERBOSE,
     )
 
-    _LINE_COMMENT_RE = re.compile(
-        r"^\s*//\s?(?P<text>.*)$"
-    )
+    _LINE_COMMENT_RE = re.compile(r"^\s*//\s?(?P<text>.*)$")
 
-    _ANNOTATION_RE = re.compile(
-        r"^\s*@(?P<name>[A-Za-z_][A-Za-z0-9_.]*)"
-    )
+    _ANNOTATION_RE = re.compile(r"^\s*@(?P<name>[A-Za-z_][A-Za-z0-9_.]*)")
 
     # ========================================================
     # PUBLIC API
@@ -412,9 +406,7 @@ class JavaReader(LanguageReader):
                 success=False,
                 project=project,
                 warnings=warnings,
-                errors=[
-                    f"{path}: unable to read Java source: {exc}"
-                ],
+                errors=[f"{path}: unable to read Java source: {exc}"],
                 metadata={
                     "language": self.language,
                     "version": self.version,
@@ -449,11 +441,7 @@ class JavaReader(LanguageReader):
 
             package_name = self._extract_package(source)
 
-            module_name = (
-                package_name
-                if package_name
-                else self._module_name(path)
-            )
+            module_name = package_name if package_name else self._module_name(path)
 
             file_module = ModuleNode(
                 name=module_name,
@@ -489,7 +477,8 @@ class JavaReader(LanguageReader):
             classes = [
                 item
                 for item in structures
-                if item["kind"] in {
+                if item["kind"]
+                in {
                     "class",
                     "record",
                     "enum",
@@ -511,9 +500,7 @@ class JavaReader(LanguageReader):
                 bases = []
 
                 if structure.get("superclass"):
-                    bases.append(
-                        structure["superclass"]
-                    )
+                    bases.append(structure["superclass"])
 
                 bases.extend(
                     structure.get(
@@ -528,18 +515,11 @@ class JavaReader(LanguageReader):
                     name,
                 )
 
-                method_names = [
-                    method["name"]
-                    for method in methods
-                ]
+                method_names = [method["name"] for method in methods]
 
-                attributes = self._extract_fields(
-                    structure["body"]
-                )
+                attributes = self._extract_fields(structure["body"])
 
-                documentation = structure.get(
-                    "documentation"
-                )
+                documentation = structure.get("documentation")
 
                 class_node = ClassNode(
                     name=fq_name,
@@ -549,19 +529,13 @@ class JavaReader(LanguageReader):
                     methods=method_names,
                     attributes=attributes,
                     documentation=documentation,
-                    line_start=structure[
-                        "line_start"
-                    ],
-                    line_end=structure[
-                        "line_end"
-                    ],
+                    line_start=structure["line_start"],
+                    line_end=structure["line_end"],
                     metadata={
                         "java_kind": kind,
                         "package": package_name,
                         "simple_name": name,
-                        "superclass": structure.get(
-                            "superclass"
-                        ),
+                        "superclass": structure.get("superclass"),
                         "interfaces": structure.get(
                             "interfaces",
                             [],
@@ -570,9 +544,7 @@ class JavaReader(LanguageReader):
                             "annotations",
                             [],
                         ),
-                        "parent": structure.get(
-                            "parent"
-                        ),
+                        "parent": structure.get("parent"),
                     },
                 )
 
@@ -590,9 +562,7 @@ class JavaReader(LanguageReader):
                     project.add_relationship(
                         RelationshipNode(
                             source=fq_name,
-                            target=structure[
-                                "superclass"
-                            ],
+                            target=structure["superclass"],
                             kind="inherits",
                             source_file=str(path),
                             evidence="DECLARED",
@@ -607,11 +577,7 @@ class JavaReader(LanguageReader):
                         RelationshipNode(
                             source=fq_name,
                             target=interface,
-                            kind=(
-                                "implements"
-                                if kind != "interface"
-                                else "extends"
-                            ),
+                            kind=("implements" if kind != "interface" else "extends"),
                             source_file=str(path),
                             evidence="DECLARED",
                         )
@@ -632,22 +598,14 @@ class JavaReader(LanguageReader):
                                 "",
                             )
                         ),
-                        return_type=method.get(
-                            "return_type"
-                        ),
+                        return_type=method.get("return_type"),
                         decorators=method.get(
                             "annotations",
                             [],
                         ),
-                        documentation=method.get(
-                            "documentation"
-                        ),
-                        line_start=method[
-                            "line_start"
-                        ],
-                        line_end=method[
-                            "line_end"
-                        ],
+                        documentation=method.get("documentation"),
+                        line_start=method["line_start"],
+                        line_end=method["line_end"],
                         class_name=fq_name,
                         metadata={
                             "java_kind": method.get(
@@ -658,9 +616,7 @@ class JavaReader(LanguageReader):
                                 "modifiers",
                                 [],
                             ),
-                            "throws": method.get(
-                                "throws"
-                            ),
+                            "throws": method.get("throws"),
                             "constructor": method.get(
                                 "constructor",
                                 False,
@@ -668,9 +624,7 @@ class JavaReader(LanguageReader):
                         },
                     )
 
-                    project.add_method(
-                        method_node
-                    )
+                    project.add_method(method_node)
 
                     project.add_relationship(
                         RelationshipNode(
@@ -697,13 +651,9 @@ class JavaReader(LanguageReader):
                             language=self.language,
                             type=None,
                             constant=False,
-                            line=structure[
-                                "line_start"
-                            ],
+                            line=structure["line_start"],
                             metadata={
-                                "java_kind": (
-                                    "record_component"
-                                ),
+                                "java_kind": ("record_component"),
                                 "class": fq_name,
                             },
                         )
@@ -750,16 +700,15 @@ class JavaReader(LanguageReader):
                     "java_version": "unknown",
                     "package": package_name,
                     "classes": [
-                        (f"{package_name}.{structure['name']}" if package_name else structure['name'])
+                        (
+                            f"{package_name}.{structure['name']}"
+                            if package_name
+                            else structure["name"]
+                        )
                         for structure in classes
                     ],
-                    "imports": [
-                        item["name"]
-                        for item in imports
-                    ],
-                    "parser": (
-                        "static-java-structural-scanner"
-                    ),
+                    "imports": [item["name"] for item in imports],
+                    "parser": ("static-java-structural-scanner"),
                 }
             )
 
@@ -771,9 +720,7 @@ class JavaReader(LanguageReader):
                 metadata={
                     "language": self.language,
                     "version": self.version,
-                    "parser": (
-                        "static-java-structural-scanner"
-                    ),
+                    "parser": ("static-java-structural-scanner"),
                     "static_analysis": True,
                     "java_version": "unknown",
                     "classes": len(classes),
@@ -791,9 +738,7 @@ class JavaReader(LanguageReader):
             )
 
         except Exception as exc:
-            errors.append(
-                f"{path}: Java structural analysis failed: {exc}"
-            )
+            errors.append(f"{path}: Java structural analysis failed: {exc}")
 
             return ReaderResult(
                 success=False,
@@ -819,9 +764,7 @@ class JavaReader(LanguageReader):
         """
 
         for raw_line in source.splitlines():
-            line = self._strip_java_comment(
-                raw_line
-            ).strip()
+            line = self._strip_java_comment(raw_line).strip()
 
             match = self._PACKAGE_RE.match(line)
 
@@ -848,13 +791,9 @@ class JavaReader(LanguageReader):
         prematurely terminate a class.
         """
 
-        lines = source.splitlines(
-            keepends=True
-        )
+        lines = source.splitlines(keepends=True)
 
-        structures: list[
-            dict[str, Any]
-        ] = []
+        structures: list[dict[str, Any]] = []
 
         offsets: list[int] = []
 
@@ -864,16 +803,12 @@ class JavaReader(LanguageReader):
             offsets.append(offset)
             offset += len(line)
 
-        stack: list[
-            dict[str, Any]
-        ] = []
+        stack: list[dict[str, Any]] = []
 
         brace_depth = 0
 
         for index, raw_line in enumerate(lines):
-            clean_line = self._strip_java_comments(
-                raw_line
-            ).strip()
+            clean_line = self._strip_java_comments(raw_line).strip()
 
             if not clean_line:
                 continue
@@ -884,9 +819,7 @@ class JavaReader(LanguageReader):
             # STRUCTURE DECLARATIONS
             # ------------------------------------------------
 
-            match = self._match_structure(
-                clean_line
-            )
+            match = self._match_structure(clean_line)
 
             if match:
                 kind = match["kind"]
@@ -894,9 +827,7 @@ class JavaReader(LanguageReader):
                 structure = {
                     "kind": kind,
                     "name": match["name"],
-                    "superclass": match.get(
-                        "superclass"
-                    ),
+                    "superclass": match.get("superclass"),
                     "interfaces": match.get(
                         "interfaces",
                         [],
@@ -912,33 +843,23 @@ class JavaReader(LanguageReader):
                     "line_start": index + 1,
                     "line_end": None,
                     "offset": line_start_offset,
-                    "body_start": (
-                        line_start_offset
-                        + raw_line.find("{")
-                        + 1
-                    ),
+                    "body_start": (line_start_offset + raw_line.find("{") + 1),
                     "body": "",
-                    "parent": self._nearest_parent(
-                        stack
-                    ),
+                    "parent": self._nearest_parent(stack),
                     "documentation": (
                         self._documentation_before(
                             lines,
                             index,
                         )
                     ),
-                    "brace_depth": (
-                        brace_depth + 1
-                    ),
+                    "brace_depth": (brace_depth + 1),
                 }
 
                 stack.append(
                     {
                         "kind": kind,
                         "structure": structure,
-                        "depth": (
-                            brace_depth + 1
-                        ),
+                        "depth": (brace_depth + 1),
                     }
                 )
 
@@ -949,9 +870,7 @@ class JavaReader(LanguageReader):
             opens = clean_line.count("{")
             closes = clean_line.count("}")
 
-            brace_depth += (
-                opens - closes
-            )
+            brace_depth += opens - closes
 
             # ------------------------------------------------
             # CLOSE STRUCTURES
@@ -965,27 +884,15 @@ class JavaReader(LanguageReader):
 
                 stack.pop()
 
-                structure = entry[
-                    "structure"
-                ]
+                structure = entry["structure"]
 
-                structure["line_end"] = (
-                    index + 1
-                )
+                structure["line_end"] = index + 1
 
-                closing_offset = (
-                    offsets[index]
-                    + len(raw_line)
-                )
+                closing_offset = offsets[index] + len(raw_line)
 
-                structure["body"] = source[
-                    structure["body_start"]:
-                    closing_offset
-                ]
+                structure["body"] = source[structure["body_start"] : closing_offset]
 
-                structures.append(
-                    structure
-                )
+                structures.append(structure)
 
         # ----------------------------------------------------
         # CONSERVATIVE CLOSE
@@ -994,27 +901,18 @@ class JavaReader(LanguageReader):
         while stack:
             entry = stack.pop()
 
-            structure = entry[
-                "structure"
-            ]
+            structure = entry["structure"]
 
-            structure["line_end"] = len(
-                lines
-            )
+            structure["line_end"] = len(lines)
 
-            structure["body"] = source[
-                structure["body_start"]:
-            ]
+            structure["body"] = source[structure["body_start"] :]
 
-            structures.append(
-                structure
-            )
+            structures.append(structure)
 
         structures.sort(
             key=lambda item: (
                 item["line_start"],
-                item["line_end"]
-                or item["line_start"],
+                item["line_end"] or item["line_start"],
             )
         )
 
@@ -1032,113 +930,49 @@ class JavaReader(LanguageReader):
         Match one Java structure declaration.
         """
 
-        match = self._CLASS_RE.match(
-            line
-        )
+        match = self._CLASS_RE.match(line)
 
         if match:
             return {
                 "kind": "class",
-                "name": match.group(
-                    "name"
-                ),
-                "superclass": match.group(
-                    "superclass"
-                ),
-                "interfaces": (
-                    self._split_type_list(
-                        match.group(
-                            "interfaces"
-                        )
-                    )
-                ),
-                "annotations": self._parse_annotations(
-                    match.group(
-                        "annotations"
-                    )
-                ),
+                "name": match.group("name"),
+                "superclass": match.group("superclass"),
+                "interfaces": (self._split_type_list(match.group("interfaces"))),
+                "annotations": self._parse_annotations(match.group("annotations")),
             }
 
-        match = self._INTERFACE_RE.match(
-            line
-        )
+        match = self._INTERFACE_RE.match(line)
 
         if match:
             return {
                 "kind": "interface",
-                "name": match.group(
-                    "name"
-                ),
+                "name": match.group("name"),
                 "superclass": None,
-                "interfaces": (
-                    self._split_type_list(
-                        match.group(
-                            "interfaces"
-                        )
-                    )
-                ),
-                "annotations": self._parse_annotations(
-                    match.group(
-                        "annotations"
-                    )
-                ),
+                "interfaces": (self._split_type_list(match.group("interfaces"))),
+                "annotations": self._parse_annotations(match.group("annotations")),
             }
 
-        match = self._ENUM_RE.match(
-            line
-        )
+        match = self._ENUM_RE.match(line)
 
         if match:
             return {
                 "kind": "enum",
-                "name": match.group(
-                    "name"
-                ),
+                "name": match.group("name"),
                 "superclass": None,
-                "interfaces": (
-                    self._split_type_list(
-                        match.group(
-                            "interfaces"
-                        )
-                    )
-                ),
-                "annotations": self._parse_annotations(
-                    match.group(
-                        "annotations"
-                    )
-                ),
+                "interfaces": (self._split_type_list(match.group("interfaces"))),
+                "annotations": self._parse_annotations(match.group("annotations")),
             }
 
-        match = self._RECORD_RE.match(
-            line
-        )
+        match = self._RECORD_RE.match(line)
 
         if match:
             return {
                 "kind": "record",
-                "name": match.group(
-                    "name"
-                ),
+                "name": match.group("name"),
                 "superclass": None,
-                "interfaces": (
-                    self._split_type_list(
-                        match.group(
-                            "interfaces"
-                        )
-                    )
-                ),
-                "components": (
-                    self._parse_parameters(
-                        match.group(
-                            "components"
-                        )
-                    )
-                ),
-                "annotations": self._parse_annotations(
-                    match.group(
-                        "annotations"
-                    )
-                ),
+                "interfaces": (self._split_type_list(match.group("interfaces"))),
+                "components": (self._parse_parameters(match.group("components"))),
+                "annotations": self._parse_annotations(match.group("annotations")),
             }
 
         return None
@@ -1162,13 +996,9 @@ class JavaReader(LanguageReader):
         constructor before it becomes a MethodNode.
         """
 
-        lines = body.splitlines(
-            keepends=True
-        )
+        lines = body.splitlines(keepends=True)
 
-        methods: list[
-            dict[str, Any]
-        ] = []
+        methods: list[dict[str, Any]] = []
 
         offsets: list[int] = []
 
@@ -1181,9 +1011,7 @@ class JavaReader(LanguageReader):
         brace_depth = 0
 
         for index, raw_line in enumerate(lines):
-            clean_line = self._strip_java_comments(
-                raw_line
-            ).strip()
+            clean_line = self._strip_java_comments(raw_line).strip()
 
             if not clean_line:
                 continue
@@ -1192,42 +1020,20 @@ class JavaReader(LanguageReader):
             # CONSTRUCTOR
             # ------------------------------------------------
 
-            constructor = (
-                self._CONSTRUCTOR_RE.match(
-                    clean_line
-                )
-            )
+            constructor = self._CONSTRUCTOR_RE.match(clean_line)
 
             if constructor:
-                if (
-                    constructor.group(
-                        "name"
-                    )
-                    == class_name
-                ):
+                if constructor.group("name") == class_name:
                     method = {
                         "name": class_name,
-                        "params": (
-                            constructor.group(
-                                "params"
-                            )
-                            or ""
-                        ),
+                        "params": (constructor.group("params") or ""),
                         "return_type": None,
-                        "throws": (
-                            constructor.group(
-                                "throws"
-                            )
-                        ),
+                        "throws": (constructor.group("throws")),
                         "annotations": self._parse_annotations(
-                            constructor.group(
-                                "annotations"
-                            )
+                            constructor.group("annotations")
                         ),
                         "modifiers": self._parse_modifiers(
-                            constructor.group(
-                                "modifiers"
-                            )
+                            constructor.group("modifiers")
                         ),
                         "line_start": (
                             self._line_number_from_offset(
@@ -1251,9 +1057,7 @@ class JavaReader(LanguageReader):
                         "java_kind": "constructor",
                     }
 
-                    methods.append(
-                        method
-                    )
+                    methods.append(method)
 
                     continue
 
@@ -1261,45 +1065,18 @@ class JavaReader(LanguageReader):
             # METHOD
             # ------------------------------------------------
 
-            match = self._METHOD_RE.match(
-                clean_line
-            )
+            match = self._METHOD_RE.match(clean_line)
 
             if match:
-                terminator = match.group(
-                    "terminator"
-                )
+                terminator = match.group("terminator")
 
                 method = {
-                    "name": match.group(
-                        "name"
-                    ),
-                    "params": (
-                        match.group(
-                            "params"
-                        )
-                        or ""
-                    ),
-                    "return_type": (
-                        match.group(
-                            "type"
-                        )
-                    ),
-                    "throws": (
-                        match.group(
-                            "throws"
-                        )
-                    ),
-                    "annotations": self._parse_annotations(
-                        match.group(
-                            "annotations"
-                        )
-                    ),
-                    "modifiers": self._parse_modifiers(
-                        match.group(
-                            "modifiers"
-                        )
-                    ),
+                    "name": match.group("name"),
+                    "params": (match.group("params") or ""),
+                    "return_type": (match.group("type")),
+                    "throws": (match.group("throws")),
+                    "annotations": self._parse_annotations(match.group("annotations")),
+                    "modifiers": self._parse_modifiers(match.group("modifiers")),
                     "line_start": (
                         self._line_number_from_offset(
                             body,
@@ -1318,32 +1095,24 @@ class JavaReader(LanguageReader):
                 }
 
                 if terminator == ";":
-                    method["line_end"] = (
-                        method["line_start"]
-                    )
+                    method["line_end"] = method["line_start"]
 
                 else:
-                    method["line_end"] = (
-                        self._find_block_end(
-                            lines,
-                            index,
-                        )
+                    method["line_end"] = self._find_block_end(
+                        lines,
+                        index,
                     )
 
                 methods.append(method)
 
                 continue
 
-            brace_depth += (
-                clean_line.count("{")
-                - clean_line.count("}")
-            )
+            brace_depth += clean_line.count("{") - clean_line.count("}")
 
         methods.sort(
             key=lambda item: (
                 item["line_start"],
-                item["line_end"]
-                or item["line_start"],
+                item["line_end"] or item["line_start"],
             )
         )
 
@@ -1367,9 +1136,7 @@ class JavaReader(LanguageReader):
         fields: list[str] = []
 
         for raw_line in body.splitlines():
-            line = self._strip_java_comments(
-                raw_line
-            ).strip()
+            line = self._strip_java_comments(raw_line).strip()
 
             if not line:
                 continue
@@ -1377,20 +1144,14 @@ class JavaReader(LanguageReader):
             if "(" in line:
                 continue
 
-            match = self._FIELD_RE.match(
-                line
-            )
+            match = self._FIELD_RE.match(line)
 
             if not match:
                 continue
 
-            declarations = match.group(
-                "declarations"
-            )
+            declarations = match.group("declarations")
 
-            for declaration in declarations.split(
-                ","
-            ):
+            for declaration in declarations.split(","):
                 name = declaration.split(
                     "=",
                     1,
@@ -1400,9 +1161,7 @@ class JavaReader(LanguageReader):
                     r"^[A-Za-z_$][A-Za-z0-9_$]*$",
                     name,
                 ):
-                    fields.append(
-                        name
-                    )
+                    fields.append(name)
 
         return fields
 
@@ -1422,17 +1181,13 @@ class JavaReader(LanguageReader):
         This remains intentionally conservative.
         """
 
-        seen: set[
-            tuple[str, str]
-        ] = set()
+        seen: set[tuple[str, str]] = set()
 
         for line_number, raw_line in enumerate(
             source.splitlines(),
             start=1,
         ):
-            line = self._strip_java_comments(
-                raw_line
-            ).strip()
+            line = self._strip_java_comments(raw_line).strip()
 
             if not line:
                 continue
@@ -1441,26 +1196,14 @@ class JavaReader(LanguageReader):
             # FIELD / DECLARATION
             # ------------------------------------------------
 
-            field_match = self._FIELD_RE.match(
-                line
-            )
+            field_match = self._FIELD_RE.match(line)
 
             if field_match:
-                variable_type = (
-                    field_match.group(
-                        "type"
-                    )
-                )
+                variable_type = field_match.group("type")
 
-                declarations = (
-                    field_match.group(
-                        "declarations"
-                    )
-                )
+                declarations = field_match.group("declarations")
 
-                for declaration in declarations.split(
-                    ","
-                ):
+                for declaration in declarations.split(","):
                     parts = declaration.split(
                         "=",
                         1,
@@ -1468,11 +1211,7 @@ class JavaReader(LanguageReader):
 
                     name = parts[0].strip()
 
-                    value = (
-                        parts[1].strip()
-                        if len(parts) > 1
-                        else None
-                    )
+                    value = parts[1].strip() if len(parts) > 1 else None
 
                     if not re.match(
                         r"^[A-Za-z_$][A-Za-z0-9_$]*$",
@@ -1490,11 +1229,7 @@ class JavaReader(LanguageReader):
 
                     seen.add(key)
 
-                    modifiers = self._parse_modifiers(
-                        field_match.group(
-                            "modifiers"
-                        )
-                    )
+                    modifiers = self._parse_modifiers(field_match.group("modifiers"))
 
                     project.add_variable(
                         VariableNode(
@@ -1503,10 +1238,7 @@ class JavaReader(LanguageReader):
                             language=self.language,
                             type=variable_type,
                             value=value,
-                            constant=(
-                                "final"
-                                in modifiers
-                            ),
+                            constant=("final" in modifiers),
                             line=line_number,
                             metadata={
                                 "java_kind": "field",
@@ -1519,20 +1251,12 @@ class JavaReader(LanguageReader):
             # LOCAL VARIABLE
             # ------------------------------------------------
 
-            local_match = self._LOCAL_VARIABLE_RE.search(
-                line
-            )
+            local_match = self._LOCAL_VARIABLE_RE.search(line)
 
             if local_match:
-                name = local_match.group(
-                    "name"
-                )
+                name = local_match.group("name")
 
-                variable_type = (
-                    local_match.group(
-                        "type"
-                    )
-                )
+                variable_type = local_match.group("type")
 
                 key = (
                     "java_local_variable",
@@ -1551,9 +1275,7 @@ class JavaReader(LanguageReader):
                             constant=False,
                             line=line_number,
                             metadata={
-                                "java_kind": (
-                                    "local_variable"
-                                ),
+                                "java_kind": ("local_variable"),
                             },
                         )
                     )
@@ -1573,35 +1295,21 @@ class JavaReader(LanguageReader):
         Extract Java import declarations.
         """
 
-        imports: list[
-            dict[str, str]
-        ] = []
+        imports: list[dict[str, str]] = []
 
         for line in source.splitlines():
             stripped = line.strip()
 
-            match = self._IMPORT_RE.match(
-                stripped
-            )
+            match = self._IMPORT_RE.match(stripped)
 
             if not match:
                 continue
 
-            name = match.group(
-                "name"
-            )
+            name = match.group("name")
 
-            is_static = bool(
-                match.group(
-                    "static"
-                )
-            )
+            is_static = bool(match.group("static"))
 
-            kind = (
-                "static_import"
-                if is_static
-                else "import"
-            )
+            kind = "static_import" if is_static else "import"
 
             imports.append(
                 {
@@ -1632,9 +1340,7 @@ class JavaReader(LanguageReader):
                 )
             )
 
-            file_module.imports.append(
-                name
-            )
+            file_module.imports.append(name)
 
         return imports
 
@@ -1679,9 +1385,7 @@ class JavaReader(LanguageReader):
                     text = text[:-2]
                     in_javadoc = False
 
-                text = self._clean_javadoc_line(
-                    text
-                )
+                text = self._clean_javadoc_line(text)
 
                 if text:
                     current.append(text)
@@ -1711,9 +1415,7 @@ class JavaReader(LanguageReader):
                     text = text[:-2]
                     in_javadoc = False
 
-                text = self._clean_javadoc_line(
-                    text
-                )
+                text = self._clean_javadoc_line(text)
 
                 if text:
                     current.append(text)
@@ -1753,16 +1455,12 @@ class JavaReader(LanguageReader):
         Add one JavaDoc block to the Project Model.
         """
 
-        text = "\n".join(
-            lines
-        ).strip()
+        text = "\n".join(lines).strip()
 
         if not text:
             return
 
-        title = self._documentation_title(
-            text
-        )
+        title = self._documentation_title(text)
 
         project.add_documentation(
             DocumentationNode(
@@ -1801,14 +1499,10 @@ class JavaReader(LanguageReader):
         """
 
         for entry in reversed(stack):
-            structure = entry.get(
-                "structure"
-            )
+            structure = entry.get("structure")
 
             if structure:
-                return structure.get(
-                    "name"
-                )
+                return structure.get("name")
 
         return None
 
@@ -1908,9 +1602,7 @@ class JavaReader(LanguageReader):
                 continue
 
             if char == "," and depth == 0:
-                item = "".join(
-                    current
-                ).strip()
+                item = "".join(current).strip()
 
                 if item:
                     result.append(item)
@@ -1921,9 +1613,7 @@ class JavaReader(LanguageReader):
 
             current.append(char)
 
-        item = "".join(
-            current
-        ).strip()
+        item = "".join(current).strip()
 
         if item:
             result.append(item)
@@ -1941,12 +1631,7 @@ class JavaReader(LanguageReader):
         if not value:
             return []
 
-        return [
-            match.group("name")
-            for match in self._ANNOTATION_RE.finditer(
-                value
-            )
-        ]
+        return [match.group("name") for match in self._ANNOTATION_RE.finditer(value)]
 
     def _parse_modifiers(
         self,
@@ -1976,11 +1661,7 @@ class JavaReader(LanguageReader):
             "volatile",
         }
 
-        return [
-            token
-            for token in value.split()
-            if token in allowed
-        ]
+        return [token for token in value.split() if token in allowed]
 
     def _find_block_end(
         self,
@@ -2001,9 +1682,7 @@ class JavaReader(LanguageReader):
             start_index,
             len(lines),
         ):
-            line = self._strip_java_comments(
-                lines[index]
-            )
+            line = self._strip_java_comments(lines[index])
 
             for char in line:
                 if char == "{":
@@ -2048,49 +1727,31 @@ class JavaReader(LanguageReader):
                 cursor -= 1
 
                 while cursor >= 0:
-                    current = lines[
-                        cursor
-                    ].strip()
+                    current = lines[cursor].strip()
 
-                    if current.startswith(
-                        "/**"
-                    ):
+                    if current.startswith("/**"):
                         text = current[3:]
 
                         if text:
-                            docs.append(
-                                self._clean_javadoc_line(
-                                    text
-                                )
-                            )
+                            docs.append(self._clean_javadoc_line(text))
 
                         cursor -= 1
                         break
 
                     if current.startswith("*"):
-                        docs.append(
-                            self._clean_javadoc_line(
-                                current
-                            )
-                        )
+                        docs.append(self._clean_javadoc_line(current))
 
                     cursor -= 1
 
                 continue
 
-            if line.startswith(
-                "/**"
-            ):
+            if line.startswith("/**"):
                 text = line[3:]
 
-                if text.endswith(
-                    "*/"
-                ):
+                if text.endswith("*/"):
                     text = text[:-2]
 
-                text = self._clean_javadoc_line(
-                    text
-                )
+                text = self._clean_javadoc_line(text)
 
                 if text:
                     docs.append(text)
@@ -2098,9 +1759,7 @@ class JavaReader(LanguageReader):
                 cursor -= 1
                 continue
 
-            if line.startswith(
-                "//"
-            ):
+            if line.startswith("//"):
                 text = line[2:].strip()
 
                 if text:
@@ -2109,14 +1768,8 @@ class JavaReader(LanguageReader):
                 cursor -= 1
                 continue
 
-            if line.startswith(
-                "*"
-            ):
-                docs.append(
-                    self._clean_javadoc_line(
-                        line
-                    )
-                )
+            if line.startswith("*"):
+                docs.append(self._clean_javadoc_line(line))
 
                 cursor -= 1
                 continue
@@ -2128,11 +1781,7 @@ class JavaReader(LanguageReader):
 
         docs.reverse()
 
-        return "\n".join(
-            item
-            for item in docs
-            if item
-        ).strip()
+        return "\n".join(item for item in docs if item).strip()
 
     def _clean_javadoc_line(
         self,
@@ -2157,9 +1806,7 @@ class JavaReader(LanguageReader):
         Generate a deterministic documentation title.
         """
 
-        first_line = (
-            text.splitlines()[0].strip()
-        )
+        first_line = text.splitlines()[0].strip()
 
         if not first_line:
             return "Java Documentation"
@@ -2244,11 +1891,7 @@ class JavaReader(LanguageReader):
                 index += 1
                 continue
 
-            if (
-                char == "/"
-                and index + 1 < len(line)
-                and line[index + 1] == "/"
-            ):
+            if char == "/" and index + 1 < len(line) and line[index + 1] == "/":
                 break
 
             result.append(char)
@@ -2256,10 +1899,8 @@ class JavaReader(LanguageReader):
             index += 1
 
         return "".join(result)
-    
 
     def _strip_java_comments(self, source: str) -> str:
-
         """
         Remove Java comments while preserving strings, character literals,
         and line structure.

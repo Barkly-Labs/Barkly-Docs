@@ -36,13 +36,21 @@ from readers.rust import RustReader
 def test_project_discovery_finds_supported_files_and_skips_ignored_dirs(tmp_path):
     source_dir = tmp_path / "src"
     source_dir.mkdir()
-    (source_dir / "app.py").write_text("def hello():\n    return 'hi'\n", encoding="utf-8")
-    (source_dir / "ui.js").write_text("export function run() { return 1; }\n", encoding="utf-8")
+    (source_dir / "app.py").write_text(
+        "def hello():\n    return 'hi'\n", encoding="utf-8"
+    )
+    (source_dir / "ui.js").write_text(
+        "export function run() { return 1; }\n", encoding="utf-8"
+    )
     (tmp_path / "notes.txt").write_text("ignore me\n", encoding="utf-8")
     (tmp_path / "node_modules").mkdir()
-    (tmp_path / "node_modules" / "pkg.js").write_text("console.log('ignore me')\n", encoding="utf-8")
+    (tmp_path / "node_modules" / "pkg.js").write_text(
+        "console.log('ignore me')\n", encoding="utf-8"
+    )
     (tmp_path / "docs-site").mkdir()
-    (tmp_path / "docs-site" / "generated.py").write_text("def generated(): pass\n", encoding="utf-8")
+    (tmp_path / "docs-site" / "generated.py").write_text(
+        "def generated(): pass\n", encoding="utf-8"
+    )
 
     result = ProjectDiscovery(
         [PythonReader(), JavaScriptReader()],
@@ -57,7 +65,14 @@ def test_project_discovery_finds_supported_files_and_skips_ignored_dirs(tmp_path
 
 
 def test_readers_are_selected_for_the_right_file_types():
-    readers = [PythonReader(), JavaScriptReader(), JavaReader(), RubyReader(), RustReader(), JSONReader()]
+    readers = [
+        PythonReader(),
+        JavaScriptReader(),
+        JavaReader(),
+        RubyReader(),
+        RustReader(),
+        JSONReader(),
+    ]
 
     by_extension = {
         ".py": PythonReader,
@@ -69,7 +84,9 @@ def test_readers_are_selected_for_the_right_file_types():
     }
 
     for extension, reader_type in by_extension.items():
-        selected = next(reader for reader in readers if reader.can_read(Path(f"sample{extension}")))
+        selected = next(
+            reader for reader in readers if reader.can_read(Path(f"sample{extension}"))
+        )
         assert isinstance(selected, reader_type)
 
     assert not PythonReader().can_read(Path("sample.txt"))
@@ -78,12 +95,20 @@ def test_readers_are_selected_for_the_right_file_types():
 def test_project_summary_is_consistent():
     project = Project(name="demo", root="/tmp/demo")
     project.add_file(FileNode(path="/tmp/demo/app.py", language="Python"))
-    project.add_module(ModuleNode(name="app", path="/tmp/demo/app.py", language="Python"))
-    project.add_function(FunctionNode(name="hello", path="/tmp/demo/app.py", language="Python"))
-    project.add_method(
-        MethodNode(name="run", path="/tmp/demo/app.py", language="Python", class_name="Thing")
+    project.add_module(
+        ModuleNode(name="app", path="/tmp/demo/app.py", language="Python")
     )
-    project.add_class(ClassNode(name="Thing", path="/tmp/demo/app.py", language="Python"))
+    project.add_function(
+        FunctionNode(name="hello", path="/tmp/demo/app.py", language="Python")
+    )
+    project.add_method(
+        MethodNode(
+            name="run", path="/tmp/demo/app.py", language="Python", class_name="Thing"
+        )
+    )
+    project.add_class(
+        ClassNode(name="Thing", path="/tmp/demo/app.py", language="Python")
+    )
 
     summary = project.summary()
     assert summary["files"] == 1
@@ -108,8 +133,7 @@ def greet(name: str) -> str:
 class Greeter:
     def format(self, name: str) -> str:
         return greet(name)
-""".strip()
-        + "\n",
+""".strip() + "\n",
         encoding="utf-8",
     )
 
@@ -186,7 +210,12 @@ def test_java_reader_keeps_constructor_and_method_counts_isolated_per_file(tmp_p
     assert aggregate.summary()["files"] == 2
     assert aggregate.summary()["classes"] == 2
     assert aggregate.summary()["methods"] == 4
-    assert {method.name for method in aggregate.methods} == {"Alpha", "add", "Beta", "run"}
+    assert {method.name for method in aggregate.methods} == {
+        "Alpha",
+        "add",
+        "Beta",
+        "run",
+    }
 
 
 def test_supported_readers_do_not_crash_on_ordinary_source_files(tmp_path):
@@ -284,7 +313,15 @@ def test_cli_runs_on_a_small_project_and_returns_zero(tmp_path):
     )
 
     result = subprocess.run(
-        [sys.executable, "-m", "cli", str(project_dir), "--name", "Fixture", "--generate-only"],
+        [
+            sys.executable,
+            "-m",
+            "cli",
+            str(project_dir),
+            "--name",
+            "Fixture",
+            "--generate-only",
+        ],
         capture_output=True,
         text=True,
         cwd=str(REPO_ROOT),
@@ -355,17 +392,27 @@ def test_html_site_generation_renders_pages_and_relationships(tmp_path):
 
     entities_html = output_dir.joinpath("entities.html").read_text(encoding="utf-8")
     assert "Method and function reference" in entities_html
-    assert "Run a widget." in entities_html or "Execute the widget runner." in entities_html
+    assert (
+        "Run a widget." in entities_html
+        or "Execute the widget runner." in entities_html
+    )
 
-    relationships_html = output_dir.joinpath("relationships.html").read_text(encoding="utf-8")
+    relationships_html = output_dir.joinpath("relationships.html").read_text(
+        encoding="utf-8"
+    )
     assert "WidgetRunner" in relationships_html
     assert "DETECTED" in relationships_html
     assert "graph TD" in relationships_html
 
-    relation_map_html = output_dir.joinpath("relation-map.html").read_text(encoding="utf-8")
+    relation_map_html = output_dir.joinpath("relation-map.html").read_text(
+        encoding="utf-8"
+    )
     assert "Relation Map" in relation_map_html
     assert "Structurizr" in relation_map_html
-    assert "Structurizr project-level graph is displayed on the Project overview page" in relation_map_html
+    assert (
+        "Structurizr project-level graph is displayed on the Project overview page"
+        in relation_map_html
+    )
     assert "<iframe" not in relation_map_html
     assert "Structurizr project-level architecture" in index_html
     assert "<iframe" in index_html
@@ -377,7 +424,9 @@ def test_html_site_generation_renders_pages_and_relationships(tmp_path):
 def test_relation_graph_normalizes_scan_relationships_and_unresolved_refs():
     project = Project(name="graph-demo", root="/tmp/graph-demo")
     project.add_file(FileNode(path="/tmp/graph-demo/app.py", language="Python"))
-    project.add_function(FunctionNode(name="main", path="/tmp/graph-demo/app.py", language="Python"))
+    project.add_function(
+        FunctionNode(name="main", path="/tmp/graph-demo/app.py", language="Python")
+    )
     project.add_relationship(
         RelationshipNode(
             source="main",
@@ -411,7 +460,9 @@ def test_project_counts_and_evidence_summary_remain_consistent():
     file_node = FileNode(path="/tmp/demo/app.py", language="Python")
     project.add_file(file_node)
     project.add_file(FileNode(path="/tmp/demo/app.py", language="Python"))
-    project.add_module(ModuleNode(name="app", path="/tmp/demo/app.py", language="Python"))
+    project.add_module(
+        ModuleNode(name="app", path="/tmp/demo/app.py", language="Python")
+    )
     project.add_relationship(
         RelationshipNode(
             source="com.example.A",
@@ -454,27 +505,44 @@ def test_html_renderer_escapes_special_characters_and_empty_project(tmp_path):
     output_dir = tmp_path / "safe-site"
     render_project_website(project, output_dir)
     html_content = output_dir.joinpath("index.html").read_text(encoding="utf-8")
-    assert "&lt;script&gt;alert('boom')&lt;/script&gt;" in html_content or "&lt;script&gt;alert(&#x27;boom&#x27;)&lt;/script&gt;" in html_content
+    assert (
+        "&lt;script&gt;alert('boom')&lt;/script&gt;" in html_content
+        or "&lt;script&gt;alert(&#x27;boom&#x27;)&lt;/script&gt;" in html_content
+    )
 
     empty_project = Project(name="Empty", root=str(tmp_path / "empty"))
     empty_dir = tmp_path / "empty-site"
     render_project_website(empty_project, empty_dir)
     empty_html = empty_dir.joinpath("index.html").read_text(encoding="utf-8")
-    assert "No project files were discovered." in empty_html or "No project entities were detected." in empty_html
+    assert (
+        "No project files were discovered." in empty_html
+        or "No project entities were detected." in empty_html
+    )
 
 
 def test_html_renderer_uses_accessible_structure_and_evidence_labels(tmp_path):
     project = Project(name="Example", root=str(tmp_path))
-    project.add_relationship(RelationshipNode(source="a", target="b", kind="calls", evidence="DETECTED"))
-    project.add_relationship(RelationshipNode(source="b", target="c", kind="uses", evidence="INFERRED"))
-    project.add_relationship(RelationshipNode(source="c", target="d", kind="references", evidence="UNKNOWN"))
+    project.add_relationship(
+        RelationshipNode(source="a", target="b", kind="calls", evidence="DETECTED")
+    )
+    project.add_relationship(
+        RelationshipNode(source="b", target="c", kind="uses", evidence="INFERRED")
+    )
+    project.add_relationship(
+        RelationshipNode(source="c", target="d", kind="references", evidence="UNKNOWN")
+    )
     render_project_website(project, tmp_path / "accessible-site")
-    html_text = (tmp_path / "accessible-site" / "index.html").read_text(encoding="utf-8")
-    assert '<a class="skip-link" href="#main-content">Skip to main content</a>' in html_text
-    assert 'Evidence and limits' in html_text
-    assert 'DETECTED' in html_text
-    assert 'INFERRED' in html_text
-    assert 'UNKNOWN' in html_text
+    html_text = (tmp_path / "accessible-site" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    assert (
+        '<a class="skip-link" href="#main-content">Skip to main content</a>'
+        in html_text
+    )
+    assert "Evidence and limits" in html_text
+    assert "DETECTED" in html_text
+    assert "INFERRED" in html_text
+    assert "UNKNOWN" in html_text
     assert '<nav class="site-nav" aria-label="Main navigation">' in html_text
 
 
@@ -488,7 +556,17 @@ def test_cli_can_generate_html_site(tmp_path):
     output_dir = tmp_path / "site-output"
 
     result = subprocess.run(
-        [sys.executable, "-m", "cli", str(project_dir), "--name", "Fixture", "--output", str(output_dir), "--generate-only"],
+        [
+            sys.executable,
+            "-m",
+            "cli",
+            str(project_dir),
+            "--name",
+            "Fixture",
+            "--output",
+            str(output_dir),
+            "--generate-only",
+        ],
         capture_output=True,
         text=True,
         cwd=str(REPO_ROOT),
@@ -503,16 +581,18 @@ def test_cli_can_generate_html_site(tmp_path):
 def test_cli_parser_supports_preview_flags():
     cli_main = importlib.import_module("cli.main")
     parser = cli_main.build_parser()
-    args = parser.parse_args([
-        ".",
-        "--serve",
-        "--output",
-        "site-output",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        "8123",
-    ])
+    args = parser.parse_args(
+        [
+            ".",
+            "--serve",
+            "--output",
+            "site-output",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "8123",
+        ]
+    )
 
     assert args.serve is True
     assert args.output == Path("site-output")
@@ -540,7 +620,9 @@ def test_build_preview_server_uses_localhost_and_port(monkeypatch, tmp_path):
 
     site_dir = tmp_path / "site"
     site_dir.mkdir()
-    (site_dir / "index.html").write_text("<html><body>ok</body></html>", encoding="utf-8")
+    (site_dir / "index.html").write_text(
+        "<html><body>ok</body></html>", encoding="utf-8"
+    )
 
     captured = {}
 
@@ -571,7 +653,9 @@ def test_relation_graph_connects_path_qualified_classes_to_all_methods(tmp_path)
     )
     project = Project(name="fixture", root=str(tmp_path))
     PythonReader().read(source, project)
-    graph = build_relation_graph(project, view="relation_map", max_nodes=None, max_edges=None)
+    graph = build_relation_graph(
+        project, view="relation_map", max_nodes=None, max_edges=None
+    )
 
     class_id = f"Tool@{source}"
     method_ids = {f"Tool.first", "Tool.second"}

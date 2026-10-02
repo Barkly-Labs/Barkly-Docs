@@ -18,7 +18,6 @@ from typing import Iterable
 
 from .project import EVIDENCE_STATUS, Project, RelationshipNode
 
-
 # ============================================================
 # RELATIONSHIP KINDS
 # ============================================================
@@ -46,6 +45,7 @@ RELATIONSHIP_KINDS = {
 # RELATIONSHIP RESULT
 # ============================================================
 
+
 @dataclass
 class RelationshipResult:
     """
@@ -64,6 +64,7 @@ class RelationshipResult:
 # RELATIONSHIP ENGINE
 # ============================================================
 
+
 class RelationshipEngine:
     """
     Builds and manages relationships between project objects.
@@ -80,7 +81,9 @@ class RelationshipEngine:
 
         # Used to prevent duplicate relationships while still allowing
         # distinct call sites or same logical edge at different locations.
-        self._seen: set[tuple[str, str, str, str | None, tuple[tuple[str, str], ...] | None]] = set()
+        self._seen: set[
+            tuple[str, str, str, str | None, tuple[tuple[str, str], ...] | None]
+        ] = set()
 
         # Fast indexes.
         self._outgoing: dict[str, list[RelationshipNode]] = {}
@@ -91,7 +94,11 @@ class RelationshipEngine:
 
         counts = {label: 0 for label in EVIDENCE_STATUS}
         for relationship in self.project.relationships:
-            key = relationship.evidence if relationship.evidence in EVIDENCE_STATUS else "UNKNOWN"
+            key = (
+                relationship.evidence
+                if relationship.evidence in EVIDENCE_STATUS
+                else "UNKNOWN"
+            )
             counts[key] = counts.get(key, 0) + 1
         return counts
 
@@ -124,9 +131,7 @@ class RelationshipEngine:
         kind = self._normalize(kind)
 
         if not source:
-            self.project.warnings.append(
-                "Relationship rejected: empty source."
-            )
+            self.project.warnings.append("Relationship rejected: empty source.")
             return None
 
         if not target:
@@ -152,7 +157,9 @@ class RelationshipEngine:
             kind=kind,
             source_file=source_file,
             evidence=evidence,
-            source_location=dict(source_location) if source_location is not None else None,
+            source_location=(
+                dict(source_location) if source_location is not None else None
+            ),
             metadata=dict(metadata or {}),
         )
 
@@ -166,9 +173,7 @@ class RelationshipEngine:
         kind = self._normalize(node.kind)
 
         if not source:
-            self.project.warnings.append(
-                "Relationship rejected: empty source."
-            )
+            self.project.warnings.append("Relationship rejected: empty source.")
             return None
 
         if not target:
@@ -299,9 +304,7 @@ class RelationshipEngine:
             return list(relationships)
 
         return [
-            relationship
-            for relationship in relationships
-            if relationship.kind == kind
+            relationship for relationship in relationships if relationship.kind == kind
         ]
 
     def incoming(
@@ -323,9 +326,7 @@ class RelationshipEngine:
             return list(relationships)
 
         return [
-            relationship
-            for relationship in relationships
-            if relationship.kind == kind
+            relationship for relationship in relationships if relationship.kind == kind
         ]
 
     def between(
@@ -350,9 +351,7 @@ class RelationshipEngine:
 
         if kind is not None:
             results = [
-                relationship
-                for relationship in results
-                if relationship.kind == kind
+                relationship for relationship in results if relationship.kind == kind
             ]
 
         return results
@@ -392,19 +391,13 @@ class RelationshipEngine:
 
         for relationship in self.project.relationships:
             if not relationship.source:
-                warnings.append(
-                    "Relationship has no source."
-                )
+                warnings.append("Relationship has no source.")
 
             if not relationship.target:
-                warnings.append(
-                    "Relationship has no target."
-                )
+                warnings.append("Relationship has no target.")
 
             if not relationship.kind:
-                warnings.append(
-                    "Relationship has no kind."
-                )
+                warnings.append("Relationship has no kind.")
 
             if relationship.evidence not in EVIDENCE_STATUS:
                 warnings.append(
@@ -433,9 +426,7 @@ class RelationshipEngine:
         counts: dict[str, int] = {}
 
         for relationship in self.project.relationships:
-            counts[relationship.kind] = (
-                counts.get(relationship.kind, 0) + 1
-            )
+            counts[relationship.kind] = counts.get(relationship.kind, 0) + 1
 
         return dict(sorted(counts.items()))
 
@@ -458,6 +449,7 @@ class RelationshipEngine:
 # ============================================================
 # CONVENIENCE FUNCTION
 # ============================================================
+
 
 def build_relationships(
     project: Project,
@@ -483,6 +475,7 @@ def build_relationships(
 # ============================================================
 # RELATIONSHIP HELPERS
 # ============================================================
+
 
 def relationship(
     source: str,

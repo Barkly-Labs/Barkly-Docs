@@ -69,9 +69,7 @@ class JSONReader(LanguageReader):
         try:
             payload = json.loads(source)
         except json.JSONDecodeError as exc:
-            message = (
-                f"Could not parse JSON file {path}: {exc.msg} at line {exc.lineno}, column {exc.colno}"
-            )
+            message = f"Could not parse JSON file {path}: {exc.msg} at line {exc.lineno}, column {exc.colno}"
             warnings.append(message)
             file_node.metadata["parse_error"] = {
                 "message": exc.msg,
@@ -154,7 +152,9 @@ class JSONReader(LanguageReader):
             project.add_data(node)
             for key, child in value.items():
                 child_path = f"{path_name}.{key}" if path_name != "$" else f"$.{key}"
-                self._add_json_values(project, file_node, file_path, child, path_name=child_path)
+                self._add_json_values(
+                    project, file_node, file_path, child, path_name=child_path
+                )
             return
 
         if isinstance(value, list):
@@ -175,7 +175,9 @@ class JSONReader(LanguageReader):
             project.add_data(node)
             for index, child in enumerate(value):
                 child_path = f"{path_name}[{index}]"
-                self._add_json_values(project, file_node, file_path, child, path_name=child_path)
+                self._add_json_values(
+                    project, file_node, file_path, child, path_name=child_path
+                )
             return
 
         node = DataNode(

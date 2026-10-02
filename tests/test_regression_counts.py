@@ -104,8 +104,12 @@ def test_parallel_and_sequential_analysis_are_equivalent(tmp_path):
     discovery = ProjectDiscovery([PythonReader(), JavaReader()])
 
     sequential = discovery.analyze(tmp_path, name="fixture-seq", parallel=False)
-    parallel = discovery.analyze(tmp_path, name="fixture-parallel", parallel=True, workers=2)
+    parallel = discovery.analyze(
+        tmp_path, name="fixture-parallel", parallel=True, workers=2
+    )
 
-    assert [path.name for path in sequential.processed_files] == [path.name for path in parallel.processed_files]
+    assert [path.name for path in sequential.processed_files] == [
+        path.name for path in parallel.processed_files
+    ]
     assert sequential.project.summary() == parallel.project.summary()
     assert len(sequential.project.relationships) == len(parallel.project.relationships)

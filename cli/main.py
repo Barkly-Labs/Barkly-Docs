@@ -1,4 +1,3 @@
-
 """
 BARKLY DOCS
 Command Line Interface
@@ -25,7 +24,6 @@ from readers.java import JavaReader
 from readers.json import JSONReader
 from rendering.html import render_project_website
 
-
 DEFAULT_PREVIEW_HOST = "127.0.0.1"
 DEFAULT_PREVIEW_PORT = 8000
 DEFAULT_OUTPUT_DIR = ".barkly-docs-site"
@@ -39,8 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="barkly-docs",
         description=(
-            "Analyze a software project and build "
-            "the Barkly Project Model."
+            "Analyze a software project and build " "the Barkly Project Model."
         ),
     )
 
@@ -178,9 +175,7 @@ def ensure_website_generated(
     """Generate HTML output when the site has not yet been created."""
 
     if output_dir is None:
-        raise FileNotFoundError(
-            "No output directory supplied for the HTML website."
-        )
+        raise FileNotFoundError("No output directory supplied for the HTML website.")
 
     output_dir = Path(output_dir)
     landing_page = output_dir / "index.html"

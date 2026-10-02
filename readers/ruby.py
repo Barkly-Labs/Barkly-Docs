@@ -108,7 +108,7 @@ class RubyReader(LanguageReader):
     #   initialize
     #   self.foo
     #   self.foo=
-    #   <=> 
+    #   <=>
     #   ==
     #   []
     #   []=
@@ -191,13 +191,9 @@ class RubyReader(LanguageReader):
         re.VERBOSE,
     )
 
-    _INSTANCE_VARIABLE_RE = re.compile(
-        r"""(?<![A-Za-z0-9_])@[A-Za-z_][A-Za-z0-9_]*"""
-    )
+    _INSTANCE_VARIABLE_RE = re.compile(r"""(?<![A-Za-z0-9_])@[A-Za-z_][A-Za-z0-9_]*""")
 
-    _CLASS_VARIABLE_RE = re.compile(
-        r"""(?<![A-Za-z0-9_])@@[A-Za-z_][A-Za-z0-9_]*"""
-    )
+    _CLASS_VARIABLE_RE = re.compile(r"""(?<![A-Za-z0-9_])@@[A-Za-z_][A-Za-z0-9_]*""")
 
     _LOCAL_VARIABLE_RE = re.compile(
         r"""
@@ -270,9 +266,7 @@ class RubyReader(LanguageReader):
                 success=False,
                 project=project,
                 warnings=warnings,
-                errors=[
-                    f"{path}: unable to read Ruby source: {exc}"
-                ],
+                errors=[f"{path}: unable to read Ruby source: {exc}"],
                 metadata={
                     "language": self.language,
                     "version": self.version,
@@ -332,17 +326,9 @@ class RubyReader(LanguageReader):
 
             structures = self._scan_structures(source)
 
-            classes = [
-                item
-                for item in structures
-                if item["kind"] == "class"
-            ]
+            classes = [item for item in structures if item["kind"] == "class"]
 
-            modules = [
-                item
-                for item in structures
-                if item["kind"] == "module"
-            ]
+            modules = [item for item in structures if item["kind"] == "module"]
 
             # ------------------------------------------------
             # MODULE NODES
@@ -379,22 +365,13 @@ class RubyReader(LanguageReader):
                     class_name,
                 )
 
-                method_names = [
-                    method["name"]
-                    for method in methods
-                ]
+                method_names = [method["name"] for method in methods]
 
-                includes = self._extract_includes(
-                    structure["body"]
-                )
+                includes = self._extract_includes(structure["body"])
 
-                extends = self._extract_extends(
-                    structure["body"]
-                )
+                extends = self._extract_extends(structure["body"])
 
-                attributes = self._extract_attributes(
-                    structure["body"]
-                )
+                attributes = self._extract_attributes(structure["body"])
 
                 class_node = ClassNode(
                     name=class_name,
@@ -471,9 +448,7 @@ class RubyReader(LanguageReader):
                         name=method["name"],
                         path=str(path),
                         language=self.language,
-                        parameters=self._parse_parameters(
-                            method.get("params", "")
-                        ),
+                        parameters=self._parse_parameters(method.get("params", "")),
                         documentation=method.get("documentation"),
                         line_start=method["line_start"],
                         line_end=method["line_end"],
@@ -488,9 +463,7 @@ class RubyReader(LanguageReader):
                                 "singleton",
                                 False,
                             ),
-                            "receiver": method.get(
-                                "receiver"
-                            ),
+                            "receiver": method.get("receiver"),
                         },
                     )
 
@@ -509,18 +482,14 @@ class RubyReader(LanguageReader):
             # TOP-LEVEL METHODS
             # ------------------------------------------------
 
-            top_level_methods = self._extract_top_level_methods(
-                source
-            )
+            top_level_methods = self._extract_top_level_methods(source)
 
             for function in top_level_methods:
                 function_node = FunctionNode(
                     name=function["name"],
                     path=str(path),
                     language=self.language,
-                    parameters=self._parse_parameters(
-                        function.get("params", "")
-                    ),
+                    parameters=self._parse_parameters(function.get("params", "")),
                     documentation=function.get("documentation"),
                     line_start=function["line_start"],
                     line_end=function["line_end"],
@@ -539,13 +508,9 @@ class RubyReader(LanguageReader):
 
                 project.add_function(function_node)
 
-                file_node.functions.append(
-                    function["name"]
-                )
+                file_node.functions.append(function["name"])
 
-                file_module.functions.append(
-                    function["name"]
-                )
+                file_module.functions.append(function["name"])
 
             # ------------------------------------------------
             # VARIABLES / CONSTANTS
@@ -574,18 +539,9 @@ class RubyReader(LanguageReader):
             file_node.metadata.update(
                 {
                     "ruby_version": "unknown",
-                    "classes": [
-                        structure["name"]
-                        for structure in classes
-                    ],
-                    "modules": [
-                        structure["name"]
-                        for structure in modules
-                    ],
-                    "imports": [
-                        item["name"]
-                        for item in imports
-                    ],
+                    "classes": [structure["name"] for structure in classes],
+                    "modules": [structure["name"] for structure in modules],
+                    "imports": [item["name"] for item in imports],
                     "parser": "static-ruby-structural-scanner",
                 }
             )
@@ -603,16 +559,12 @@ class RubyReader(LanguageReader):
                     "ruby_version": "unknown",
                     "classes": len(classes),
                     "modules": len(modules),
-                    "top_level_functions": len(
-                        top_level_methods
-                    ),
+                    "top_level_functions": len(top_level_methods),
                 },
             )
 
         except Exception as exc:
-            errors.append(
-                f"{path}: Ruby structural analysis failed: {exc}"
-            )
+            errors.append(f"{path}: Ruby structural analysis failed: {exc}")
 
             return ReaderResult(
                 success=False,
@@ -677,14 +629,10 @@ class RubyReader(LanguageReader):
         for index, raw_line in enumerate(lines):
             line_start_offset = offsets[index]
             line_end_offset = (
-                offsets[index + 1]
-                if index + 1 < len(offsets)
-                else total_length
+                offsets[index + 1] if index + 1 < len(offsets) else total_length
             )
 
-            stripped = self._strip_ruby_comment(
-                raw_line
-            ).strip()
+            stripped = self._strip_ruby_comment(raw_line).strip()
 
             if not stripped:
                 continue
@@ -701,17 +649,13 @@ class RubyReader(LanguageReader):
                 structure = {
                     "kind": "class",
                     "name": name,
-                    "superclass": class_match.group(
-                        "superclass"
-                    ),
+                    "superclass": class_match.group("superclass"),
                     "line_start": index + 1,
                     "line_end": None,
                     "offset": line_start_offset,
                     "body_start": line_end_offset,
                     "body": "",
-                    "parent": self._nearest_namespace(
-                        stack
-                    ),
+                    "parent": self._nearest_namespace(stack),
                     "documentation": self._documentation_before(
                         lines,
                         index,
@@ -746,9 +690,7 @@ class RubyReader(LanguageReader):
                     "offset": line_start_offset,
                     "body_start": line_end_offset,
                     "body": "",
-                    "parent": self._nearest_namespace(
-                        stack
-                    ),
+                    "parent": self._nearest_namespace(stack),
                     "documentation": self._documentation_before(
                         lines,
                         index,
@@ -788,9 +730,7 @@ class RubyReader(LanguageReader):
             if self._opens_end_structure(stripped):
                 stack.append(
                     {
-                        "kind": self._opening_kind(
-                            stripped
-                        ),
+                        "kind": self._opening_kind(stripped),
                         "start_offset": line_start_offset,
                     }
                 )
@@ -829,9 +769,7 @@ class RubyReader(LanguageReader):
 
             structure["line_end"] = len(lines)
 
-            structure["body"] = source[
-                structure["body_start"]:
-            ]
+            structure["body"] = source[structure["body_start"] :]
 
             structures.append(structure)
 
@@ -876,10 +814,7 @@ class RubyReader(LanguageReader):
 
         structure["line_end"] = end_line
 
-        structure["body"] = source[
-            structure["body_start"]:
-            end_offset
-        ]
+        structure["body"] = source[structure["body_start"] : end_offset]
 
         structures.append(structure)
 
@@ -1007,9 +942,7 @@ class RubyReader(LanguageReader):
             offset += len(line)
 
         for index, raw_line in enumerate(lines):
-            stripped = self._strip_ruby_comment(
-                raw_line
-            ).strip()
+            stripped = self._strip_ruby_comment(raw_line).strip()
 
             if not stripped:
                 continue
@@ -1026,34 +959,17 @@ class RubyReader(LanguageReader):
                 visibility = stripped
                 continue
 
-            method_match = self._METHOD_RE.match(
-                stripped
-            )
+            method_match = self._METHOD_RE.match(stripped)
 
             if method_match:
                 stack.append(
                     {
                         "kind": "def",
                         "method": {
-                            "name": method_match.group(
-                                "name"
-                            ),
-                            "params": (
-                                method_match.group(
-                                    "params"
-                                )
-                                or ""
-                            ),
-                            "receiver": (
-                                method_match.group(
-                                    "receiver"
-                                )
-                            ),
-                            "singleton": bool(
-                                method_match.group(
-                                    "receiver"
-                                )
-                            ),
+                            "name": method_match.group("name"),
+                            "params": (method_match.group("params") or ""),
+                            "receiver": (method_match.group("receiver")),
+                            "singleton": bool(method_match.group("receiver")),
                             "line_start": self._line_number_from_offset(
                                 body,
                                 offsets[index],
@@ -1074,9 +990,7 @@ class RubyReader(LanguageReader):
             if self._opens_end_structure(stripped):
                 stack.append(
                     {
-                        "kind": self._opening_kind(
-                            stripped
-                        ),
+                        "kind": self._opening_kind(stripped),
                     }
                 )
 
@@ -1091,12 +1005,9 @@ class RubyReader(LanguageReader):
                 if entry["kind"] == "def":
                     method = entry["method"]
 
-                    method["line_end"] = (
-                        self._line_number_from_offset(
-                            body,
-                            offsets[index]
-                            + len(raw_line),
-                        )
+                    method["line_end"] = self._line_number_from_offset(
+                        body,
+                        offsets[index] + len(raw_line),
                     )
 
                     methods.append(method)
@@ -1110,11 +1021,9 @@ class RubyReader(LanguageReader):
 
             method = entry["method"]
 
-            method["line_end"] = (
-                self._line_number_from_offset(
-                    body,
-                    len(body),
-                )
+            method["line_end"] = self._line_number_from_offset(
+                body,
+                len(body),
             )
 
             methods.append(method)
@@ -1155,9 +1064,7 @@ class RubyReader(LanguageReader):
             offset += len(line)
 
         for index, raw_line in enumerate(lines):
-            stripped = self._strip_ruby_comment(
-                raw_line
-            ).strip()
+            stripped = self._strip_ruby_comment(raw_line).strip()
 
             if not stripped:
                 continue
@@ -1170,13 +1077,12 @@ class RubyReader(LanguageReader):
                 visibility = stripped
                 continue
 
-            method_match = self._METHOD_RE.match(
-                stripped
-            )
+            method_match = self._METHOD_RE.match(stripped)
 
             if method_match:
                 if not any(
-                    item in {
+                    item
+                    in {
                         "class",
                         "module",
                     }
@@ -1186,25 +1092,10 @@ class RubyReader(LanguageReader):
 
                     methods.append(
                         {
-                            "name": method_match.group(
-                                "name"
-                            ),
-                            "params": (
-                                method_match.group(
-                                    "params"
-                                )
-                                or ""
-                            ),
-                            "receiver": (
-                                method_match.group(
-                                    "receiver"
-                                )
-                            ),
-                            "singleton": bool(
-                                method_match.group(
-                                    "receiver"
-                                )
-                            ),
+                            "name": method_match.group("name"),
+                            "params": (method_match.group("params") or ""),
+                            "receiver": (method_match.group("receiver")),
+                            "singleton": bool(method_match.group("receiver")),
                             "line_start": index + 1,
                             "line_end": None,
                             "visibility": visibility,
@@ -1229,9 +1120,7 @@ class RubyReader(LanguageReader):
                 continue
 
             if self._opens_end_structure(stripped):
-                stack.append(
-                    self._opening_kind(stripped)
-                )
+                stack.append(self._opening_kind(stripped))
                 continue
 
             if self._is_end_line(stripped):
@@ -1245,9 +1134,7 @@ class RubyReader(LanguageReader):
                     # method and close it.
                     for method in reversed(methods):
                         if method["line_end"] is None:
-                            method["line_end"] = (
-                                index + 1
-                            )
+                            method["line_end"] = index + 1
                             break
 
         # Conservative close for unfinished methods.
@@ -1275,16 +1162,12 @@ class RubyReader(LanguageReader):
         imports: list[dict[str, str]] = []
 
         for line in source.splitlines():
-            stripped = self._strip_ruby_comment(
-                line
-            ).strip()
+            stripped = self._strip_ruby_comment(line).strip()
 
             if not stripped:
                 continue
 
-            match = self._REQUIRE_RELATIVE_RE.match(
-                stripped
-            )
+            match = self._REQUIRE_RELATIVE_RE.match(stripped)
 
             if match:
                 name = match.group("name")
@@ -1301,9 +1184,7 @@ class RubyReader(LanguageReader):
                         source_file=str(path),
                         target=name,
                         language=self.language,
-                        metadata={
-                            "ruby_kind": "require_relative"
-                        },
+                        metadata={"ruby_kind": "require_relative"},
                     )
                 )
 
@@ -1320,9 +1201,7 @@ class RubyReader(LanguageReader):
 
                 continue
 
-            match = self._REQUIRE_RE.match(
-                stripped
-            )
+            match = self._REQUIRE_RE.match(stripped)
 
             if match:
                 name = match.group("name")
@@ -1339,9 +1218,7 @@ class RubyReader(LanguageReader):
                         source_file=str(path),
                         target=name,
                         language=self.language,
-                        metadata={
-                            "ruby_kind": "require"
-                        },
+                        metadata={"ruby_kind": "require"},
                     )
                 )
 
@@ -1373,22 +1250,14 @@ class RubyReader(LanguageReader):
         names: list[str] = []
 
         for line in body.splitlines():
-            stripped = self._strip_ruby_comment(
-                line
-            ).strip()
+            stripped = self._strip_ruby_comment(line).strip()
 
-            match = self._INCLUDE_RE.match(
-                stripped
-            )
+            match = self._INCLUDE_RE.match(stripped)
 
             if not match:
                 continue
 
-            names.extend(
-                self._split_symbol_list(
-                    match.group("names")
-                )
-            )
+            names.extend(self._split_symbol_list(match.group("names")))
 
         return names
 
@@ -1403,22 +1272,14 @@ class RubyReader(LanguageReader):
         names: list[str] = []
 
         for line in body.splitlines():
-            stripped = self._strip_ruby_comment(
-                line
-            ).strip()
+            stripped = self._strip_ruby_comment(line).strip()
 
-            match = self._EXTEND_RE.match(
-                stripped
-            )
+            match = self._EXTEND_RE.match(stripped)
 
             if not match:
                 continue
 
-            names.extend(
-                self._split_symbol_list(
-                    match.group("names")
-                )
-            )
+            names.extend(self._split_symbol_list(match.group("names")))
 
         return names
 
@@ -1437,25 +1298,17 @@ class RubyReader(LanguageReader):
         attributes: list[str] = []
 
         for line in body.splitlines():
-            stripped = self._strip_ruby_comment(
-                line
-            ).strip()
+            stripped = self._strip_ruby_comment(line).strip()
 
-            match = self._ATTRIBUTE_RE.match(
-                stripped
-            )
+            match = self._ATTRIBUTE_RE.match(stripped)
 
             if not match:
                 continue
 
             kind = match.group("kind")
 
-            for name in self._split_symbol_list(
-                match.group("names")
-            ):
-                attributes.append(
-                    f"{kind}:{name}"
-                )
+            for name in self._split_symbol_list(match.group("names")):
+                attributes.append(f"{kind}:{name}")
 
         return attributes
 
@@ -1481,9 +1334,7 @@ class RubyReader(LanguageReader):
             source.splitlines(),
             start=1,
         ):
-            line = self._strip_ruby_comment(
-                raw_line
-            )
+            line = self._strip_ruby_comment(raw_line)
 
             # --------------------------------------------
             # CONSTANTS
@@ -1503,9 +1354,7 @@ class RubyReader(LanguageReader):
             )
 
             if constant_match:
-                name = constant_match.group(
-                    "name"
-                )
+                name = constant_match.group("name")
 
                 if "=" in name:
                     name, value = name.split(
@@ -1531,9 +1380,7 @@ class RubyReader(LanguageReader):
                             value=value,
                             constant=True,
                             line=line_number,
-                            metadata={
-                                "ruby_kind": "constant"
-                            },
+                            metadata={"ruby_kind": "constant"},
                         )
                     )
 
@@ -1541,9 +1388,7 @@ class RubyReader(LanguageReader):
             # INSTANCE VARIABLES
             # --------------------------------------------
 
-            for match in self._INSTANCE_VARIABLE_RE.finditer(
-                line
-            ):
+            for match in self._INSTANCE_VARIABLE_RE.finditer(line):
                 name = match.group(0)
 
                 key = (
@@ -1563,9 +1408,7 @@ class RubyReader(LanguageReader):
                         language=self.language,
                         constant=False,
                         line=line_number,
-                        metadata={
-                            "ruby_kind": "instance_variable"
-                        },
+                        metadata={"ruby_kind": "instance_variable"},
                     )
                 )
 
@@ -1573,9 +1416,7 @@ class RubyReader(LanguageReader):
             # CLASS VARIABLES
             # --------------------------------------------
 
-            for match in self._CLASS_VARIABLE_RE.finditer(
-                line
-            ):
+            for match in self._CLASS_VARIABLE_RE.finditer(line):
                 name = match.group(0)
 
                 key = (
@@ -1595,9 +1436,7 @@ class RubyReader(LanguageReader):
                         language=self.language,
                         constant=False,
                         line=line_number,
-                        metadata={
-                            "ruby_kind": "class_variable"
-                        },
+                        metadata={"ruby_kind": "class_variable"},
                     )
                 )
 
@@ -1605,15 +1444,15 @@ class RubyReader(LanguageReader):
             # LOCAL ASSIGNMENTS
             # --------------------------------------------
 
-            for match in self._LOCAL_VARIABLE_RE.finditer(
-                line
-            ):
-                name = match.group(
-                    0
-                ).split(
-                    "=",
-                    1,
-                )[0].strip()
+            for match in self._LOCAL_VARIABLE_RE.finditer(line):
+                name = (
+                    match.group(0)
+                    .split(
+                        "=",
+                        1,
+                    )[0]
+                    .strip()
+                )
 
                 if name in {
                     "if",
@@ -1653,9 +1492,7 @@ class RubyReader(LanguageReader):
                         language=self.language,
                         constant=False,
                         line=line_number,
-                        metadata={
-                            "ruby_kind": "local_variable"
-                        },
+                        metadata={"ruby_kind": "local_variable"},
                     )
                 )
 
@@ -1683,38 +1520,26 @@ class RubyReader(LanguageReader):
             lines,
             start=1,
         ):
-            match = self._RUBYDOC_RE.match(
-                line
-            )
+            match = self._RUBYDOC_RE.match(line)
 
             if match:
                 if start_line is None:
                     start_line = index
 
-                current.append(
-                    match.group("text").strip()
-                )
+                current.append(match.group("text").strip())
 
                 continue
 
             if current:
-                text = "\n".join(
-                    current
-                ).strip()
+                text = "\n".join(current).strip()
 
                 if text:
                     project.add_documentation(
                         DocumentationNode(
-                            title=self._documentation_title(
-                                text
-                            ),
+                            title=self._documentation_title(text),
                             path=str(path),
                             kind="ruby_comment",
-                            headings=[
-                                self._documentation_title(
-                                    text
-                                )
-                            ],
+                            headings=[self._documentation_title(text)],
                             metadata={
                                 "line_start": start_line,
                                 "line_end": index - 1,
@@ -1727,23 +1552,15 @@ class RubyReader(LanguageReader):
                 start_line = None
 
         if current:
-            text = "\n".join(
-                current
-            ).strip()
+            text = "\n".join(current).strip()
 
             if text:
                 project.add_documentation(
                     DocumentationNode(
-                        title=self._documentation_title(
-                            text
-                        ),
+                        title=self._documentation_title(text),
                         path=str(path),
                         kind="ruby_comment",
-                        headings=[
-                            self._documentation_title(
-                                text
-                            )
-                        ],
+                        headings=[self._documentation_title(text)],
                         metadata={
                             "line_start": start_line,
                             "line_end": len(lines),
@@ -1774,16 +1591,12 @@ class RubyReader(LanguageReader):
         Return class inheritance information.
         """
 
-        superclass = structure.get(
-            "superclass"
-        )
+        superclass = structure.get("superclass")
 
         if not superclass:
             return []
 
-        return [
-            superclass.strip()
-        ]
+        return [superclass.strip()]
 
     def _parse_parameters(
         self,
@@ -1856,9 +1669,7 @@ class RubyReader(LanguageReader):
                 continue
 
             if char == "," and depth == 0:
-                item = "".join(
-                    current
-                ).strip()
+                item = "".join(current).strip()
 
                 if item:
                     result.append(item)
@@ -1868,9 +1679,7 @@ class RubyReader(LanguageReader):
 
             current.append(char)
 
-        item = "".join(
-            current
-        ).strip()
+        item = "".join(current).strip()
 
         if item:
             result.append(item)
@@ -1895,15 +1704,8 @@ class RubyReader(LanguageReader):
 
             item = item.lstrip(":")
 
-            if (
-                (
-                    item.startswith('"')
-                    and item.endswith('"')
-                )
-                or (
-                    item.startswith("'")
-                    and item.endswith("'")
-                )
+            if (item.startswith('"') and item.endswith('"')) or (
+                item.startswith("'") and item.endswith("'")
             ):
                 item = item[1:-1]
 
@@ -1996,11 +1798,14 @@ class RubyReader(LanguageReader):
             ),
         )
 
-        return text.count(
-            "\n",
-            0,
-            offset,
-        ) + 1
+        return (
+            text.count(
+                "\n",
+                0,
+                offset,
+            )
+            + 1
+        )
 
     def _line_number(
         self,

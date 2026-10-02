@@ -13,10 +13,10 @@ from pathlib import Path
 
 from model.project import Project
 
-
 # ============================================================
 # READER RESULT
 # ============================================================
+
 
 @dataclass
 class ReaderResult:
@@ -38,6 +38,7 @@ class ReaderResult:
 # ============================================================
 # LANGUAGE READER
 # ============================================================
+
 
 class LanguageReader(ABC):
     """

@@ -27,7 +27,6 @@ import re
 import sqlite3
 import webbrowser
 
-
 HOST = "127.0.0.1"
 PORT = 8765
 
@@ -58,6 +57,7 @@ AFTER_EFFECTS = [
 # ------------------------------------------------------------
 # DATABASE
 # ------------------------------------------------------------
+
 
 def connect():
     db = sqlite3.connect(DB)
@@ -92,6 +92,7 @@ def connect():
 # ------------------------------------------------------------
 # HELPERS
 # ------------------------------------------------------------
+
 
 def format_seconds(seconds):
     seconds = max(0, int(seconds or 0))
@@ -162,6 +163,7 @@ def today():
 # ------------------------------------------------------------
 # HTML
 # ------------------------------------------------------------
+
 
 def page(body, title="Barkly Work Log"):
 
@@ -442,6 +444,7 @@ td {{
 # DASHBOARD
 # ------------------------------------------------------------
 
+
 def dashboard():
 
     db = connect()
@@ -452,26 +455,13 @@ def dashboard():
         ORDER BY id DESC
     """).fetchall()
 
-    today_rows = [
-        row
-        for row in rows
-        if row["started_at"][:10] == today()
-    ]
+    today_rows = [row for row in rows if row["started_at"][:10] == today()]
 
-    today_active = sum(
-        row["active_seconds"]
-        for row in today_rows
-    )
+    today_active = sum(row["active_seconds"] for row in today_rows)
 
-    today_breaks = sum(
-        row["break_seconds"]
-        for row in today_rows
-    )
+    today_breaks = sum(row["break_seconds"] for row in today_rows)
 
-    today_income = sum(
-        row["income"]
-        for row in today_rows
-    )
+    today_income = sum(row["income"] for row in today_rows)
 
     recent = rows[:15]
 
@@ -892,48 +882,32 @@ not a score.
 # HTTP SERVER
 # ------------------------------------------------------------
 
+
 class Handler(BaseHTTPRequestHandler):
 
-    def send_html(
-        self,
-        content,
-        status=200
-    ):
+    def send_html(self, content, status=200):
 
         data = content.encode("utf-8")
 
         self.send_response(status)
 
-        self.send_header(
-            "Content-Type",
-            "text/html; charset=utf-8"
-        )
+        self.send_header("Content-Type", "text/html; charset=utf-8")
 
-        self.send_header(
-            "Content-Length",
-            str(len(data))
-        )
+        self.send_header("Content-Length", str(len(data)))
 
         self.end_headers()
 
         self.wfile.write(data)
 
-
     def do_GET(self):
 
-        path = urlparse(
-            self.path
-        ).path
-
+        path = urlparse(self.path).path
 
         if path == "/":
 
-            self.send_html(
-                dashboard()
-            )
+            self.send_html(dashboard())
 
             return
-
 
         if path == "/export":
 
@@ -947,73 +921,61 @@ class Handler(BaseHTTPRequestHandler):
 
             db.close()
 
-
             output = io.StringIO()
 
             writer = csv.writer(output)
 
-            writer.writerow([
-                "id",
-                "category",
-                "started_at",
-                "stopped_at",
-                "active_seconds",
-                "break_seconds",
-                "breaks",
-                "energy_after",
-                "after_effect",
-                "income_received",
-                "notes",
-            ])
-
+            writer.writerow(
+                [
+                    "id",
+                    "category",
+                    "started_at",
+                    "stopped_at",
+                    "active_seconds",
+                    "break_seconds",
+                    "breaks",
+                    "energy_after",
+                    "after_effect",
+                    "income_received",
+                    "notes",
+                ]
+            )
 
             for row in rows:
 
-                writer.writerow([
-                    row["id"],
-                    row["category"],
-                    row["started_at"],
-                    row["stopped_at"],
-                    row["active_seconds"],
-                    row["break_seconds"],
-                    row["breaks"],
-                    row["energy"],
-                    row["after_effect"],
-                    row["income"],
-                    row["notes"],
-                ])
+                writer.writerow(
+                    [
+                        row["id"],
+                        row["category"],
+                        row["started_at"],
+                        row["stopped_at"],
+                        row["active_seconds"],
+                        row["break_seconds"],
+                        row["breaks"],
+                        row["energy"],
+                        row["after_effect"],
+                        row["income"],
+                        row["notes"],
+                    ]
+                )
 
-
-            data = (
-                output
-                .getvalue()
-                .encode("utf-8-sig")
-            )
-
+            data = output.getvalue().encode("utf-8-sig")
 
             self.send_response(200)
 
-            self.send_header(
-                "Content-Type",
-                "text/csv; charset=utf-8"
-            )
+            self.send_header("Content-Type", "text/csv; charset=utf-8")
 
             self.send_header(
-                "Content-Disposition",
-                'attachment; filename="barkly_work_log.csv"'
+                "Content-Disposition", 'attachment; filename="barkly_work_log.csv"'
             )
 
-            self.send_header(
-                "Content-Length",
-                str(len(data))
-            )
+            self.send_header("Content-Length", str(len(data)))
 
             self.end_headers()
 
             self.wfile.write(data)
 
             return
-
 
         self.send_html(
             page("""
@@ -1025,13 +987,9 @@ class Handler(BaseHTTPRequestHandler):
             404,
         )
 
-
     def do_POST(self):
 
-        path = urlparse(
-            self.path
-        ).path
-
+        path = urlparse(self.path).path
 
         if path != "/add":
 
@@ -1042,59 +1000,25 @@ class Handler(BaseHTTPRequestHandler):
 
             return
 
+        length = int(self.headers.get("Content-Length", "0"))
 
-        length = int(
-            self.headers.get(
-                "Content-Length",
-                "0"
-            )
-        )
-
-
-        raw = self.rfile.read(
-            length
-        ).decode("utf-8")
-
+        raw = self.rfile.read(length).decode("utf-8")
 
         form = parse_qs(raw)
 
+        def get(name, default=""):
 
-        def get(
-            name,
-            default=""
-        ):
+            return form.get(name, [default])[0].strip()
 
-            return form.get(
-                name,
-                [default]
-            )[0].strip()
+        started = get("started_at").replace("T", " ")
 
-
-        started = get(
-            "started_at"
-        ).replace(
-            "T",
-            " "
-        )
-
-
-        stopped = get(
-            "stopped_at"
-        ).replace(
-            "T",
-            " "
-        )
-
+        stopped = get("stopped_at").replace("T", " ")
 
         try:
 
-            started_dt = datetime.fromisoformat(
-                started
-            )
+            started_dt = datetime.fromisoformat(started)
 
-            stopped_dt = datetime.fromisoformat(
-                stopped
-            )
+            stopped_dt = datetime.fromisoformat(stopped)
 
         except ValueError:
 
@@ -1115,7 +1039,6 @@ class Handler(BaseHTTPRequestHandler):
             )
 
             return
-
 
         if stopped_dt < started_dt:
 
@@ -1138,55 +1061,30 @@ class Handler(BaseHTTPRequestHandler):
 
             return
 
+        active_seconds = parse_duration(get("active_time"))
 
-        active_seconds = parse_duration(
-            get("active_time")
-        )
-
-
-        break_seconds = parse_duration(
-            get("break_time")
-        )
-
+        break_seconds = parse_duration(get("break_time"))
 
         try:
 
-            breaks = max(
-                0,
-                int(
-                    get(
-                        "breaks",
-                        "0"
-                    ) or 0
-                )
-            )
+            breaks = max(0, int(get("breaks", "0") or 0))
 
         except ValueError:
 
             breaks = 0
 
-
         try:
 
-            income = max(
-                0.0,
-                float(
-                    get(
-                        "income",
-                        "0"
-                    ) or 0
-                )
-            )
+            income = max(0.0, float(get("income", "0") or 0))
 
         except ValueError:
 
             income = 0.0
 
-
         db = connect()
 
-
-        db.execute("""
+        db.execute(
+            """
             INSERT INTO sessions (
 
                 category,
@@ -1211,50 +1109,28 @@ class Handler(BaseHTTPRequestHandler):
                 ?, ?,
                 ?, ?
             )
-        """, (
-
-            get(
-                "category"
-            ) or "Other",
-
-            started,
-
-            stopped,
-
-            active_seconds,
-
-            break_seconds,
-
-            breaks,
-
-            get(
-                "energy"
-            ) or ENERGY[0],
-
-            get(
-                "after_effect"
-            ) or AFTER_EFFECTS[0],
-
-            income,
-
-            get(
-                "notes"
+        """,
+            (
+                get("category") or "Other",
+                started,
+                stopped,
+                active_seconds,
+                break_seconds,
+                breaks,
+                get("energy") or ENERGY[0],
+                get("after_effect") or AFTER_EFFECTS[0],
+                income,
+                get("notes"),
             ),
-
-        ))
-
+        )
 
         db.commit()
 
         db.close()
 
-
         self.send_response(303)
 
-        self.send_header(
-            "Location",
-            "/"
-        )
+        self.send_header("Location", "/")
 
         self.end_headers()
 
@@ -1263,52 +1139,35 @@ class Handler(BaseHTTPRequestHandler):
 # MAIN
 # ------------------------------------------------------------
 
+
 def main():
 
     connect().close()
 
-
     server = ThreadingHTTPServer(
-        (
-            HOST,
-            PORT
-        ),
+        (HOST, PORT),
         Handler,
     )
 
-
-    url = (
-        f"http://{HOST}:{PORT}"
-    )
-
+    url = f"http://{HOST}:{PORT}"
 
     print()
     print("🐶 Barkly Work Log")
     print()
-    print(
-        f"Open: {url}"
-    )
+    print(f"Open: {url}")
     print()
-    print(
-        f"Database: {DB}"
-    )
+    print(f"Database: {DB}")
     print()
-    print(
-        "Press Ctrl+C to stop."
-    )
+    print("Press Ctrl+C to stop.")
     print()
-
 
     try:
 
-        webbrowser.open(
-            url
-        )
+        webbrowser.open(url)
 
     except Exception:
 
         pass
-
 
     try:
 
@@ -1317,9 +1176,7 @@ def main():
     except KeyboardInterrupt:
 
         print()
-        print(
-            "Barkly Work Log stopped."
-        )
+        print("Barkly Work Log stopped.")
 
     finally:
 

@@ -19,7 +19,6 @@ from model.project import Project
 from readers.base import LanguageReader, ReaderResult
 from analysis.graph import build_relation_graph
 
-
 _PROJECT_NODE_FIELDS = (
     "files",
     "modules",
@@ -115,7 +114,9 @@ def _instantiate_reader(reader_module: str, reader_qualname: str) -> LanguageRea
         target = getattr(target, part)
     reader = target()
     if not isinstance(reader, LanguageReader):
-        raise TypeError(f"Reader factory did not resolve to a LanguageReader: {reader_module}.{reader_qualname}")
+        raise TypeError(
+            f"Reader factory did not resolve to a LanguageReader: {reader_module}.{reader_qualname}"
+        )
     return reader
 
 
@@ -273,14 +274,10 @@ class ProjectDiscovery:
         root = root.resolve()
 
         if not root.exists():
-            raise FileNotFoundError(
-                f"Project path does not exist: {root}"
-            )
+            raise FileNotFoundError(f"Project path does not exist: {root}")
 
         if not root.is_dir():
-            raise NotADirectoryError(
-                f"Project path is not a directory: {root}"
-            )
+            raise NotADirectoryError(f"Project path is not a directory: {root}")
 
         project = Project(
             name=name or root.name,
@@ -362,7 +359,9 @@ class ProjectDiscovery:
 
                 result.reader_results.append(reader_result)
 
-                duration_ms = int((__import__("time").perf_counter() - start_time) * 1000)
+                duration_ms = int(
+                    (__import__("time").perf_counter() - start_time) * 1000
+                )
 
                 if reader_result.success:
                     result.processed_files.append(path)
@@ -401,18 +400,30 @@ class ProjectDiscovery:
                 }
 
                 per_file_counts = {
-                    "classes": reader_result.metadata.get("classes")
-                    if reader_result.metadata and "classes" in reader_result.metadata
-                    else delta["classes"],
-                    "functions": reader_result.metadata.get("functions")
-                    if reader_result.metadata and "functions" in reader_result.metadata
-                    else delta["functions"],
-                    "methods": reader_result.metadata.get("methods")
-                    if reader_result.metadata and "methods" in reader_result.metadata
-                    else delta["methods"],
-                    "relationships": reader_result.metadata.get("relationships")
-                    if reader_result.metadata and "relationships" in reader_result.metadata
-                    else delta["relationships"],
+                    "classes": (
+                        reader_result.metadata.get("classes")
+                        if reader_result.metadata
+                        and "classes" in reader_result.metadata
+                        else delta["classes"]
+                    ),
+                    "functions": (
+                        reader_result.metadata.get("functions")
+                        if reader_result.metadata
+                        and "functions" in reader_result.metadata
+                        else delta["functions"]
+                    ),
+                    "methods": (
+                        reader_result.metadata.get("methods")
+                        if reader_result.metadata
+                        and "methods" in reader_result.metadata
+                        else delta["methods"]
+                    ),
+                    "relationships": (
+                        reader_result.metadata.get("relationships")
+                        if reader_result.metadata
+                        and "relationships" in reader_result.metadata
+                        else delta["relationships"]
+                    ),
                 }
 
                 project_totals = project.summary()
@@ -438,8 +449,7 @@ class ProjectDiscovery:
 
             except Exception as exc:
                 result.errors.append(
-                    f"{path}: reader "
-                    f"{reader.language} failed: {exc}"
+                    f"{path}: reader " f"{reader.language} failed: {exc}"
                 )
                 if progress_callback is not None:
                     progress_callback(
@@ -462,7 +472,9 @@ class ProjectDiscovery:
                         reader_name=reader.language,
                         status="failed",
                         phase="analysis",
-                        duration_ms=int((__import__("time").perf_counter() - start_time) * 1000),
+                        duration_ms=int(
+                            (__import__("time").perf_counter() - start_time) * 1000
+                        ),
                         error=str(exc),
                         counts={
                             "processed": len(result.processed_files),
@@ -470,7 +482,7 @@ class ProjectDiscovery:
                             "failed": len(result.errors),
                         },
                     )
- 
+
         if event_logger is not None:
             event_logger.stage_complete(
                 "discovery",
@@ -507,7 +519,9 @@ class ProjectDiscovery:
 
         last_progress_log = {"stage": None, "current": 0}
 
-        def log_relationship_progress(substage: str, current: int, stage_total: int) -> None:
+        def log_relationship_progress(
+            substage: str, current: int, stage_total: int
+        ) -> None:
             # Emit actual work-loop progress, not timer-based/fabricated progress.
             if event_logger is None:
                 return
@@ -523,7 +537,9 @@ class ProjectDiscovery:
                     message=f"Relationship map: {substage} {current}/{stage_total}",
                 )
 
-        graph = build_relation_graph(project, progress_callback=log_relationship_progress)
+        graph = build_relation_graph(
+            project, progress_callback=log_relationship_progress
+        )
         graph_duration_ms = int((time.perf_counter() - relationship_started) * 1000)
         result.project.metadata["relation_graph"] = graph.as_dict()
         result.project.metadata["relation_graph_unresolved"] = list(graph.unresolved)
@@ -571,9 +587,13 @@ class ProjectDiscovery:
         worker_results: dict[str, _WorkerResult] = {}
         tasks = list(reader_specs)
         if tasks:
-            chunksize = max(1, len(tasks) // (worker_count * 4) if worker_count > 0 else 1)
+            chunksize = max(
+                1, len(tasks) // (worker_count * 4) if worker_count > 0 else 1
+            )
             with ProcessPoolExecutor(max_workers=worker_count) as executor:
-                for entry in executor.map(_read_worker_task, tasks, chunksize=chunksize):
+                for entry in executor.map(
+                    _read_worker_task, tasks, chunksize=chunksize
+                ):
                     worker_results[entry.path] = entry
 
         for index, path in enumerate(discovered_files, start=1):
@@ -681,12 +701,31 @@ class ProjectDiscovery:
                 "methods": len(project.methods),
                 "relationships": len(project.relationships),
             }
-            delta = {key: post_counts[key] - pre_counts.get(key, 0) for key in post_counts}
+            delta = {
+                key: post_counts[key] - pre_counts.get(key, 0) for key in post_counts
+            }
             per_file_counts = {
-                "classes": reader_result.metadata.get("classes") if reader_result.metadata and "classes" in reader_result.metadata else delta["classes"],
-                "functions": reader_result.metadata.get("functions") if reader_result.metadata and "functions" in reader_result.metadata else delta["functions"],
-                "methods": reader_result.metadata.get("methods") if reader_result.metadata and "methods" in reader_result.metadata else delta["methods"],
-                "relationships": reader_result.metadata.get("relationships") if reader_result.metadata and "relationships" in reader_result.metadata else delta["relationships"],
+                "classes": (
+                    reader_result.metadata.get("classes")
+                    if reader_result.metadata and "classes" in reader_result.metadata
+                    else delta["classes"]
+                ),
+                "functions": (
+                    reader_result.metadata.get("functions")
+                    if reader_result.metadata and "functions" in reader_result.metadata
+                    else delta["functions"]
+                ),
+                "methods": (
+                    reader_result.metadata.get("methods")
+                    if reader_result.metadata and "methods" in reader_result.metadata
+                    else delta["methods"]
+                ),
+                "relationships": (
+                    reader_result.metadata.get("relationships")
+                    if reader_result.metadata
+                    and "relationships" in reader_result.metadata
+                    else delta["relationships"]
+                ),
             }
             project_totals = project.summary()
 
@@ -703,7 +742,9 @@ class ProjectDiscovery:
                         "project": project_totals,
                     },
                     message=(
-                        "File analyzed successfully." if status == "complete" else "File analysis returned warnings or errors."
+                        "File analyzed successfully."
+                        if status == "complete"
+                        else "File analysis returned warnings or errors."
                     ),
                 )
 
@@ -743,7 +784,9 @@ class ProjectDiscovery:
 
         last_progress_log = {"stage": None, "current": 0}
 
-        def log_relationship_progress(substage: str, current: int, stage_total: int) -> None:
+        def log_relationship_progress(
+            substage: str, current: int, stage_total: int
+        ) -> None:
             # Emit actual work-loop progress, not timer-based/fabricated progress.
             if event_logger is None:
                 return
@@ -759,7 +802,9 @@ class ProjectDiscovery:
                     message=f"Relationship map: {substage} {current}/{stage_total}",
                 )
 
-        graph = build_relation_graph(project, progress_callback=log_relationship_progress)
+        graph = build_relation_graph(
+            project, progress_callback=log_relationship_progress
+        )
         graph_duration_ms = int((time.perf_counter() - relationship_started) * 1000)
         result.project.metadata["relation_graph"] = graph.as_dict()
         result.project.metadata["relation_graph_unresolved"] = list(graph.unresolved)
@@ -794,8 +839,7 @@ class ProjectDiscovery:
         ignored = {name.casefold() for name in self.ignored_directories}
         for current, directory_names, file_names in os.walk(root, topdown=True):
             directory_names[:] = sorted(
-                name for name in directory_names
-                if name.casefold() not in ignored
+                name for name in directory_names if name.casefold() not in ignored
             )
             current_path = Path(current)
             for filename in file_names:

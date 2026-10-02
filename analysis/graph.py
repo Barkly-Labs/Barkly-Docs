@@ -11,7 +11,6 @@ from typing import Any, Callable
 
 from model.project import Project, RelationshipNode
 
-
 EVIDENCE_LEVELS = ("DECLARED", "DETECTED", "INFERRED", "UNKNOWN")
 
 # Keep graph construction focused on code owned by the project. Discovery
@@ -19,10 +18,28 @@ EVIDENCE_LEVELS = ("DECLARED", "DETECTED", "INFERRED", "UNKNOWN")
 # from cached, manually-created, or older Project objects that contain vendor
 # entities.
 _DEFAULT_IGNORED_SOURCE_DIRS = {
-    ".git", ".venv", "venv", "env", ".env", "site-packages",
-    "dist-packages", "vendor", "vendors", "third_party", "third-party",
-    "external", "deps", "node_modules", "__pycache__", "dist", "build",
-    "target", "coverage", ".pytest_cache", ".mypy_cache", ".ruff_cache",
+    ".git",
+    ".venv",
+    "venv",
+    "env",
+    ".env",
+    "site-packages",
+    "dist-packages",
+    "vendor",
+    "vendors",
+    "third_party",
+    "third-party",
+    "external",
+    "deps",
+    "node_modules",
+    "__pycache__",
+    "dist",
+    "build",
+    "target",
+    "coverage",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
     ".barkly-docs-site",
 }
 
@@ -63,6 +80,8 @@ def _node_source_path(node: Any) -> str | None:
         or getattr(node, "path", None)
         or getattr(node, "file_path", None)
     )
+
+
 NODE_KIND_ORDER = (
     "file",
     "module",
@@ -114,7 +133,11 @@ class RelationGraph:
     view: str = "project_overview"
     max_nodes: int | None = None
     max_edges: int | None = None
-    generated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    generated_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
+    )
     _node_ids: set[str] = field(default_factory=set, init=False, repr=False)
     _edge_ids: set[str] = field(default_factory=set, init=False, repr=False)
 
@@ -179,7 +202,13 @@ def _display_name(value: str | None) -> str:
     return cleaned.rsplit("/", 1)[-1] if "/" in cleaned else cleaned
 
 
-def _build_qualified_name(project: Project, *, value: str | None, path: str | None = None, kind: str = "symbol") -> str:
+def _build_qualified_name(
+    project: Project,
+    *,
+    value: str | None,
+    path: str | None = None,
+    kind: str = "symbol",
+) -> str:
     candidate = _normalize_identifier(value)
     if not candidate:
         return ""
@@ -188,7 +217,11 @@ def _build_qualified_name(project: Project, *, value: str | None, path: str | No
     if kind == "module":
         return f"module:{candidate}"
     if kind == "class":
-        return candidate if "." in candidate or candidate.startswith("file:") else candidate
+        return (
+            candidate
+            if "." in candidate or candidate.startswith("file:")
+            else candidate
+        )
     if kind == "method" and "." in candidate:
         return candidate
     if path:
@@ -201,23 +234,44 @@ def _build_qualified_name(project: Project, *, value: str | None, path: str | No
 def _relationship_explanation(kind: str, detail: dict[str, Any] | None = None) -> str:
     detail = detail or {}
     if kind == "imports":
-        return detail.get("message", "Import statement declares a dependency on another file or module.")
+        return detail.get(
+            "message",
+            "Import statement declares a dependency on another file or module.",
+        )
     if kind == "contains":
-        return detail.get("message", "This node owns or defines the target symbol in the same file.")
+        return detail.get(
+            "message", "This node owns or defines the target symbol in the same file."
+        )
     if kind == "calls":
-        return detail.get("message", "A static call expression directly invokes the target symbol.")
+        return detail.get(
+            "message", "A static call expression directly invokes the target symbol."
+        )
     if kind == "inherits":
-        return detail.get("message", "The class explicitly inherits from the target superclass.")
+        return detail.get(
+            "message", "The class explicitly inherits from the target superclass."
+        )
     if kind == "implements":
-        return detail.get("message", "The class explicitly implements the target interface or contract.")
+        return detail.get(
+            "message",
+            "The class explicitly implements the target interface or contract.",
+        )
     if kind == "references":
-        return detail.get("message", "The symbol references another symbol without an explicit call or inheritance link.")
+        return detail.get(
+            "message",
+            "The symbol references another symbol without an explicit call or inheritance link.",
+        )
     if kind == "routes_to":
-        return detail.get("message", "An endpoint or route resolves through this handler target.")
-    return detail.get("message", "Static source evidence captured by the project analysis pipeline.")
+        return detail.get(
+            "message", "An endpoint or route resolves through this handler target."
+        )
+    return detail.get(
+        "message", "Static source evidence captured by the project analysis pipeline."
+    )
 
 
-def _build_symbol_index(project: Project) -> tuple[dict[str, str], dict[tuple[str, str], str]]:
+def _build_symbol_index(
+    project: Project,
+) -> tuple[dict[str, str], dict[tuple[str, str], str]]:
     """Index known project symbols once so resolving thousands of imports is O(1)."""
     symbols: dict[str, str] = {}
     classes_by_name_path: dict[tuple[str, str], Any] = {}
@@ -239,15 +293,30 @@ def _build_symbol_index(project: Project) -> tuple[dict[str, str], dict[tuple[st
         if _is_project_source_path(project, _node_source_path(class_node)):
             add(class_node.name, class_node.name)
             add(class_node.path, class_node.name)
-            classes_by_name_path.setdefault((class_node.name, class_node.path or ""), class_node)
+            classes_by_name_path.setdefault(
+                (class_node.name, class_node.path or ""), class_node
+            )
     for function in project.functions:
         if _is_project_source_path(project, _node_source_path(function)):
             add(function.name, function.name)
-            add(function.metadata.get("qualified_name"), str(function.metadata.get("qualified_name") or ""))
+            add(
+                function.metadata.get("qualified_name"),
+                str(function.metadata.get("qualified_name") or ""),
+            )
     for method in project.methods:
         if _is_project_source_path(project, _node_source_path(method)):
-            add(method.name, method.class_name + "." + method.name if method.class_name else method.name)
-            add(method.metadata.get("qualified_name"), str(method.metadata.get("qualified_name") or ""))
+            add(
+                method.name,
+                (
+                    method.class_name + "." + method.name
+                    if method.class_name
+                    else method.name
+                ),
+            )
+            add(
+                method.metadata.get("qualified_name"),
+                str(method.metadata.get("qualified_name") or ""),
+            )
     for endpoint in project.endpoints:
         if _is_project_source_path(project, _node_source_path(endpoint)):
             add(endpoint.path, endpoint.handler or endpoint.path)
@@ -279,27 +348,49 @@ def _match_known_symbol(
     return None
 
 
-def _record_unresolved(edges: list[GraphEdge], known_identifiers: set[str], project: Project, *, source_file: str | None = None) -> list[dict[str, Any]]:
+def _record_unresolved(
+    edges: list[GraphEdge],
+    known_identifiers: set[str],
+    project: Project,
+    *,
+    source_file: str | None = None,
+) -> list[dict[str, Any]]:
     unresolved: list[dict[str, Any]] = []
     for edge in edges:
         if edge.source in known_identifiers and edge.target in known_identifiers:
             continue
-        if edge.kind in {"calls", "inherits", "implements", "references", "routes_to", "imports"}:
-            unresolved.append({
-                "source": edge.source,
-                "target": edge.target,
-                "kind": edge.kind,
-                "source_file": edge.source_file,
-                "evidence": edge.evidence,
-                "reason": "target symbol not found in the current scan",
-                "explanation": edge.explanation,
-            })
+        if edge.kind in {
+            "calls",
+            "inherits",
+            "implements",
+            "references",
+            "routes_to",
+            "imports",
+        }:
+            unresolved.append(
+                {
+                    "source": edge.source,
+                    "target": edge.target,
+                    "kind": edge.kind,
+                    "source_file": edge.source_file,
+                    "evidence": edge.evidence,
+                    "reason": "target symbol not found in the current scan",
+                    "explanation": edge.explanation,
+                }
+            )
     return unresolved
 
 
 def _sort_nodes(nodes: list[GraphNode]) -> list[GraphNode]:
     order = {kind: index for index, kind in enumerate(NODE_KIND_ORDER)}
-    return sorted(nodes, key=lambda item: (order.get(item.kind, 999), item.label.lower(), item.id.lower()))
+    return sorted(
+        nodes,
+        key=lambda item: (
+            order.get(item.kind, 999),
+            item.label.lower(),
+            item.id.lower(),
+        ),
+    )
 
 
 def _project_component_name(project: Project, value: str | Path | None) -> str | None:
@@ -309,14 +400,20 @@ def _project_component_name(project: Project, value: str | Path | None) -> str |
     raw = Path(str(value).replace("\\", "/"))
     root = Path(project.root).resolve() if project.root else None
     try:
-        relative = raw.resolve().relative_to(root) if raw.is_absolute() and root else raw
+        relative = (
+            raw.resolve().relative_to(root) if raw.is_absolute() and root else raw
+        )
     except (OSError, ValueError):
         return None
     parts = [part for part in relative.parts if part not in {".", ""}]
     if not parts:
         return "Project root"
     # Treat common source containers as layout, not as components themselves.
-    if parts[0].casefold() in {"src", "source", "sources", "lib", "app", "apps", "packages"} and len(parts) > 1:
+    if (
+        parts[0].casefold()
+        in {"src", "source", "sources", "lib", "app", "apps", "packages"}
+        and len(parts) > 1
+    ):
         return parts[1]
     if len(parts) == 1:
         return "Project root"
@@ -367,8 +464,13 @@ def _collapse_to_project_overview(graph: RelationGraph) -> None:
         counts = component_node_counts[name]
         total = sum(counts.values())
         component_nodes[name] = GraphNode(
-            id=f"component:{name}", label=name, kind="component",
-            qualified_name=name, path=name, source_file=None, evidence="DETECTED",
+            id=f"component:{name}",
+            label=name,
+            kind="component",
+            qualified_name=name,
+            path=name,
+            source_file=None,
+            evidence="DETECTED",
             metadata={
                 "project_level": True,
                 "entity_count": total,
@@ -383,7 +485,9 @@ def _collapse_to_project_overview(graph: RelationGraph) -> None:
         source_component = node_component.get(edge.source)
         if source_component is None and edge.source_file:
             source_component = _project_component_name(graph.project, edge.source_file)
-        target_component = node_component.get(edge.target) or module_component.get(edge.target)
+        target_component = node_component.get(edge.target) or module_component.get(
+            edge.target
+        )
         if target_component is None:
             # A target can be a path-qualified file or module identifier.
             candidate = edge.target.removeprefix("file:").removeprefix("module:")
@@ -409,25 +513,42 @@ def _collapse_to_project_overview(graph: RelationGraph) -> None:
                 node.metadata["internal_relationship_count"] += 1
             continue
         key = (source_component, target_component)
-        aggregate = grouped_edges.setdefault(key, {"count": 0, "kinds": set(), "evidence": set(), "examples": []})
+        aggregate = grouped_edges.setdefault(
+            key, {"count": 0, "kinds": set(), "evidence": set(), "examples": []}
+        )
         aggregate["count"] += 1
         aggregate["kinds"].add(edge.kind)
         aggregate["evidence"].add(edge.evidence or "UNKNOWN")
         if len(aggregate["examples"]) < 3:
-            aggregate["examples"].append({"kind": edge.kind, "source": edge.source, "target": edge.target})
+            aggregate["examples"].append(
+                {"kind": edge.kind, "source": edge.source, "target": edge.target}
+            )
 
     overview_edges: list[GraphEdge] = []
     for (source_name, target_name), aggregate in sorted(grouped_edges.items()):
-        evidence = "DECLARED" if "DECLARED" in aggregate["evidence"] else ("DETECTED" if "DETECTED" in aggregate["evidence"] else "INFERRED")
+        evidence = (
+            "DECLARED"
+            if "DECLARED" in aggregate["evidence"]
+            else ("DETECTED" if "DETECTED" in aggregate["evidence"] else "INFERRED")
+        )
         kinds = sorted(aggregate["kinds"])
-        overview_edges.append(GraphEdge(
-            id=f"component:{source_name}->component:{target_name}",
-            source=f"component:{source_name}", target=f"component:{target_name}",
-            kind="connects_to", label="connects to", source_file=None,
-            evidence=evidence,
-            explanation=f"{aggregate['count']} relationship(s) connect these project components.",
-            metadata={"relationship_count": aggregate["count"], "relationship_kinds": kinds, "examples": aggregate["examples"]},
-        ))
+        overview_edges.append(
+            GraphEdge(
+                id=f"component:{source_name}->component:{target_name}",
+                source=f"component:{source_name}",
+                target=f"component:{target_name}",
+                kind="connects_to",
+                label="connects to",
+                source_file=None,
+                evidence=evidence,
+                explanation=f"{aggregate['count']} relationship(s) connect these project components.",
+                metadata={
+                    "relationship_count": aggregate["count"],
+                    "relationship_kinds": kinds,
+                    "examples": aggregate["examples"],
+                },
+            )
+        )
 
     graph.nodes = list(component_nodes.values())
     graph.edges = overview_edges
@@ -436,7 +557,9 @@ def _collapse_to_project_overview(graph: RelationGraph) -> None:
     graph._edge_ids = {edge.id for edge in graph.edges}
     graph.max_nodes = None
     graph.max_edges = None
-    graph.warnings = ["Project overview groups files, modules, classes, and functions into top-level components. Detailed symbols remain available on the Entities and Relationships pages."]
+    graph.warnings = [
+        "Project overview groups files, modules, classes, and functions into top-level components. Detailed symbols remain available on the Entities and Relationships pages."
+    ]
 
 
 def build_relation_graph(
@@ -452,7 +575,9 @@ def build_relation_graph(
     The callback receives (stage_name, current_item, total_items). Updates are
     emitted at the beginning, every 25 items, and at completion of each stage.
     """
-    graph = RelationGraph(project=project, view=view, max_nodes=max_nodes, max_edges=max_edges)
+    graph = RelationGraph(
+        project=project, view=view, max_nodes=max_nodes, max_edges=max_edges
+    )
 
     def report_progress(stage: str, current: int, total: int) -> None:
         if progress_callback is not None:
@@ -686,13 +811,16 @@ def build_relation_graph(
         )
         if method.class_name:
             class_id = method.class_name
-            matching_class = (
-                classes_by_name_path.get((method.class_name, method.path or ""))
-                or classes_by_name_path.get((method.class_name, ""))
-            )
+            matching_class = classes_by_name_path.get(
+                (method.class_name, method.path or "")
+            ) or classes_by_name_path.get((method.class_name, ""))
             if matching_class is None and not method.path:
                 matching_class = next(
-                    (item for (name, _), item in classes_by_name_path.items() if name == method.class_name),
+                    (
+                        item
+                        for (name, _), item in classes_by_name_path.items()
+                        if name == method.class_name
+                    ),
                     None,
                 )
             if matching_class is not None and matching_class.path:
@@ -797,10 +925,18 @@ def build_relation_graph(
             )
         if not _is_project_source_path(project, import_node.source_file):
             continue
-        source_id = _match_known_symbol(project, import_node.source_file, symbol_index=symbol_index) or import_node.source_file
+        source_id = (
+            _match_known_symbol(
+                project, import_node.source_file, symbol_index=symbol_index
+            )
+            or import_node.source_file
+        )
         if not is_project_import_target(import_node.target):
             continue
-        target_id = _match_known_symbol(project, import_node.target, symbol_index=symbol_index) or import_node.target
+        target_id = (
+            _match_known_symbol(project, import_node.target, symbol_index=symbol_index)
+            or import_node.target
+        )
         graph.add_edge(
             GraphEdge(
                 id=f"{source_id}->{target_id}",
@@ -812,7 +948,11 @@ def build_relation_graph(
                 source_location={"line": import_node.metadata.get("line")},
                 evidence="DECLARED",
                 explanation="The source file imports this module or symbol.",
-                metadata={"names": list(import_node.names), "alias": import_node.alias, "language": import_node.language},
+                metadata={
+                    "names": list(import_node.names),
+                    "alias": import_node.alias,
+                    "language": import_node.language,
+                },
             )
         )
 
@@ -821,8 +961,24 @@ def build_relation_graph(
     for relationship in progress_items("relationships", project.relationships):
         if not _is_project_source_path(project, relationship.source_file):
             continue
-        source_id = _match_known_symbol(project, relationship.source, path=relationship.source_file, symbol_index=symbol_index) or relationship.source
-        target_id = _match_known_symbol(project, relationship.target, path=relationship.source_file, symbol_index=symbol_index) or relationship.target
+        source_id = (
+            _match_known_symbol(
+                project,
+                relationship.source,
+                path=relationship.source_file,
+                symbol_index=symbol_index,
+            )
+            or relationship.source
+        )
+        target_id = (
+            _match_known_symbol(
+                project,
+                relationship.target,
+                path=relationship.source_file,
+                symbol_index=symbol_index,
+            )
+            or relationship.target
+        )
         kind = relationship.kind
         edge = GraphEdge(
             id=f"{source_id}->{target_id}:{kind}:{relationship.source_file or 'unknown'}:{relationship.source_location.get('line') if relationship.source_location else ''}",
@@ -831,9 +987,30 @@ def build_relation_graph(
             kind=kind,
             label=kind,
             source_file=relationship.source_file,
-            source_location=(dict(relationship.source_location) if relationship.source_location else None),
-            evidence=relationship.evidence if relationship.evidence in EVIDENCE_LEVELS else "UNKNOWN",
-            explanation=_relationship_explanation(kind, {"line": relationship.source_location.get("line") if relationship.source_location else None, "source": relationship.source, "target": relationship.target, "message": relationship.metadata.get("reason") or relationship.metadata.get("explanation")}),
+            source_location=(
+                dict(relationship.source_location)
+                if relationship.source_location
+                else None
+            ),
+            evidence=(
+                relationship.evidence
+                if relationship.evidence in EVIDENCE_LEVELS
+                else "UNKNOWN"
+            ),
+            explanation=_relationship_explanation(
+                kind,
+                {
+                    "line": (
+                        relationship.source_location.get("line")
+                        if relationship.source_location
+                        else None
+                    ),
+                    "source": relationship.source,
+                    "target": relationship.target,
+                    "message": relationship.metadata.get("reason")
+                    or relationship.metadata.get("explanation"),
+                },
+            ),
             metadata=dict(relationship.metadata),
         )
         graph.add_edge(edge)
@@ -841,13 +1018,24 @@ def build_relation_graph(
     if view == "project_overview":
         _collapse_to_project_overview(graph)
     graph.nodes = _sort_nodes(graph.nodes)
-    graph.edges = sorted(graph.edges, key=lambda edge: (edge.kind, edge.source, edge.target, edge.source_file or ""))
-    graph.unresolved = _record_unresolved(graph.edges, set(known_identifiers), project) if view != "project_overview" else []
+    graph.edges = sorted(
+        graph.edges,
+        key=lambda edge: (edge.kind, edge.source, edge.target, edge.source_file or ""),
+    )
+    graph.unresolved = (
+        _record_unresolved(graph.edges, set(known_identifiers), project)
+        if view != "project_overview"
+        else []
+    )
     if graph.max_nodes is not None and len(graph.nodes) > graph.max_nodes:
-        graph.warnings.append(f"Relation graph was limited to the first {graph.max_nodes} nodes to keep the view responsive.")
+        graph.warnings.append(
+            f"Relation graph was limited to the first {graph.max_nodes} nodes to keep the view responsive."
+        )
         graph.nodes = graph.nodes[: graph.max_nodes]
     if graph.max_edges is not None and len(graph.edges) > graph.max_edges:
-        graph.warnings.append(f"Relation graph was limited to the first {graph.max_edges} edges to keep the view responsive.")
+        graph.warnings.append(
+            f"Relation graph was limited to the first {graph.max_edges} edges to keep the view responsive."
+        )
         graph.edges = graph.edges[: graph.max_edges]
     graph.unresolved = _record_unresolved(graph.edges, set(known_identifiers), project)
     project.metadata["relation_graph"] = graph.as_dict()

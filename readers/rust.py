@@ -1,4 +1,3 @@
-
 """
 BARKLY DOCS
 Rust Reader
@@ -62,9 +61,7 @@ class RustReader(LanguageReader):
                 success=False,
                 project=project,
                 warnings=[],
-                errors=[
-                    f"{path}: unable to read Rust source: {exc}"
-                ],
+                errors=[f"{path}: unable to read Rust source: {exc}"],
                 metadata={
                     "language": self.language,
                     "reader_version": self.version,
@@ -158,9 +155,7 @@ class RustReader(LanguageReader):
                     documentation=None,
                     metadata={
                         "rust_module": True,
-                        "visibility": self._visibility(
-                            match.group("visibility")
-                        ),
+                        "visibility": self._visibility(match.group("visibility")),
                         "line": line,
                     },
                 )
@@ -192,9 +187,7 @@ class RustReader(LanguageReader):
                 documentation=None,
                 metadata={
                     "rust_kind": "struct",
-                    "visibility": self._visibility(
-                        match.group("visibility")
-                    ),
+                    "visibility": self._visibility(match.group("visibility")),
                     "generics": match.group("generics") or "",
                     "line_start": line_start,
                     "line_end": line_end,
@@ -230,9 +223,7 @@ class RustReader(LanguageReader):
                 documentation=None,
                 metadata={
                     "rust_kind": "enum",
-                    "visibility": self._visibility(
-                        match.group("visibility")
-                    ),
+                    "visibility": self._visibility(match.group("visibility")),
                     "generics": match.group("generics") or "",
                     "line_start": line_start,
                     "line_end": line_end,
@@ -268,9 +259,7 @@ class RustReader(LanguageReader):
                 documentation=None,
                 metadata={
                     "rust_kind": "trait",
-                    "visibility": self._visibility(
-                        match.group("visibility")
-                    ),
+                    "visibility": self._visibility(match.group("visibility")),
                     "generics": match.group("generics") or "",
                     "line_start": line_start,
                     "line_end": line_end,
@@ -303,9 +292,7 @@ class RustReader(LanguageReader):
                 match.end(),
             )
 
-            parameters = self._parse_parameters(
-                match.group("parameters") or ""
-            )
+            parameters = self._parse_parameters(match.group("parameters") or "")
 
             function_node = FunctionNode(
                 name=name,
@@ -319,9 +306,7 @@ class RustReader(LanguageReader):
                 line_end=line_end,
                 metadata={
                     "rust_kind": "function",
-                    "visibility": self._visibility(
-                        match.group("visibility")
-                    ),
+                    "visibility": self._visibility(match.group("visibility")),
                     "async": bool(match.group("async")),
                     "unsafe": bool(match.group("unsafe")),
                     "extern": bool(match.group("extern")),
@@ -349,9 +334,7 @@ class RustReader(LanguageReader):
 
                 name = method.group("name")
 
-                parameters = self._parse_parameters(
-                    method.group("parameters") or ""
-                )
+                parameters = self._parse_parameters(method.group("parameters") or "")
 
                 relative_start = match.start("body") + method.start()
 
@@ -380,9 +363,7 @@ class RustReader(LanguageReader):
                     class_name=type_name,
                     metadata={
                         "rust_kind": "impl_method",
-                        "visibility": self._visibility(
-                            method.group("visibility")
-                        ),
+                        "visibility": self._visibility(method.group("visibility")),
                         "async": bool(method.group("async")),
                         "unsafe": bool(method.group("unsafe")),
                         "generics": method.group("generics") or "",
@@ -417,13 +398,9 @@ class RustReader(LanguageReader):
                     line=line,
                     metadata={
                         "rust_kind": (
-                            "static"
-                            if match.group("keyword") == "static"
-                            else "const"
+                            "static" if match.group("keyword") == "static" else "const"
                         ),
-                        "visibility": self._visibility(
-                            match.group("visibility")
-                        ),
+                        "visibility": self._visibility(match.group("visibility")),
                     },
                 )
             )
@@ -474,9 +451,7 @@ class RustReader(LanguageReader):
     # REGULAR EXPRESSIONS
     # ============================================================
 
-    _USE_RE = re.compile(
-        r"(?m)^\s*(?:pub\s+)?use\s+(?P<statement>[^;]+);"
-    )
+    _USE_RE = re.compile(r"(?m)^\s*(?:pub\s+)?use\s+(?P<statement>[^;]+);")
 
     _MOD_RE = re.compile(
         r"(?m)^\s*(?P<visibility>pub(?:\([^)]*\))?\s+)?"
@@ -705,10 +680,7 @@ class RustReader(LanguageReader):
         Extract method names from a trait body.
         """
 
-        return [
-            match.group("name")
-            for match in RustReader._FUNCTION_RE.finditer(body)
-        ]
+        return [match.group("name") for match in RustReader._FUNCTION_RE.finditer(body)]
 
     @staticmethod
     def _split_top_level(
@@ -758,9 +730,7 @@ class RustReader(LanguageReader):
             stripped = line.strip()
 
             if stripped.startswith("///"):
-                lines.append(
-                    stripped[3:].lstrip()
-                )
+                lines.append(stripped[3:].lstrip())
 
         if not lines:
             return None
@@ -782,9 +752,7 @@ class RustReader(LanguageReader):
             stripped = line.strip()
 
             if stripped.startswith("//!"):
-                lines.append(
-                    stripped[3:].lstrip()
-                )
+                lines.append(stripped[3:].lstrip())
 
         if not lines:
             return None
@@ -822,15 +790,10 @@ class RustReader(LanguageReader):
 
         prefix = source[:offset]
 
-        impl_count = len(
-            re.findall(r"\bimpl\b", prefix)
-        )
+        impl_count = len(re.findall(r"\bimpl\b", prefix))
 
         closing_count = prefix.count("}")
 
         opening_count = prefix.count("{")
 
-        return (
-            impl_count > 0
-            and opening_count > closing_count
-        )
+        return impl_count > 0 and opening_count > closing_count

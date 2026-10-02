@@ -35,13 +35,23 @@ def test_file_level_counts_are_emitted_and_distinct(tmp_path):
     )
 
     log_file = tmp_path / "events.jsonl"
-    term = BarklyTerminal(project_name="fixture", root=str(tmp_path), log_file=str(log_file), log_format="jsonl", quiet=False)
+    term = BarklyTerminal(
+        project_name="fixture",
+        root=str(tmp_path),
+        log_file=str(log_file),
+        log_format="jsonl",
+        quiet=False,
+    )
 
     discovery = ProjectDiscovery([JavaReader()])
     result = discovery.analyze(tmp_path, name="fixture", event_logger=term)
 
     # Read the JSONL file and collect file events.
-    lines = [json.loads(line) for line in log_file.read_text(encoding="utf-8").splitlines() if line.strip()]
+    lines = [
+        json.loads(line)
+        for line in log_file.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     file_events = [l for l in lines if l.get("event", "").startswith("file.")]
 
     # There should be at least 3 file.complete events (one per Java file)
@@ -74,7 +84,11 @@ def test_file_level_counts_are_emitted_and_distinct(tmp_path):
     # Re-run the discovery and ensure per-file counts are stable and
     # project totals do not double-count duplicates (deduplication enforced by model).
     discovery.analyze(tmp_path, name="fixture", event_logger=term)
-    lines2 = [json.loads(line) for line in log_file.read_text(encoding="utf-8").splitlines() if line.strip()]
+    lines2 = [
+        json.loads(line)
+        for line in log_file.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     file_events2 = [l for l in lines2 if l.get("event", "").startswith("file.")]
     complete_events2 = [ev for ev in file_events2 if ev.get("event") == "file.complete"]
     assert complete_events2, "no file.complete events after rerun"

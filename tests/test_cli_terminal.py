@@ -88,13 +88,22 @@ def test_terminal_final_report_formats_warning_counts():
         no_color=True,
         no_progress=True,
     )
+
     class FakeResult:
         processed_files = ["a.py"]
         skipped_files = ["b.txt"]
         errors = ["bad file"]
         warnings = ["warn 1"]
+
     class FakeProject:
         def summary(self):
             return {"classes": 1, "functions": 2, "methods": 3, "relationships": 4}
-    terminal.final_report(result=FakeResult(), output_dir="/tmp/site", project=FakeProject(), warnings=["warn 1"], errors=["bad file"])
+
+    terminal.final_report(
+        result=FakeResult(),
+        output_dir="/tmp/site",
+        project=FakeProject(),
+        warnings=["warn 1"],
+        errors=["bad file"],
+    )
     terminal.close()

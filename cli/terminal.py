@@ -52,10 +52,14 @@ class BarklyTerminal:
         if not quiet:
             stream = logging.StreamHandler(sys.stdout)
             stream.setLevel(logging.DEBUG if self.verbose else logging.INFO)
-            stream.setFormatter(_TextFormatter(color=not no_color and self._supports_color()))
+            stream.setFormatter(
+                _TextFormatter(color=not no_color and self._supports_color())
+            )
             self._logger.addHandler(stream)
 
-        self._terminal_enabled = not quiet and not no_progress and sys.stdout is not None
+        self._terminal_enabled = (
+            not quiet and not no_progress and sys.stdout is not None
+        )
         self._interactive_terminal = bool(
             hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
         )
@@ -77,7 +81,9 @@ class BarklyTerminal:
         except (AttributeError, UnicodeEncodeError, ValueError):
             return text.encode("ascii", "replace").decode("ascii")
 
-    def _print_safe(self, text: str = "", *, end: str = "\n", flush: bool = False) -> None:
+    def _print_safe(
+        self, text: str = "", *, end: str = "\n", flush: bool = False
+    ) -> None:
         safe = self._safe_text(text)
         try:
             print(safe, end=end, flush=flush)
@@ -121,7 +127,9 @@ class BarklyTerminal:
                 else:
                     payload[key] = value
             if self._json_handle is not None:
-                self._json_handle.write(json.dumps(payload, sort_keys=True, default=str) + "\n")
+                self._json_handle.write(
+                    json.dumps(payload, sort_keys=True, default=str) + "\n"
+                )
                 self._json_handle.flush()
         if not self.quiet or self.log_file:
             self._logger.log(level, text)
@@ -149,7 +157,9 @@ class BarklyTerminal:
             value[key] = val
 
         if self.log_file is not None and self.log_format == "jsonl":
-            self._json_handle.write(json.dumps(value, sort_keys=True, default=str) + "\n")
+            self._json_handle.write(
+                json.dumps(value, sort_keys=True, default=str) + "\n"
+            )
             self._json_handle.flush()
 
         if self.quiet and self.log_file is None:
@@ -170,12 +180,23 @@ class BarklyTerminal:
         if "message" in value:
             parts.append(str(value["message"]))
         for key in sorted(value):
-            if key in {"timestamp", "event", "run_id", "project", "root", "message", "stage_id", "parent_stage_id"}:
+            if key in {
+                "timestamp",
+                "event",
+                "run_id",
+                "project",
+                "root",
+                "message",
+                "stage_id",
+                "parent_stage_id",
+            }:
                 continue
             parts.append(f"{key}={value[key]}")
         self._logger.log(log_level, " ".join(str(part) for part in parts))
 
-    def stage_start(self, stage_id: str, parent_stage_id: str | None = None, **counts: Any) -> None:
+    def stage_start(
+        self, stage_id: str, parent_stage_id: str | None = None, **counts: Any
+    ) -> None:
         self.event(
             f"{stage_id}.start",
             level="INFO",
@@ -185,7 +206,9 @@ class BarklyTerminal:
             message=f"Starting {stage_id}",
         )
 
-    def stage_complete(self, stage_id: str, parent_stage_id: str | None = None, **counts: Any) -> None:
+    def stage_complete(
+        self, stage_id: str, parent_stage_id: str | None = None, **counts: Any
+    ) -> None:
         self.event(
             f"{stage_id}.complete",
             level="SUCCESS",
@@ -207,7 +230,11 @@ class BarklyTerminal:
     ) -> None:
         relative_path = str(path)
         if hasattr(path, "as_posix"):
-            relative_path = os.path.relpath(str(path), self.root) if os.path.isabs(str(path)) else str(path)
+            relative_path = (
+                os.path.relpath(str(path), self.root)
+                if os.path.isabs(str(path))
+                else str(path)
+            )
         payload = {
             "file": relative_path,
             "language": file_type,
@@ -240,7 +267,9 @@ class BarklyTerminal:
             self._print_safe(f"Root:    {self.root}")
             self._print_safe("")
         else:
-            self._print_safe(f"BARKLY LABS · BARKLY DOCS | {self.project_name} | {self.root}")
+            self._print_safe(
+                f"BARKLY LABS · BARKLY DOCS | {self.project_name} | {self.root}"
+            )
 
     def render_progress(
         self,
@@ -256,7 +285,9 @@ class BarklyTerminal:
             return
         if not self._terminal_enabled:
             if current_file or stage:
-                self._print_safe(f"[{stage}] {current_file or 'processing'} ({current or 0}/{total or 0})")
+                self._print_safe(
+                    f"[{stage}] {current_file or 'processing'} ({current or 0}/{total or 0})"
+                )
             return
         if total is not None and total > 0:
             percentage = int((current or 0) / total * 100) if current is not None else 0
@@ -299,13 +330,23 @@ class BarklyTerminal:
         self._print_safe("")
         self._print_safe(f"Project: {self.project_name}")
         if project is not None:
-            self._print_safe(f"Status:  {'COMPLETED' if not errors else 'COMPLETED WITH WARNINGS'}")
+            self._print_safe(
+                f"Status:  {'COMPLETED' if not errors else 'COMPLETED WITH WARNINGS'}"
+            )
         self._print_safe("")
         self._print_safe("Source files")
-        self._print_safe(f"  Discovered: {len(result.processed_files) + len(result.skipped_files) if result is not None else 0}")
-        self._print_safe(f"  Analyzed:   {len(result.processed_files) if result is not None else 0}")
-        self._print_safe(f"  Skipped:    {len(result.skipped_files) if result is not None else 0}")
-        self._print_safe(f"  Failed:     {len(result.errors) if result is not None else 0}")
+        self._print_safe(
+            f"  Discovered: {len(result.processed_files) + len(result.skipped_files) if result is not None else 0}"
+        )
+        self._print_safe(
+            f"  Analyzed:   {len(result.processed_files) if result is not None else 0}"
+        )
+        self._print_safe(
+            f"  Skipped:    {len(result.skipped_files) if result is not None else 0}"
+        )
+        self._print_safe(
+            f"  Failed:     {len(result.errors) if result is not None else 0}"
+        )
         self._print_safe("")
         if project is not None:
             summary = project.summary()

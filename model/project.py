@@ -40,6 +40,7 @@ EVIDENCE_STATUS = {
 # CORE PROJECT
 # ============================================================
 
+
 @dataclass
 class Project:
     """
@@ -93,12 +94,21 @@ class Project:
         self.files.append(node)
 
     def add_module(self, node: "ModuleNode") -> None:
-        if any(existing.name == node.name and existing.path == node.path for existing in self.modules):
+        if any(
+            existing.name == node.name and existing.path == node.path
+            for existing in self.modules
+        ):
             return
         self.modules.append(node)
 
     def add_function(self, node: "FunctionNode") -> None:
-        if any(existing.name == node.name and existing.path == node.path and getattr(existing, "line_start", None) == getattr(node, "line_start", None) for existing in self.functions):
+        if any(
+            existing.name == node.name
+            and existing.path == node.path
+            and getattr(existing, "line_start", None)
+            == getattr(node, "line_start", None)
+            for existing in self.functions
+        ):
             return
         self.functions.append(node)
 
@@ -106,20 +116,30 @@ class Project:
         if any(
             existing.name == node.name
             and existing.path == node.path
-            and getattr(existing, "class_name", None) == getattr(node, "class_name", None)
-            and getattr(existing, "line_start", None) == getattr(node, "line_start", None)
+            and getattr(existing, "class_name", None)
+            == getattr(node, "class_name", None)
+            and getattr(existing, "line_start", None)
+            == getattr(node, "line_start", None)
             for existing in self.methods
         ):
             return
         self.methods.append(node)
 
     def add_class(self, node: "ClassNode") -> None:
-        if any(existing.name == node.name and existing.path == node.path for existing in self.classes):
+        if any(
+            existing.name == node.name and existing.path == node.path
+            for existing in self.classes
+        ):
             return
         self.classes.append(node)
 
     def add_variable(self, node: "VariableNode") -> None:
-        if any(existing.name == node.name and existing.path == node.path and existing.line == node.line for existing in self.variables):
+        if any(
+            existing.name == node.name
+            and existing.path == node.path
+            and existing.line == node.line
+            for existing in self.variables
+        ):
             return
         self.variables.append(node)
 
@@ -128,14 +148,20 @@ class Project:
             existing.name == node.name
             and existing.path == node.path
             and existing.kind == node.kind
-            and getattr(existing, "value_type", None) == getattr(node, "value_type", None)
+            and getattr(existing, "value_type", None)
+            == getattr(node, "value_type", None)
             for existing in self.data
         ):
             return
         self.data.append(node)
 
     def add_import(self, node: "ImportNode") -> None:
-        if any(existing.source_file == node.source_file and existing.target == node.target and existing.alias == node.alias for existing in self.imports):
+        if any(
+            existing.source_file == node.source_file
+            and existing.target == node.target
+            and existing.alias == node.alias
+            for existing in self.imports
+        ):
             return
         self.imports.append(node)
 
@@ -150,7 +176,11 @@ class Project:
 
         counts = {label: 0 for label in EVIDENCE_STATUS}
         for relationship in self.relationships:
-            key = relationship.evidence if relationship.evidence in EVIDENCE_STATUS else "UNKNOWN"
+            key = (
+                relationship.evidence
+                if relationship.evidence in EVIDENCE_STATUS
+                else "UNKNOWN"
+            )
             counts[key] = counts.get(key, 0) + 1
         return counts
 
@@ -180,7 +210,6 @@ class Project:
 
     def add_documentation(self, node: "DocumentationNode") -> None:
         self.documentation.append(node)
-    
 
     def summary(self) -> dict[str, int]:
         """
@@ -213,6 +242,7 @@ class Project:
 # FILES
 # ============================================================
 
+
 @dataclass
 class FileNode:
     """
@@ -242,6 +272,7 @@ class FileNode:
 # MODULES
 # ============================================================
 
+
 @dataclass
 class ModuleNode:
     """
@@ -267,6 +298,7 @@ class ModuleNode:
 # ============================================================
 # COMPONENTS
 # ============================================================
+
 
 @dataclass
 class ComponentNode:
@@ -300,6 +332,7 @@ class ComponentNode:
 # FUNCTIONS
 # ============================================================
 
+
 @dataclass
 class FunctionNode:
     """
@@ -331,6 +364,7 @@ class FunctionNode:
 # METHODS
 # ============================================================
 
+
 @dataclass
 class MethodNode(FunctionNode):
     """
@@ -343,6 +377,7 @@ class MethodNode(FunctionNode):
 # ============================================================
 # CLASSES
 # ============================================================
+
 
 @dataclass
 class ClassNode:
@@ -373,6 +408,7 @@ class ClassNode:
 # INTERFACES
 # ============================================================
 
+
 @dataclass
 class InterfaceNode:
     """
@@ -399,6 +435,7 @@ class InterfaceNode:
 # VARIABLES
 # ============================================================
 
+
 @dataclass
 class VariableNode:
     """
@@ -423,6 +460,7 @@ class VariableNode:
 # ============================================================
 # DATA (STRUCTURED FILE CONTENT)
 # ============================================================
+
 
 @dataclass
 class DataNode:
@@ -451,6 +489,7 @@ class DataNode:
 # ROUTES
 # ============================================================
 
+
 @dataclass
 class RouteNode:
     """
@@ -472,6 +511,7 @@ class RouteNode:
 # ============================================================
 # API ENDPOINTS
 # ============================================================
+
 
 @dataclass
 class EndpointNode:
@@ -497,6 +537,7 @@ class EndpointNode:
 # IMPORTS
 # ============================================================
 
+
 @dataclass
 class ImportNode:
     """
@@ -520,6 +561,7 @@ class ImportNode:
 # EXPORTS
 # ============================================================
 
+
 @dataclass
 class ExportNode:
     """
@@ -539,6 +581,7 @@ class ExportNode:
 # ============================================================
 # DEPENDENCIES
 # ============================================================
+
 
 @dataclass
 class DependencyNode:
@@ -560,6 +603,7 @@ class DependencyNode:
 # CONFIGURATION
 # ============================================================
 
+
 @dataclass
 class ConfigurationNode:
     """
@@ -579,6 +623,7 @@ class ConfigurationNode:
 # ============================================================
 # TESTS
 # ============================================================
+
 
 @dataclass
 class TestNode:
@@ -600,6 +645,7 @@ class TestNode:
 # DOCUMENTATION
 # ============================================================
 
+
 @dataclass
 class DocumentationNode:
     """
@@ -620,6 +666,7 @@ class DocumentationNode:
 # ============================================================
 # RELATIONSHIPS
 # ============================================================
+
 
 @dataclass
 class RelationshipNode:

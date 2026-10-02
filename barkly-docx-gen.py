@@ -45,10 +45,10 @@ from pathlib import Path
 
 from docx import Document
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def escape(value: str) -> str:
     """Safely escape text for HTML."""
@@ -100,6 +100,7 @@ def paragraph_class(style_name: str) -> str:
 # HTML rendering
 # ---------------------------------------------------------------------------
 
+
 def render_paragraph(paragraph) -> str:
     """Convert one DOCX paragraph into HTML."""
 
@@ -134,9 +135,7 @@ def render_paragraph(paragraph) -> str:
         return f"<li>{escape(text)}</li>"
 
     return (
-        f'<p class="paragraph {paragraph_class(style_name)}">'
-        f"{escape(text)}"
-        f"</p>"
+        f'<p class="paragraph {paragraph_class(style_name)}">' f"{escape(text)}" f"</p>"
     )
 
 
@@ -158,13 +157,9 @@ def render_table(table) -> str:
             cell_text = cell.text.strip()
 
             if row_index == 0:
-                output.append(
-                    f"<th>{escape(cell_text)}</th>"
-                )
+                output.append(f"<th>{escape(cell_text)}</th>")
             else:
-                output.append(
-                    f"<td>{escape(cell_text)}</td>"
-                )
+                output.append(f"<td>{escape(cell_text)}</td>")
 
         output.append("</tr>")
 
@@ -207,11 +202,7 @@ def render_blocks(document: Document) -> str:
 
         tag = current_list_type or "ul"
 
-        output.append(
-            f"<{tag}>\n"
-            + "\n".join(current_list)
-            + f"\n</{tag}>"
-        )
+        output.append(f"<{tag}>\n" + "\n".join(current_list) + f"\n</{tag}>")
 
         current_list = []
         current_list_type = None
@@ -245,9 +236,7 @@ def render_blocks(document: Document) -> str:
                     flush_list()
 
                 current_list_type = "ul"
-                current_list.append(
-                    f"<li>{escape(text)}</li>"
-                )
+                current_list.append(f"<li>{escape(text)}</li>")
                 continue
 
             if "list number" in style_lower:
@@ -255,9 +244,7 @@ def render_blocks(document: Document) -> str:
                     flush_list()
 
                 current_list_type = "ol"
-                current_list.append(
-                    f"<li>{escape(text)}</li>"
-                )
+                current_list.append(f"<li>{escape(text)}</li>")
                 continue
 
             flush_list()
@@ -277,14 +264,13 @@ def render_blocks(document: Document) -> str:
 
     flush_list()
 
-    return "\n".join(
-        block for block in output if block.strip()
-    )
+    return "\n".join(block for block in output if block.strip())
 
 
 # ---------------------------------------------------------------------------
 # HTML document
 # ---------------------------------------------------------------------------
+
 
 def render_html(
     title: str,
@@ -667,6 +653,7 @@ footer {{
 # Conversion
 # ---------------------------------------------------------------------------
 
+
 def convert_file(
     source: Path,
     output_root: Path,
@@ -687,9 +674,7 @@ def convert_file(
 
     if input_root is not None:
         relative = source.relative_to(input_root)
-        output_dir = output_root / relative.parent / slugify(
-            source.stem
-        )
+        output_dir = output_root / relative.parent / slugify(source.stem)
     else:
         output_dir = output_root / slugify(source.stem)
 
@@ -715,8 +700,7 @@ def find_docx_files(root: Path) -> list[Path]:
     return sorted(
         path
         for path in root.rglob("*.docx")
-        if path.is_file()
-        and not path.name.startswith("~$")
+        if path.is_file() and not path.name.startswith("~$")
     )
 
 
@@ -724,12 +708,10 @@ def find_docx_files(root: Path) -> list[Path]:
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description=(
-            "Convert DOCX documents into Barkly-style HTML "
-            "documentation."
-        )
+        description=("Convert DOCX documents into Barkly-style HTML " "documentation.")
     )
 
     parser.add_argument(
@@ -752,9 +734,7 @@ def main() -> None:
     output_root = args.output.resolve()
 
     if not input_path.exists():
-        raise SystemExit(
-            f"ERROR: Input does not exist: {input_path}"
-        )
+        raise SystemExit(f"ERROR: Input does not exist: {input_path}")
 
     print()
     print("BARKLY DOCS / DOCX CONVERTER")
@@ -768,9 +748,7 @@ def main() -> None:
     if input_path.is_file():
 
         if input_path.suffix.lower() != ".docx":
-            raise SystemExit(
-                "ERROR: Input file must be a .docx document."
-            )
+            raise SystemExit("ERROR: Input file must be a .docx document.")
 
         print(f"INPUT : {input_path}")
         print(f"OUTPUT: {output_root}")
@@ -810,10 +788,7 @@ def main() -> None:
 
         for index, source in enumerate(files, start=1):
 
-            print(
-                f"[{index}/{len(files)}] "
-                f"{source.relative_to(input_path)}"
-            )
+            print(f"[{index}/{len(files)}] " f"{source.relative_to(input_path)}")
 
             try:
 
@@ -823,17 +798,13 @@ def main() -> None:
                     input_root=input_path,
                 )
 
-                print(
-                    f"        → {output_file}"
-                )
+                print(f"        → {output_file}")
 
                 converted += 1
 
             except Exception as exc:
 
-                print(
-                    f"        ERROR: {exc}"
-                )
+                print(f"        ERROR: {exc}")
 
                 failed += 1
 
@@ -848,9 +819,7 @@ def main() -> None:
 
         return
 
-    raise SystemExit(
-        "ERROR: Input must be a DOCX file or directory."
-    )
+    raise SystemExit("ERROR: Input must be a DOCX file or directory.")
 
 
 if __name__ == "__main__":

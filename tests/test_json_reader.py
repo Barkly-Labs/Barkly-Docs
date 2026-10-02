@@ -37,12 +37,34 @@ def test_json_reader_extracts_nested_objects_arrays_and_primitives(tmp_path):
     assert result.success is True
     assert not result.errors
     assert project.summary()["files"] == 1
-    assert {node.metadata.get("path") for node in project.data} >= {"$", "$.name", "$.enabled", "$.count", "$.items[0].id", "$.items[1].empty_array"}
-    assert any(node.metadata.get("path") == "$.name" and node.value_type == "string" for node in project.data)
-    assert any(node.metadata.get("path") == "$.enabled" and node.value_type == "boolean" for node in project.data)
-    assert any(node.metadata.get("path") == "$.note" and node.value_type == "null" for node in project.data)
-    assert any(node.metadata.get("path") == "$.empty_object" and node.kind == "object" for node in project.data)
-    assert any(node.metadata.get("path") == "$.items" and node.kind == "array" for node in project.data)
+    assert {node.metadata.get("path") for node in project.data} >= {
+        "$",
+        "$.name",
+        "$.enabled",
+        "$.count",
+        "$.items[0].id",
+        "$.items[1].empty_array",
+    }
+    assert any(
+        node.metadata.get("path") == "$.name" and node.value_type == "string"
+        for node in project.data
+    )
+    assert any(
+        node.metadata.get("path") == "$.enabled" and node.value_type == "boolean"
+        for node in project.data
+    )
+    assert any(
+        node.metadata.get("path") == "$.note" and node.value_type == "null"
+        for node in project.data
+    )
+    assert any(
+        node.metadata.get("path") == "$.empty_object" and node.kind == "object"
+        for node in project.data
+    )
+    assert any(
+        node.metadata.get("path") == "$.items" and node.kind == "array"
+        for node in project.data
+    )
 
 
 def test_json_reader_handles_empty_objects_arrays_and_unicode(tmp_path):
@@ -59,10 +81,22 @@ def test_json_reader_handles_empty_objects_arrays_and_unicode(tmp_path):
     result = JSONReader().read(path, project)
 
     assert result.success is True
-    assert any(node.metadata.get("path") == "$.empty_object" and node.keys == [] for node in project.data)
-    assert any(node.metadata.get("path") == "$.empty_array" and node.keys == [] for node in project.data)
-    assert any(node.metadata.get("path") == "$.greeting" and node.value == "Héllo 🌍" for node in project.data)
-    assert any(node.metadata.get("path") == "$.nested.emoji" and node.value == "🙂" for node in project.data)
+    assert any(
+        node.metadata.get("path") == "$.empty_object" and node.keys == []
+        for node in project.data
+    )
+    assert any(
+        node.metadata.get("path") == "$.empty_array" and node.keys == []
+        for node in project.data
+    )
+    assert any(
+        node.metadata.get("path") == "$.greeting" and node.value == "Héllo 🌍"
+        for node in project.data
+    )
+    assert any(
+        node.metadata.get("path") == "$.nested.emoji" and node.value == "🙂"
+        for node in project.data
+    )
 
 
 def test_json_reader_reports_malformed_json_without_crashing(tmp_path):

@@ -73,10 +73,7 @@ class PythonReader(LanguageReader):
             source = self.read_text(path)
 
         except OSError as exc:
-            error = (
-                f"Could not read Python file "
-                f"{path}: {exc}"
-            )
+            error = f"Could not read Python file " f"{path}: {exc}"
 
             errors.append(error)
 
@@ -116,10 +113,7 @@ class PythonReader(LanguageReader):
             )
 
         except SyntaxError as exc:
-            warning = (
-                f"Could not parse Python file "
-                f"{path}: {exc.msg}"
-            )
+            warning = f"Could not parse Python file " f"{path}: {exc.msg}"
 
             if exc.lineno is not None:
                 warning += f" at line {exc.lineno}"
@@ -308,9 +302,7 @@ class PythonReader(LanguageReader):
         """
 
         source_name = (
-            f"{class_name}.{node.name}"
-            if class_name is not None
-            else node.name
+            f"{class_name}.{node.name}" if class_name is not None else node.name
         )
 
         parameters = [
@@ -328,11 +320,7 @@ class PythonReader(LanguageReader):
 
         if node.args.vararg:
 
-            parameters.append(
-                "*" + self._format_argument(
-                    node.args.vararg
-                )
-            )
+            parameters.append("*" + self._format_argument(node.args.vararg))
 
         # --------------------------------------------------------
         # **kwargs
@@ -340,19 +328,14 @@ class PythonReader(LanguageReader):
 
         if node.args.kwarg:
 
-            parameters.append(
-                "**" + self._format_argument(
-                    node.args.kwarg
-                )
-            )
+            parameters.append("**" + self._format_argument(node.args.kwarg))
 
         # --------------------------------------------------------
         # DECORATORS
         # --------------------------------------------------------
 
         decorators = [
-            self._safe_unparse(decorator)
-            for decorator in node.decorator_list
+            self._safe_unparse(decorator) for decorator in node.decorator_list
         ]
 
         # --------------------------------------------------------
@@ -360,9 +343,7 @@ class PythonReader(LanguageReader):
         # --------------------------------------------------------
 
         return_type = (
-            self._safe_unparse(node.returns)
-            if node.returns is not None
-            else None
+            self._safe_unparse(node.returns) if node.returns is not None else None
         )
 
         # --------------------------------------------------------
@@ -464,14 +445,10 @@ class PythonReader(LanguageReader):
         Convert a Python class into a Barkly ClassNode.
         """
 
-        bases = [
-            self._safe_unparse(base)
-            for base in node.bases
-        ]
+        bases = [self._safe_unparse(base) for base in node.bases]
 
         decorators = [
-            self._safe_unparse(decorator)
-            for decorator in node.decorator_list
+            self._safe_unparse(decorator) for decorator in node.decorator_list
         ]
 
         class_node = ClassNode(
@@ -526,9 +503,7 @@ class PythonReader(LanguageReader):
                     source_name=f"{node.name}.{child.name}",
                 )
 
-                class_node.methods.append(
-                    method.name
-                )
+                class_node.methods.append(method.name)
 
             # ----------------------------------------------------
             # CLASS ATTRIBUTES
@@ -539,15 +514,11 @@ class PythonReader(LanguageReader):
                 (ast.Assign, ast.AnnAssign),
             ):
 
-                attributes = self._assignment_names(
-                    child
-                )
+                attributes = self._assignment_names(child)
 
                 for name in attributes:
 
-                    class_node.attributes.append(
-                        name
-                    )
+                    class_node.attributes.append(name)
 
         return class_node
 
@@ -588,13 +559,9 @@ class PythonReader(LanguageReader):
                     },
                 )
 
-                project.add_import(
-                    import_node
-                )
+                project.add_import(import_node)
 
-                module_node.imports.append(
-                    imported_name
-                )
+                module_node.imports.append(imported_name)
 
         # --------------------------------------------------------
         # from foo import bar
@@ -606,10 +573,7 @@ class PythonReader(LanguageReader):
 
             for alias in node.names:
 
-                imported_name = (
-                    f"{'.' * node.level}"
-                    f"{module_name}"
-                )
+                imported_name = f"{'.' * node.level}" f"{module_name}"
 
                 if alias.name != "*":
 
@@ -631,13 +595,9 @@ class PythonReader(LanguageReader):
                     },
                 )
 
-                project.add_import(
-                    import_node
-                )
+                project.add_import(import_node)
 
-                module_node.imports.append(
-                    imported_name
-                )
+                module_node.imports.append(imported_name)
 
     # ============================================================
     # VARIABLES
@@ -664,15 +624,11 @@ class PythonReader(LanguageReader):
 
         if isinstance(node, ast.AnnAssign):
 
-            annotation = self._safe_unparse(
-                node.annotation
-            )
+            annotation = self._safe_unparse(node.annotation)
 
             if node.value is not None:
 
-                value = self._safe_unparse(
-                    node.value
-                )
+                value = self._safe_unparse(node.value)
 
         # --------------------------------------------------------
         # Normal assignment
@@ -682,9 +638,7 @@ class PythonReader(LanguageReader):
 
             if node.value is not None:
 
-                value = self._safe_unparse(
-                    node.value
-                )
+                value = self._safe_unparse(node.value)
 
         # --------------------------------------------------------
         # CREATE VARIABLES
@@ -692,13 +646,7 @@ class PythonReader(LanguageReader):
 
         for name in names:
 
-            constant = (
-                name.isupper()
-                and any(
-                    character.isalpha()
-                    for character in name
-                )
-            )
+            constant = name.isupper() and any(character.isalpha() for character in name)
 
             project.add_variable(
                 VariableNode(
@@ -819,9 +767,7 @@ class PythonReader(LanguageReader):
                 ast.Name,
             ):
 
-                names.append(
-                    target.id
-                )
+                names.append(target.id)
 
             elif isinstance(
                 target,
@@ -835,9 +781,7 @@ class PythonReader(LanguageReader):
                         ast.Name,
                     ):
 
-                        names.append(
-                            element.id
-                        )
+                        names.append(element.id)
 
         return names
 
@@ -859,9 +803,7 @@ class PythonReader(LanguageReader):
         if argument.annotation is None:
             return name
 
-        annotation = self._safe_unparse(
-            argument.annotation
-        )
+        annotation = self._safe_unparse(argument.annotation)
 
         return f"{name}: {annotation}"
 
