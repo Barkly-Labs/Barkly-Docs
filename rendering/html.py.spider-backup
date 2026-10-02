@@ -1370,22 +1370,20 @@ def _render_relationship_pipeline(graph) -> str:
 
 
 def _render_relation_map_page(project: Project) -> str:
-    """Render the project spider map and link to the full relationship inventory."""
+    """Keep the legacy route, but show the architecture graph only on index.html."""
     body = (
-        _render_project_architecture(project)
-        + '<section class="section">'
-        '<h2>Full Relationship Inventory</h2>'
-        '<div class="section-subtitle">'
-        'Browse the complete detected relationship list separately from the spider map.'
+        '<section class="section">'
+        '<h2>Project Architecture</h2>'
+        '<div class="section-subtitle">The Structurizr project-level graph is displayed on the Project overview page.</div>'
+        '<div class="card" style="padding:18px">'
+        '<p>The architecture view is intentionally shown only on the index page, keeping this separate page from duplicating the graph.</p>'
+        '<p><a href="index.html#project-architecture">View project architecture on the overview page</a> · '
+        '<a href="architecture/workspace.dsl">View workspace.dsl</a></p>'
         '</div>'
-        '<p><a href="relationships.html">Open the full relationship inventory</a></p>'
         '</section>'
     )
-    return _page_shell(
-        f"Relation Map ? {_project_name(project)}",
-        "relation-map",
-        body,
-    )
+    return _page_shell(f"Project Architecture — {_project_name(project)}", "relation-map", body)
+
 
 def _render_files(project: Project) -> str:
     if not project.files:
@@ -1460,9 +1458,9 @@ def _page_shell(title: str, current: str, body: str) -> str:
 
 
 def _render_project_architecture(project: Project) -> str:
-    """Render a native, project-only spider relationship map."""
+    """Render a readable, project-only layered architecture overview."""
+    from collections import defaultdict
     from html import escape
-    from math import cos, sin, pi
 
     graph = build_relation_graph(
         project,
@@ -1471,85 +1469,157 @@ def _render_project_architecture(project: Project) -> str:
         max_edges=None,
     )
 
-    nodes = list(graph.nodes)
-    if not nodes:
+    if not graph.nodes:
         return """
         <section class="section project-architecture" id="project-architecture">
-          <h2>Project Spider Map</h2>
-          <p class="section-subtitle">No internal project components were found.</p>
+          <h2>Project Architecture</h2>
+          <p class="section-subtitle">
+            No internal project components were found for the overview.
+          </p>
         </section>
         """
 
-    node_by_id = {str(node.id): node for node in nodes}
-    count = len(nodes)
-
-    # Place components around a ring so relationships form a spider-like map.
-    width = max(1100, int(count * 24))
-    height = max(760, int(count * 18))
-    cx, cy = width / 2, height / 2
-    radius = max(230, min(width, height) * 0.39)
-
-    positions = {}
-    for index, node in enumerate(nodes):
-        angle = (2 * pi * index / count) - (pi / 2)
-        positions[str(node.id)] = (
-            cx + radius * cos(angle),
-            cy + radius * sin(angle),
-        )
-
-    def full_label(node):
-        return str(getattr(node, "label", None) or getattr(node, "id", "Component"))
-
-    def short_label(value, limit=25):
-        value = value.replace("\\", "/")
-        if len(value) > limit:
-            return value[:limit - 1] + "?"
-        return value
-
-    def node_color(node):
+    def component_text(node, *keys):
         metadata = getattr(node, "metadata", {}) or {}
+        for key in keys:
+            value = metadata.get(key)
+            if value:
+                return str(value).lower()
+        return ""
+
+    def layer_for(node):
         identity = " ".join((
             str(getattr(node, "id", "")),
-            full_label(node),
-            str(metadata.get("kind", "")),
-            str(metadata.get("type", "")),
-            str(metadata.get("path", "")),
+            str(getattr(node, "label", "")),
+            component_text(node, "kind", "type", "category", "path", "module"),
         )).lower().replace("\\", "/")
 
-        if any(term in identity for term in (
-            "database", "repository", "repositories", "model", "schema",
-            "storage", "persistence", "migration",
-        )):
-            return "#96aaff"
-        if any(term in identity for term in (
+        entry_terms = (
             "entrypoint", "entry_point", "main.py", "main.rs",
-            "app.py", "server.py", "routes", "router", "controller",
-            "endpoint", "cli",
-        )):
-            return "#efa0cf"
-        return "#6edca5"
+            "app.py", "server.py", "routes", "router",
+            "controller", "endpoint", "cli",
+        )
+        data_terms = (
+            "database", "repository", "repositories", "model",
+            "schema", "storage", "persistence", "migration",
+        )
 
-    edge_markup = []
+        if any(term in identity for term in entry_terms):
+            return "entry"
+
+        if any(term in identity for term in data_terms):
+            return "data"
+
+        return "core"
+
+    layers = [
+        ("entry", "Entry points", "Where execution enters the project."),
+        ("core", "Core logic", "The components that perform the main work."),
+        ("data", "Data and persistence", "Project components that manage data."),
+    ]
+
+    grouped = defaultdict(list)
+
+    for node in graph.nodes:
+        grouped[layer_for(node)].append(node)
+
+    for key in grouped:
+        grouped[key].sort(
+            key=lambda node: str(getattr(node, "label", getattr(node, "id", ""))).lower()
+        )
+
+    node_layer = {
+        str(node.id): layer_for(node)
+        for node in graph.nodes
+    }
+
+    def node_label(node):
+        return escape(str(getattr(node, "label", getattr(node, "id", "Component"))))
+
+    def node_counts(node):
+        metadata = getattr(node, "metadata", {}) or {}
+        counts = []
+
+        for key, label in (
+            ("file_count", "files"),
+            ("class_count", "classes"),
+            ("function_count", "functions"),
+            ("entity_count", "entities"),
+        ):
+            value = metadata.get(key)
+            if isinstance(value, (int, float)) and value:
+                counts.append(f"{int(value)} {label}")
+
+        return " ? ".join(counts)
+
+    layer_sections = []
+
+    for key, title, description in layers:
+        nodes = grouped[key]
+        cards = []
+
+        for node in nodes:
+            label = node_label(node)
+            counts = node_counts(node)
+
+            cards.append(
+                '<div class="architecture-component">'
+                f'<span class="architecture-component-name">{label}</span>'
+                + (
+                    f'<span class="architecture-component-meta">'
+                    f'{escape(counts)}</span>'
+                    if counts else ""
+                )
+                + "</div>"
+            )
+
+        cards_html = "".join(cards)
+        if not cards_html:
+            cards_html = (
+                '<p class="architecture-empty">'
+                'No components assigned to this layer.</p>'
+            )
+
+        section_html = (
+            f'<section class="architecture-layer architecture-layer-{key}">'
+            f'<div class="architecture-layer-heading">'
+            f'<div><h3>{escape(title)}</h3>'
+            f'<p>{escape(description)}</p></div>'
+            f'<span class="architecture-layer-count">'
+            f'{len(nodes)} component(s)</span></div>'
+            f'<div class="architecture-components">'
+            f'{cards_html}</div></section>'
+        )
+        layer_sections.append(section_html)
+
+    internal_edges = []
     seen_edges = set()
 
     for edge in graph.edges:
         source_id = str(edge.source)
         target_id = str(edge.target)
 
-        if (
-            source_id not in positions
-            or target_id not in positions
-            or source_id == target_id
-        ):
+        if source_id not in node_layer or target_id not in node_layer:
             continue
 
         identity = (source_id, target_id)
         if identity in seen_edges:
             continue
+
         seen_edges.add(identity)
 
-        x1, y1 = positions[source_id]
-        x2, y2 = positions[target_id]
+        source_node = next(
+            (node for node in graph.nodes if str(node.id) == source_id),
+            None,
+        )
+        target_node = next(
+            (node for node in graph.nodes if str(node.id) == target_id),
+            None,
+        )
+
+        if source_node is None or target_node is None:
+            continue
+
         metadata = getattr(edge, "metadata", {}) or {}
         relation = (
             metadata.get("kind")
@@ -1558,126 +1628,177 @@ def _render_project_architecture(project: Project) -> str:
             or "connects to"
         )
 
-        edge_markup.append(
-            f'<line x1="{x1:.1f}" y1="{y1:.1f}" '
-            f'x2="{x2:.1f}" y2="{y2:.1f}" '
-            f'class="spider-edge">'
-            f'<title>{escape(str(relation))}: '
-            f'{escape(full_label(node_by_id[source_id]))} ? '
-            f'{escape(full_label(node_by_id[target_id]))}</title></line>'
+        internal_edges.append(
+            f'<li><span>{node_label(source_node)}</span>'
+            f'<span class="architecture-relation-type">'
+            f'{escape(str(relation))}</span>'
+            f'<span>{node_label(target_node)}</span></li>'
         )
 
-    node_markup = []
-    box_width, box_height = 170, 48
-
-    for node in nodes:
-        node_id = str(node.id)
-        x, y = positions[node_id]
-        left, top = x - box_width / 2, y - box_height / 2
-        label = full_label(node)
-        color = node_color(node)
-
-        node_markup.append(
-            f'<g class="spider-node" tabindex="0" role="img" '
-            f'aria-label="{escape(label, quote=True)}">'
-            f'<title>{escape(label)}</title>'
-            f'<rect x="{left:.1f}" y="{top:.1f}" '
-            f'width="{box_width}" height="{box_height}" rx="10" '
-            f'style="stroke:{color}" />'
-            f'<text x="{x:.1f}" y="{y + 5:.1f}" '
-            f'text-anchor="middle">{escape(short_label(label))}</text>'
-            f'</g>'
-        )
+    connection_details = (
+        '<details class="architecture-details">'
+        '<summary>Detailed connections '
+        f'({len(internal_edges)})</summary>'
+        '<p class="architecture-details-intro">'
+        'Internal component relationships in the project overview. '
+        'The full relationship inventory remains available on its own page.'
+        '</p>'
+        '<ul class="architecture-connection-list">'
+        + "".join(internal_edges)
+        + '</ul></details>'
+    )
 
     return f"""
     <section class="section project-architecture" id="project-architecture">
-      <h2>Project Spider Map</h2>
+      <h2>Project Architecture</h2>
       <div class="section-subtitle">
-        Internal components and their detected relationships.
-        Hover over a component or connection for its full details.
+        A readable overview of the project's own components.
+        Follow the layers first; expand detailed connections when needed.
       </div>
-      <div class="card spider-map-card" style="padding:16px;margin-top:16px">
-        <div class="spider-legend">
-          <span><i class="spider-key spider-key-entry"></i> Entry points</span>
-          <span><i class="spider-key spider-key-core"></i> Core components</span>
-          <span><i class="spider-key spider-key-data"></i> Data and persistence</span>
-          <span class="meta">{count} components ? {len(seen_edges)} connections</span>
-        </div>
-        <div class="spider-map-scroll" role="region" aria-label="Scrollable project relationship spider map" tabindex="0">
-          <svg class="spider-map" xmlns="http://www.w3.org/2000/svg"
-               viewBox="0 0 {width} {height}" role="img"
-               aria-label="Project component relationship map">
-            <defs>
-              <marker id="spider-arrow" markerWidth="8" markerHeight="8"
-                      refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
-                <path d="M0,0 L0,6 L6,3 z" fill="var(--muted)" />
-              </marker>
-            </defs>
-            <g class="spider-edges" marker-end="url(#spider-arrow)">
-              {''.join(edge_markup)}
-            </g>
-            <g class="spider-nodes">
-              {''.join(node_markup)}
-            </g>
-          </svg>
+      <div class="card architecture-map" style="padding:20px;margin-top:16px">
+        <div class="meta">
+          {len(graph.nodes)} project component(s) ?
+          {len(seen_edges)} internal connection(s)
         </div>
         <style>
-          .spider-legend {{
-            display:flex; align-items:center; flex-wrap:wrap;
-            gap:12px 18px; margin-bottom:12px; font-size:.85rem;
+          .architecture-map {{
+            color: var(--text);
           }}
-          .spider-legend span {{ display:inline-flex; align-items:center; gap:6px; }}
-          .spider-key {{ display:inline-block; width:10px; height:10px; border-radius:3px; }}
-          .spider-key-entry {{ background:#efa0cf; }}
-          .spider-key-core {{ background:#6edca5; }}
-          .spider-key-data {{ background:#96aaff; }}
-          .spider-map-scroll {{
-            width:100%; max-height:75vh; overflow:auto;
-            border:1px solid var(--line); border-radius:10px;
-            background:var(--bg, transparent);
+          .architecture-flow {{
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 12px;
+            margin-top: 18px;
           }}
-          .spider-map {{ display:block; width:100%; height:auto; min-width:900px; }}
-          .spider-edge {{
-            stroke:var(--muted); stroke-opacity:.55; stroke-width:1.5;
-            fill:none;
+          .architecture-layer {{
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 16px;
+            min-width: 0;
           }}
-          .spider-node rect {{
-            fill:var(--card, #20242d); stroke-width:2;
+          .architecture-layer-entry {{
+            background: rgba(239, 160, 207, 0.07);
+            border-color: rgba(239, 160, 207, 0.35);
           }}
-          .spider-node text {{
-            fill:var(--text); font-size:13px; font-weight:600;
-            pointer-events:none;
+          .architecture-layer-core {{
+            background: rgba(110, 220, 165, 0.06);
+            border-color: rgba(110, 220, 165, 0.35);
           }}
-          .spider-node:hover rect,
-          .spider-node:focus rect {{
-            stroke-width:4; filter:brightness(1.12); outline:none;
+          .architecture-layer-data {{
+            background: rgba(150, 170, 255, 0.06);
+            border-color: rgba(150, 170, 255, 0.35);
           }}
-          @media (max-width:600px) {{
-            .spider-map-card {{ padding:10px !important; }}
-            .spider-map {{ min-width:850px; }}
+          .architecture-layer-heading {{
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+          }}
+          .architecture-layer-heading h3 {{
+            margin: 0 0 4px;
+          }}
+          .architecture-layer-heading p {{
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.9rem;
+          }}
+          .architecture-layer-count {{
+            color: var(--muted);
+            font-size: 0.82rem;
+            white-space: nowrap;
+          }}
+          .architecture-components {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 9px;
+          }}
+          .architecture-component {{
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            min-width: 0;
+            padding: 11px 12px;
+            border: 1px solid var(--line);
+            border-radius: 9px;
+            background: var(--card, rgba(0, 0, 0, 0.16));
+            overflow-wrap: anywhere;
+          }}
+          .architecture-component-name {{
+            font-weight: 600;
+          }}
+          .architecture-component-meta,
+          .architecture-empty {{
+            color: var(--muted);
+            font-size: 0.8rem;
+          }}
+          .architecture-layer-arrow {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            color: #63dca0;
+            font-size: 0.85rem;
+            font-weight: 600;
+          }}
+          .architecture-layer-arrow span {{
+            font-size: 1.3rem;
+          }}
+          .architecture-details {{
+            margin-top: 18px;
+            border-top: 1px solid var(--line);
+            padding-top: 14px;
+          }}
+          .architecture-details summary {{
+            cursor: pointer;
+            font-weight: 600;
+          }}
+          .architecture-details-intro {{
+            color: var(--muted);
+            font-size: 0.9rem;
+          }}
+          .architecture-connection-list {{
+            display: grid;
+            gap: 7px;
+            padding-left: 20px;
+          }}
+          .architecture-connection-list li {{
+            overflow-wrap: anywhere;
+          }}
+          .architecture-relation-type {{
+            color: var(--muted);
+            font-size: 0.85rem;
+            padding: 0 7px;
+          }}
+          @media (max-width: 600px) {{
+            .architecture-map {{
+              padding: 12px !important;
+            }}
+            .architecture-layer {{
+              padding: 12px;
+            }}
+            .architecture-components {{
+              grid-template-columns: minmax(0, 1fr);
+            }}
           }}
         </style>
-        <details class="architecture-details">
-          <summary>View the full internal connection list ({len(seen_edges)})</summary>
-          <ul class="architecture-connection-list">
-            {''.join(
-                '<li>' + escape(full_label(node_by_id[str(edge.source)]))
-                + ' <span class="architecture-relation-type">'
-                + escape(str((getattr(edge, "metadata", {}) or {}).get("kind")
-                    or (getattr(edge, "metadata", {}) or {}).get("type")
-                    or "connects to"))
-                + '</span> '
-                + escape(full_label(node_by_id[str(edge.target)]))
-                + '</li>'
-                for edge in graph.edges
-                if str(edge.source) in node_by_id
-                and str(edge.target) in node_by_id
-            )}
-          </ul>
-        </details>
+        <div class="architecture-flow">
+          {layer_sections[0]}
+          <div class="architecture-layer-arrow">
+            <span aria-hidden="true">?</span> Entry points lead into core logic
+          </div>
+          {layer_sections[1]}
+          <div class="architecture-layer-arrow">
+            <span aria-hidden="true">?</span> Core logic may use data components
+          </div>
+          {layer_sections[2]}
+        </div>
+        {connection_details}
       </div>
     </section>
     """
+
 
 def _render_index(project: Project, graph_generated: bool = True) -> str:
     description = _project_description(project)
