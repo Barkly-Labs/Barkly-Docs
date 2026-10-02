@@ -1472,7 +1472,7 @@ def _render_relation_map_page(project: Project) -> str:
     )
 
     body = (
-        '<section class="hero">'
+        '<section class="hero subpage-hero">'
         '<div class="kicker">Barkly Docs · Project explorer</div>'
         "<h1>Relationship Map</h1>"
         "<p>Explore files, modules, classes, functions, methods, and their "
@@ -2692,6 +2692,39 @@ def _render_three_layer_architecture(project: Project) -> str:
 .readme-content blockquote { margin: 12px 0; padding: 8px 14px; border-left: 2px solid var(--accent); color: var(--muted); background: rgba(255,107,157,.035); }
 .readme-content hr { border: 0; border-top: 1px solid rgba(255,255,255,.07); margin: 20px 0; }
 .readme-content a { color: var(--accent-bright); }
+
+/* Barkly Standard secondary-page header — header only. */
+.subpage-hero {
+  display: block !important;
+  margin-top: 24px;
+  padding: 0 0 22px;
+  text-align: left;
+}
+.subpage-hero .kicker {
+  display: block;
+  margin: 0 0 8px;
+}
+.subpage-hero h1 {
+  display: block;
+  width: 100%;
+  margin: 0 0 6px 0;
+  padding: 0;
+  text-align: left !important;
+  font-size: clamp(1.8rem, 3vw, 2.35rem);
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+}
+.subpage-hero p {
+  margin: 0;
+  padding: 0;
+  max-width: 72ch;
+  color: var(--muted);
+}
+.subpage-hero + .section,
+.subpage-hero + .card {
+  margin-top: 12px;
+}
+
 </style>"""
         "<h2>How the project fits together</h2>"
         '<p class="architecture-flow-intro">Follow the three layers from possible entry points, '
@@ -2856,7 +2889,7 @@ def _render_index(project: Project, graph_generated: bool = True) -> str:
 
 def _render_entities_page(project: Project) -> str:
     body = (
-        '<section class="hero">'
+        '<section class="hero subpage-hero">'
         '<div class="kicker">Barkly Docs · Project entities</div>'
         "<h1>Entities</h1>"
         "<p>Classes, functions, and methods discovered in the project model.</p>"
@@ -2876,7 +2909,7 @@ def _render_entities_page(project: Project) -> str:
 
 def _render_relationships_page(project: Project) -> str:
     body = (
-        '<section class="hero">'
+        '<section class="hero subpage-hero">'
         '<div class="kicker">Barkly Docs · Project relationships</div>'
         "<h1>Relationships</h1>"
         "<p>Evidence-labeled relationships between project entities.</p>"
@@ -2934,4 +2967,3 @@ __all__ = [
     "render_project_website",
     "generate_html_website",
 ]
-
