@@ -693,32 +693,127 @@ def _markdown_inline(value: str) -> str:
         return f"\x00BARKLYITALICTOKEN{len(italic_tokens) - 1}ZZ\x00"
 
     value = re.sub(r"</?i\s*>", preserve_italic, value, flags=re.IGNORECASE)
-    escaped = html.escape(value, quote=False)
-    escaped = re.sub(
-        r'!\[([^\]]*)\]\(([^)\s]+)(?:\s+["\']([^"\']*)["\'])?\)',
-        lambda m: '<img alt="'
-        + html.escape(m.group(1), quote=True)
-        + '" src="'
-        + html.escape(m.group(2), quote=True)
-        + '"'
-        + (
-            (' title="' + html.escape(m.group(3), quote=True) + '"')
-            if m.group(3)
-            else ""
+
+    def scan_balanced(text: str, start: int, opening: str, closing: str) -> tuple[str, int] | None:
+        if start >= len(text) or text[start] != opening:
+            return None
+        depth = 1
+        escaped_char = False
+        index = start + 1
+        while index < len(text):
+            char = text[index]
+            if escaped_char:
+                escaped_char = False
+            elif char == "\\":
+                escaped_char = True
+            elif char == opening:
+                depth += 1
+            elif char == closing:
+                depth -= 1
+                if depth == 0:
+                    return text[start + 1:index], index + 1
+            index += 1
+        return None
+
+    def split_destination(raw: str) -> tuple[str, str | None]:
+        raw = raw.strip()
+        if not raw:
+            return "", None
+        # Preserve balanced parentheses in destinations. A trailing quoted
+        # title is recognized only when separated from the destination.
+        match = re.match(r"""^(.*?)(?:\s+["']([^"']*)["'])?$""", raw, re.S)
+        return (match.group(1).strip(), match.group(2)) if match else (raw, None)
+
+    def safe_url(url: str) -> str | None:
+        url = url.replace(r"\(", "(").replace(r"\)", ")")
+        lowered = url.strip().lower()
+        if lowered.startswith(("javascript:", "vbscript:", "data:")):
+            return None
+        return url
+
+    def unescape_markdown(text: str) -> str:
+        return re.sub(r"\\([\\`*{}\[\]()#+\-.!_>])", r"\1", text)
+
+    def render_image(alt: str, destination: str) -> str | None:
+        src, title = split_destination(destination)
+        src = safe_url(src)
+        if src is None or not src:
+            return None
+        result = (
+            '<img alt="' + html.escape(unescape_markdown(alt), quote=True)
+            + '" src="' + html.escape(src, quote=True) + '"'
         )
-        + ">",
-        escaped,
-    )
-    escaped = re.sub(
-        r'\[([^\]]+)\]\(([^)\s]+)(?:\s+["\']([^"\']*)["\'])?\)',
-        lambda m: '<a href="'
-        + html.escape(m.group(2), quote=True)
-        + '"'
-        + ">"
-        + m.group(1)
-        + "</a>",
-        escaped,
-    )
+        if title:
+            result += ' title="' + html.escape(title, quote=True) + '"'
+        return result + ">"
+
+    def render_link(label_html: str, destination: str) -> str | None:
+        href, _title = split_destination(destination)
+        href = safe_url(href)
+        if href is None or not href:
+            return None
+        return '<a href="' + html.escape(href, quote=True) + '">' + label_html + "</a>"
+
+    # Parse links/images structurally before the general escaping pass. The old
+    # regular expressions stopped at the first ']' / ')' and therefore could
+    # not reliably represent nested image links or balanced URL parentheses.
+    tokens: list[str] = []
+    output: list[str] = []
+    index = 0
+    while index < len(value):
+        # Linked image: [![alt](image)](link)
+        if value.startswith("[![", index):
+            alt_part = scan_balanced(value, index + 2, "[", "]")
+            if alt_part:
+                alt, after_alt = alt_part
+                image_dest = scan_balanced(value, after_alt, "(", ")")
+                if image_dest and image_dest[1] < len(value) and value[image_dest[1]] == "]":
+                    outer_dest = scan_balanced(value, image_dest[1] + 1, "(", ")")
+                    if outer_dest:
+                        image_html = render_image(alt, image_dest[0])
+                        link_html = render_link(image_html or "", outer_dest[0]) if image_html else None
+                        if link_html:
+                            token = f"\x00BARKLYMDTOKEN{len(tokens)}ZZ\x00"
+                            tokens.append(link_html)
+                            output.append(token)
+                            index = outer_dest[1]
+                            continue
+
+        # Standalone image.
+        if value.startswith("![", index):
+            alt_part = scan_balanced(value, index + 1, "[", "]")
+            if alt_part:
+                alt, after_alt = alt_part
+                dest = scan_balanced(value, after_alt, "(", ")")
+                if dest:
+                    image_html = render_image(alt, dest[0])
+                    if image_html:
+                        token = f"\x00BARKLYMDTOKEN{len(tokens)}ZZ\x00"
+                        tokens.append(image_html)
+                        output.append(token)
+                        index = dest[1]
+                        continue
+
+        # Ordinary link. Balanced brackets allow labels such as [a [nested] label].
+        if value[index] == "[":
+            label_part = scan_balanced(value, index, "[", "]")
+            if label_part:
+                label, after_label = label_part
+                dest = scan_balanced(value, after_label, "(", ")")
+                if dest:
+                    label_html = html.escape(unescape_markdown(label), quote=False)
+                    link_html = render_link(label_html, dest[0])
+                    if link_html:
+                        token = f"\x00BARKLYMDTOKEN{len(tokens)}ZZ\x00"
+                        tokens.append(link_html)
+                        output.append(token)
+                        index = dest[1]
+                        continue
+
+        output.append(value[index])
+        index += 1
+
+    escaped = html.escape("".join(output), quote=False)
     escaped = re.sub(r"<(https?://[^>]+)>", r'<a href="\1">\1</a>', escaped)
     escaped = re.sub(r"`([^`]+)`", r"<code>\1</code>", escaped)
     escaped = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", escaped)
@@ -726,6 +821,8 @@ def _markdown_inline(value: str) -> str:
     escaped = re.sub(r"~~([^~]+)~~", r"<del>\1</del>", escaped)
     escaped = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<em>\1</em>", escaped)
     escaped = re.sub(r"(?<!_)_([^_]+)_(?!_)", r"<em>\1</em>", escaped)
+    for index, token_html in enumerate(tokens):
+        escaped = escaped.replace(f"\x00BARKLYMDTOKEN{index}ZZ\x00", token_html)
     for index, tag in enumerate(italic_tokens):
         escaped = escaped.replace(f"\x00BARKLYITALICTOKEN{index}ZZ\x00", tag)
     return escaped
