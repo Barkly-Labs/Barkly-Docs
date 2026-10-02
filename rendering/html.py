@@ -976,17 +976,54 @@ def _relationship_badge(value: str) -> str:
 
 
 def _evidence_summary(project: Project) -> str:
-    counts = {"DECLARED": 0, "DETECTED": 0, "INFERRED": 0, "UNKNOWN": 0}
+    """Show exact evidence counts plus the relationship kinds behind each count."""
+    labels = ("DECLARED", "DETECTED", "INFERRED", "UNKNOWN")
+    grouped: dict[str, list] = {label: [] for label in labels}
+
     for relationship in project.relationships:
-        key = (relationship.evidence or "UNKNOWN").upper()
-        if key in counts:
-            counts[key] += 1
-    entries = []
-    for label in ["DECLARED", "DETECTED", "INFERRED", "UNKNOWN"]:
+        key = str(relationship.evidence or "UNKNOWN").upper()
+        if key not in grouped:
+            key = "UNKNOWN"
+        grouped[key].append(relationship)
+
+    entries: list[str] = []
+    for label in labels:
+        relationships = grouped[label]
+        kind_counts: dict[str, int] = {}
+        for relationship in relationships:
+            kind = str(getattr(relationship, "kind", None) or "unspecified")
+            kind_counts[kind] = kind_counts.get(kind, 0) + 1
+
+        if kind_counts:
+            breakdown = "".join(
+                '<li><span class="evidence-kind">'
+                + _escape(kind)
+                + '</span><strong>'
+                + str(count)
+                + '</strong></li>'
+                for kind, count in sorted(
+                    kind_counts.items(),
+                    key=lambda pair: (-pair[1], pair[0].lower()),
+                )
+            )
+            data_html = (
+                '<details class="evidence-data">'
+                '<summary>View exact breakdown</summary>'
+                '<ul>' + breakdown + '</ul>'
+                '</details>'
+            )
+        else:
+            data_html = '<p class="evidence-empty">No relationships recorded.</p>'
+
         entries.append(
-            f'<div class="tile"><h3>{_escape(label)}</h3><p>{counts[label]} relationship(s)</p></div>'
+            '<div class="tile evidence-tile">'
+            f'<h3>{_escape(label)}</h3>'
+            f'<p class="evidence-total"><strong>{len(relationships)}</strong> relationship(s)</p>'
+            + data_html
+            + '</div>'
         )
-    return '<div class="grid">' + "".join(entries) + "</div>"
+
+    return '<div class="grid evidence-grid">' + "".join(entries) + "</div>"
 
 
 def _nav(current: str) -> str:
@@ -2681,6 +2718,22 @@ def _render_three_layer_architecture(project: Project) -> str:
 .index-evidence{margin-top:12px;border-top:1px solid var(--line);padding-top:14px}
 .index-evidence h3{margin:0 0 5px;font-size:.9rem}
 .index-evidence > p{margin:0 0 12px;color:var(--muted);font-size:.8rem;line-height:1.55}
+
+.index-evidence .evidence-grid{align-items:start}
+.index-evidence .evidence-tile{min-width:0}
+.index-evidence .evidence-total{margin:0;color:var(--text-soft)}
+.index-evidence .evidence-total strong{font-size:1rem;color:var(--text)}
+.index-evidence .evidence-data{margin-top:10px;border-top:1px solid var(--line);padding-top:9px}
+.index-evidence .evidence-data > summary{cursor:pointer;list-style:none;color:var(--accent);font:600 9px/1.3 "SFMono-Regular",Consolas,monospace}
+.index-evidence .evidence-data > summary::-webkit-details-marker{display:none}
+.index-evidence .evidence-data > summary::after{content:" ↓"}
+.index-evidence .evidence-data[open] > summary::after{content:" ↑"}
+.index-evidence .evidence-data ul{list-style:none;margin:9px 0 0;padding:0;display:grid;gap:6px}
+.index-evidence .evidence-data li{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding-top:6px;border-top:1px solid rgba(255,255,255,.045);font-size:.72rem}
+.index-evidence .evidence-kind{min-width:0;color:var(--muted);overflow-wrap:anywhere}
+.index-evidence .evidence-data strong{flex:0 0 auto;color:var(--text)}
+.index-evidence .evidence-empty{margin:8px 0 0;color:var(--muted);font-size:.72rem}
+
 .index-deep-label{margin:30px 0 0;color:var(--accent);font:800 8px/1 "SFMono-Regular",Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
 .index-deep-title{margin:7px 0 4px;font-size:1.35rem}
 .index-deep-copy{margin:0 0 14px;color:var(--muted);font-size:.84rem;line-height:1.55;max-width:760px}
