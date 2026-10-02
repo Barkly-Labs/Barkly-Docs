@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import html
 import json
@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 from analysis.graph import build_relation_graph
+from rendering.structurizr import write_structurizr_files
 from model.project import Project
 
 CSS = """
@@ -1370,94 +1371,19 @@ def _render_relationship_pipeline(graph) -> str:
 
 
 def _render_relation_map_page(project: Project) -> str:
-    graph = build_relation_graph(project, view="relation_map", max_nodes=None, max_edges=None)
-    graph_payload = json.dumps(graph.as_dict(), ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-    node_types = sorted({node.kind for node in graph.nodes}) or ["file"]
-    edge_types = sorted({edge.kind for edge in graph.edges}) or ["imports"]
-    legend_items = [
-        ('file', '#ff6b9d'),
-        ('module', '#7dffb2'),
-        ('class', '#ffd76b'),
-        ('interface', '#d8a4ff'),
-        ('function', '#ff6b9d'),
-        ('method', '#ff9f7a'),
-        ('endpoint', '#ff7b8c'),
-    ]
-    evidence_types = ["DECLARED", "DETECTED", "INFERRED", "UNKNOWN"]
-    filter_boxes = (
-        ''.join(
-            f'<label class="filter-chip"><input type="checkbox" data-filter-node value="{_escape(kind)}" checked /> {_escape(kind)}</label>'
-            for kind in node_types
-        )
-        + ''.join(
-            f'<label class="filter-chip"><input type="checkbox" data-filter-edge value="{_escape(kind)}" checked /> {_escape(kind)}</label>'
-            for kind in edge_types
-        )
-        + ''.join(
-            f'<label class="filter-chip"><input type="checkbox" data-filter-evidence value="{_escape(kind)}" checked /> {_escape(kind)}</label>'
-            for kind in evidence_types
-        )
-    )
-    legend_html = ''.join(
-        f'<div class="legend-item"><span class="legend-swatch" style="background: {color};"></span>{_escape(kind)}</div>'
-        for kind, color in legend_items
-    )
-    if graph.edges:
-        edges = ''.join(
-            f'<div class="relationship-item"><h3>{_escape(edge.source)} → {_escape(edge.target)}</h3><div class="meta">{_relationship_badge(edge.evidence)} <span class="code">{_escape(edge.kind)}</span></div><div class="meta">{_escape(edge.source_file or "Unknown file")}</div><p>{_escape(edge.explanation or "Static relationship discovered during source analysis.")}</p></div>'
-            for edge in graph.edges[:20]
-        )
-        relationship_listing = _render_relationship_pipeline(graph)
-    else:
-        relationship_listing = '<div class="relation-map-empty">No relationships were detected for the current scan.</div>'
-
+    """Keep the legacy route, but show the architecture graph only on index.html."""
     body = (
         '<section class="section">'
-        '<h2>Relation Map</h2>'
-        '<div class="section-subtitle">A force-directed spider-web graph built from the current scan results and evidence-labeled relationships.</div>'
-        + (f'<div class="meta">Graph nodes: {len(graph.nodes)} · edges: {len(graph.edges)} · unresolved: {len(graph.unresolved)}</div>' if graph.nodes or graph.edges else '')
-        + (f'<div class="meta">{_escape(graph.warnings[0])}</div>' if graph.warnings else '')
-        + '<div id="relation-map-shell">'
-        '  <div id="relation-map-panel" class="card">'
-        '    <div class="graph-tools">'
-        '      <input id="relation-map-search" type="search" placeholder="Search by file path or symbol name" aria-label="Search graph" />'
-        '      <label class="filter-chip"><input type="checkbox" data-filter-direction="incoming" checked /> Incoming</label>'
-        '      <label class="filter-chip"><input type="checkbox" data-filter-direction="outgoing" checked /> Outgoing</label>'
-        '      <select id="relation-map-depth" aria-label="Relationship hop depth">'
-        '        <option value="1">1 hop</option>'
-        '        <option value="2">2 hops</option>'
-        '        <option value="3">3 hops</option>'
-        '        <option value="4">4 hops</option>'
-        '      </select>'
-        '      <button type="button" data-graph-action="focus">Center</button>'
-        '      <button type="button" data-graph-action="expand">Expand</button>'
-        '      <button type="button" data-graph-action="fit">Fit</button>'
-        '      <button type="button" data-graph-action="zoom-in">Zoom+</button>'
-        '      <button type="button" data-graph-action="zoom-out">Zoom-</button>'
-        '      <button type="button" data-graph-action="reset">Reset view</button>'
-        '      <button type="button" data-graph-action="reset-filters">Reset filters</button>'
-        '    </div>'
-        '    <div class="graph-filters">' + filter_boxes + '</div>'
-        '    <svg id="relation-map-canvas" aria-label="Relation map graph" viewBox="0 0 900 560"></svg>'
-        '  </div>'
-        '  <aside id="relation-map-details" class="card">'
-        '    <h3>Node details</h3>'
-        '    <div class="meta">Select a node or edge to inspect its evidence and relationships.</div>'
-        '  </aside>'
+        '<h2>Project Architecture</h2>'
+        '<div class="section-subtitle">The Structurizr project-level graph is displayed on the Project overview page.</div>'
+        '<div class="card" style="padding:18px">'
+        '<p>The architecture view is intentionally shown only on the index page, keeping this separate page from duplicating the graph.</p>'
+        '<p><a href="index.html#project-architecture">View project architecture on the overview page</a> · '
+        '<a href="architecture/workspace.dsl">View workspace.dsl</a></p>'
         '</div>'
-        + '<div class="section">'
-        '<h3>Legend</h3>'
-        '<div class="legend-grid">' + legend_html + '</div>'
-        '</div>'
-        + '<div class="section">'
-        '<h3>Relationship list</h3>'
-        + relationship_listing
-        + '</div>'
-        + (f'<script type="application/json" id="relation-map-data">{graph_payload}</script>' if graph_payload else '<script type="application/json" id="relation-map-data">{"nodes":[],"edges":[]}</script>')
-        + '<script src="assets/relation-map.js" defer></script>'
-        + '</section>'
+        '</section>'
     )
-    return _page_shell(f"Relation Map — {_project_name(project)}", "relation-map", body)
+    return _page_shell(f"Project Architecture — {_project_name(project)}", "relation-map", body)
 
 
 def _render_files(project: Project) -> str:
@@ -1532,135 +1458,23 @@ def _page_shell(title: str, current: str, body: str) -> str:
 
 
 
-def _render_relationship_preview(project: Project, graph_generated: bool = True) -> str:
-    if not project.relationships:
-        return (
-            '<div class="empty-state">'
-            'No relationships were discovered for this project yet.'
-            '</div>'
-        )
-
-    if not graph_generated:
-        return (
-            '<div class="empty-state">'
-            'The relationship graph could not be generated. '
-            'Install Graphviz and the Python graphviz package, then regenerate the docs.'
-            '</div>'
-        )
-
+def _render_project_architecture(project: Project) -> str:
+    """Render the Structurizr project-level graph on the index page only."""
+    graph = build_relation_graph(project, view="project_overview", max_nodes=None, max_edges=None)
     return f"""
-    <div class="relationship-preview">
-      <a href="relationships.html" aria-label="Open the complete relationship list">
-        <img
-          src="assets/relationship-graph.png"
-          alt="Graphviz diagram of detected relationships between project entities"
-          loading="lazy"
-        />
-      </a>
-      <p class="meta">
-        Graphviz diagram of {len(project.relationships)} detected relationships.
-        <a href="relationships.html">Explore the complete relationship list</a>.
-        <a href="relation-map.html">Open interactive relationship map</a>.
-      </p>
-    </div>
+    <section class="section project-architecture" id="project-architecture">
+      <h2>Project Architecture</h2>
+      <div class="section-subtitle">A project-level view of major components and their connections. Individual files, classes, functions, and methods are excluded.</div>
+      <div class="card" style="padding:18px;margin-top:16px">
+        <div class="meta">{len(graph.nodes)} project component(s) · {len(graph.edges)} component connection(s)</div>
+        <div style="margin-top:16px;border:1px solid var(--line);border-radius:12px;overflow:hidden">
+          <iframe title="Structurizr project-level architecture" src="http://localhost:8080" style="display:block;width:100%;height:620px;background:#080808;border:0" loading="lazy"></iframe>
+        </div>
+        <p class="meta">To view the interactive diagram, start Structurizr Lite from the generated architecture folder: <code>cd architecture</code>, then <code>docker compose up -d</code>. Docker must be running.</p>
+        <p><a href="http://localhost:8080" target="_blank" rel="noopener">Open Structurizr Lite</a> · <a href="architecture/workspace.dsl">View workspace.dsl</a> · <a href="architecture/docker-compose.yml">View Docker Compose configuration</a></p>
+      </div>
+    </section>
     """
-
-
-def _write_relationship_graph_png(project: Project, output_path: Path) -> bool:
-    """Render the project's actual relationship model as a Graphviz PNG."""
-    if not project.relationships:
-        return False
-
-    try:
-        from graphviz import Digraph
-    except ImportError:
-        return False
-
-    graph = Digraph(
-        name="BarklyRelationships",
-        format="png",
-        engine="dot",
-        graph_attr={
-            "bgcolor": "#080808",
-            "rankdir": "LR",
-            "splines": "true",
-            "overlap": "false",
-            "pad": "0.35",
-            "nodesep": "0.45",
-            "ranksep": "0.8",
-            "fontname": "Arial",
-            "fontsize": "20",
-            "fontcolor": "#ff6b9d",
-            "label": "BARKLY DOCS  /  RELATIONSHIP GRAPH",
-            "labelloc": "t",
-        },
-        node_attr={
-            "shape": "box",
-            "style": "rounded,filled",
-            "fillcolor": "#101010",
-            "color": "#ff6b9d",
-            "fontcolor": "#f2f2f2",
-            "fontname": "Arial",
-            "fontsize": "10",
-            "margin": "0.16,0.10",
-        },
-        edge_attr={
-            "color": "#9a9a9a",
-            "fontcolor": "#ffd76b",
-            "fontname": "Arial",
-            "fontsize": "8",
-            "arrowsize": "0.7",
-        },
-    )
-
-    evidence_colors = {
-        "DECLARED": "#7dffb2",
-        "DETECTED": "#ff6b9d",
-        "INFERRED": "#ffd76b",
-        "UNKNOWN": "#ff7b8c",
-    }
-
-    def node_id(value: object) -> str:
-        # Graphviz IDs are generated from labels, avoiding unsafe raw identifiers.
-        return str(value or "Unknown").strip() or "Unknown"
-
-    relationships = sorted(
-        project.relationships,
-        key=lambda rel: (
-            str(rel.source).lower(),
-            str(rel.kind).lower(),
-            str(rel.target).lower(),
-        ),
-    )
-
-    for rel in relationships:
-        source = node_id(rel.source)
-        target = node_id(rel.target)
-        kind = str(rel.kind or "related to")
-        evidence = str(rel.evidence or "UNKNOWN").upper()
-        edge_color = evidence_colors.get(evidence, "#9a9a9a")
-
-        graph.node(source, label=source, color="#ff6b9d", fillcolor="#191219")
-        graph.node(target, label=target, color="#7dffb2", fillcolor="#101b15")
-        graph.edge(
-            source,
-            target,
-            label=f"{kind} · {evidence}",
-            color=edge_color,
-            fontcolor=edge_color,
-            tooltip=str(getattr(rel, "explanation", "") or kind),
-        )
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        # Graphviz appends the selected format extension; cleanup removes its .gv source.
-        rendered = Path(graph.render(filename=output_path.stem, directory=str(output_path.parent), cleanup=True))
-        if rendered != output_path and rendered.exists():
-            rendered.replace(output_path)
-        return output_path.exists()
-    except Exception:
-        # Missing Graphviz system executable or another render error: keep HTML generation alive.
-        return False
 
 
 def _render_index(project: Project, graph_generated: bool = True) -> str:
@@ -1683,15 +1497,7 @@ def _render_index(project: Project, graph_generated: bool = True) -> str:
         + _stat_card("Relationships", str(len(project.relationships)))
         + '</div>'
     )
-    relationship_preview = (
-        '<div class="section">'
-        '<h2>Relationship Pipeline</h2>'
-        '<div class="section-subtitle">'
-        'A visual summary of how discovered project entities connect.'
-        '</div>'
-        + _render_relationship_preview(project, graph_generated)
-        + '</div>'
-    )
+    architecture_section = _render_project_architecture(project)
     overview = (
         '<div class="section">'
         '<h2>Project overview</h2>'
@@ -1736,7 +1542,7 @@ def _render_index(project: Project, graph_generated: bool = True) -> str:
   
     body = (
         f'<section class="hero">{project_summary}{stats}</section>'
-        f'{relationship_preview}'
+        f'{architecture_section}'
         f'{overview}{evidence}{documentation}{structure}{json_section}'
     )
     return _page_shell(
@@ -1784,20 +1590,19 @@ def render_project_website(project: Project, output_dir: str | Path) -> list[Pat
     (assets_dir / "site.css").write_text(CSS, encoding="utf-8")
     (assets_dir / "relation-map.js").write_text(RELATION_MAP_JS, encoding="utf-8")
 
-    relationship_graph_png = assets_dir / "relationship-graph.png"
-    graph_generated = _write_relationship_graph_png(project_obj, relationship_graph_png)
+    architecture_paths = write_structurizr_files(project_obj, output_path)
 
     index_path = output_path / "index.html"
     entities_path = output_path / "entities.html"
     relationships_path = output_path / "relationships.html"
     relation_map_path = output_path / "relation-map.html"
 
-    index_path.write_text(_render_index(project_obj, graph_generated), encoding="utf-8")
+    index_path.write_text(_render_index(project_obj), encoding="utf-8")
     entities_path.write_text(_render_entities_page(project_obj), encoding="utf-8")
     relationships_path.write_text(_render_relationships_page(project_obj), encoding="utf-8")
     relation_map_path.write_text(_render_relation_map_page(project_obj), encoding="utf-8")
 
-    return [index_path, entities_path, relationships_path, relation_map_path, assets_dir / "site.css", assets_dir / "relation-map.js"]
+    return [index_path, entities_path, relationships_path, relation_map_path, assets_dir / "site.css", assets_dir / "relation-map.js", *architecture_paths]
 
 
 def generate_html_website(project: Project, output_dir: str | Path) -> list[Path]:

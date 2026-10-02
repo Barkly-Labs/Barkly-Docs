@@ -1,0 +1,2077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PlantWater-API-server — Barkly Docs</title>
+  <meta name="description" content="Barkly Docs project overview and evidence-based documentation." />
+  <link rel="stylesheet" href="assets/site.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+  <header class="site-header">
+    <div class="container">
+      <div class="brand"><span class="paw">
+<svg viewBox="0 0 100 100" aria-hidden="true">
+  <path d="
+    M30 43
+    C19 43 12 35 14 25
+    C16 16 24 12 31 16
+    C38 20 40 31 37 37
+    C35 41 33 43 30 43
+
+    M70 43
+    C81 43 88 35 86 25
+    C84 16 76 12 69 16
+    C62 20 60 31 63 37
+    C65 41 67 43 70 43
+
+    M50 36
+    C42 36 37 29 39 22
+    C41 15 47 12 52 15
+    C58 18 59 26 56 32
+    C55 35 53 36 50 36
+
+    M50 52
+    C35 52 24 62 24 75
+    C24 87 34 92 45 88
+    C49 87 52 87 56 88
+    C67 92 76 87 76 75
+    C76 62 65 52 50 52
+  "/>
+</svg>
+</span> Barkly Docs</div>
+      <nav class="site-nav" aria-label="Main navigation"><a class="active" href="index.html">Project overview</a><a class="" href="entities.html">Entities</a><a class="" href="relationships.html">Relationships</a><a class="" href="relation-map.html">Relation Map</a></nav>
+    </div>
+  </header>
+  <main id="main-content" class="container">
+    <section class="hero"><div class="card hero-main"><div class="kicker">Project documentation</div><h1>PlantWater-API-server</h1><p>&lt;p align="center"&gt;</p></div><div class="card metrics"><div class="metric"><span class="metric-label">Files</span><span class="metric-value">44</span></div><div class="metric"><span class="metric-label">Modules</span><span class="metric-value">44</span></div><div class="metric"><span class="metric-label">Classes</span><span class="metric-value">34</span></div><div class="metric"><span class="metric-label">Functions</span><span class="metric-value">123</span></div><div class="metric"><span class="metric-label">Methods</span><span class="metric-value">64</span></div><div class="metric"><span class="metric-label">Relationships</span><span class="metric-value">1072</span></div></div></section>
+    <section class="section project-architecture" id="project-architecture">
+      <h2>Project Architecture</h2>
+      <div class="section-subtitle">A project-level view of major components and their connections. Individual files, classes, functions, and methods are excluded.</div>
+      <div class="card" style="padding:18px;margin-top:16px">
+        <div class="meta">17 project component(s) · 25 component connection(s)</div>
+        <div style="margin-top:16px;border:1px solid var(--line);border-radius:12px;overflow:hidden">
+          <iframe title="Structurizr project-level architecture" src="http://localhost:8080" style="display:block;width:100%;height:620px;background:#080808;border:0" loading="lazy"></iframe>
+        </div>
+        <p class="meta">To view the interactive diagram, start Structurizr Lite from the generated architecture folder: <code>cd architecture</code>, then <code>docker compose up -d</code>. Docker must be running.</p>
+        <p><a href="http://localhost:8080" target="_blank" rel="noopener">Open Structurizr Lite</a> · <a href="architecture/workspace.dsl">View workspace.dsl</a> · <a href="architecture/docker-compose.yml">View Docker Compose configuration</a></p>
+      </div>
+    </section>
+    <div class="section"><h2>Project overview</h2><div class="section-subtitle">What this project appears to do, based on declared project metadata and static source evidence.</div><div class="grid"><div class="tile"><h3>Purpose</h3><p>&lt;p align="center"&gt;</p></div><div class="tile"><h3>Languages</h3><p>JSON, JavaScript, Python</p></div><div class="tile"><h3>Root</h3><p>C:\Users\nickk\Documents\PlantWater-API-server</p></div><div class="tile"><h3>Documentation</h3><p>README.md present</p></div></div></div><div class="section"><h2>Evidence and limits</h2><div class="section-subtitle">Declared facts, detected structure, inferred patterns, and unknown areas remain clearly separated.</div><div class="grid"><div class="tile"><h3>DECLARED</h3><p>0 relationship(s)</p></div><div class="tile"><h3>DETECTED</h3><p>1072 relationship(s)</p></div><div class="tile"><h3>INFERRED</h3><p>0 relationship(s)</p></div><div class="tile"><h3>UNKNOWN</h3><p>0 relationship(s)</p></div></div><div class="tile" style="margin-top:12px;"><h3>Evidence labels</h3><p>DECLARED = explicitly stated in source or project metadata; DETECTED = directly identified through static analysis; INFERRED = derived but not directly observed; UNKNOWN = not established by available evidence.</p></div></div><div class="section"><h2>Documentation references</h2><div class="section-subtitle">HTML output retains the project README where available.</div><p># 🌱 PlantWater API Server</p><p>&lt;p align="center"&gt;</p><p>&lt;img src="ezgif-4963a1d02fff645e.gif" width="700"/&gt;</p><p>&lt;/p&gt;</p><p>&gt; **Smart Irrigation System** — Real-time soil moisture monitoring + weather-aware watering automation + Discord bot integration. Built with FastAPI, SQLite, and ESP32 sensor networks.</p><p>---</p><p>## 🎯 What is PlantWater?</p><p>PlantWater is a complete smart irrigation solution that:</p><p>- 📊 **Collects** real-time soil moisture data from plant beds via WiFi-enabled sensors</p><p>- 🤖 **Decides** when to water based on soil conditions + weather forecasts</p><p>- 💧 **Controls** irrigation valves automatically or via API</p><p>- 📈 **Tracks** lifetime watering stats, plant health, and system performance</p></div><div class="section"><h2>Project structure</h2><div class="section-subtitle">Discovered files and their source identities.</div><div class="entity-list">
+            <div class="entity-item">
+              <h3>.barkly-docs-state.json</h3>
+              <div class="meta">Language: JSON</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\.barkly-docs-state.json</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>bot.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\bot\bot.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>config.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\esp32-firmware\firmware\config.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>garden_api.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\esp32-firmware\firmware\garden_api.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>logger.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\esp32-firmware\firmware\logger.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>main.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\esp32-firmware\firmware\main.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>pid.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\esp32-firmware\firmware\pid.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>soil_sensor.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\esp32-firmware\firmware\soil_sensor.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>valve.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\esp32-firmware\firmware\valve.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>wifi_manager.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\esp32-firmware\firmware\wifi_manager.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>project.json</h3>
+              <div class="meta">Language: JSON</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\project.json</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>auth.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\auth.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>carriers.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\carriers.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>smart-garden-4d476-firebase-adminsdk-fbsvc-ca34395065.json</h3>
+              <div class="meta">Language: JSON</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\config\smart-garden-4d476-firebase-adminsdk-fbsvc-ca34395065.json</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>db.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\db.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>deps.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\deps.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>main.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\main.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>manifest.json</h3>
+              <div class="meta">Language: JSON</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\manifest.json</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>models.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\models.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>__init__.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\routes\__init__.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>apikeys.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\routes\apikeys.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>beds.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\routes\beds.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>bot_bridge.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\routes\bot_bridge.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>dis.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\routes\dis.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>firebase.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\routes\firebase.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>notfics.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\routes\notfics.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>pages.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\routes\pages.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>users.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\routes\users.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>schemas.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\schemas.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>__init__.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\services\__init__.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>notifications.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\services\notifications.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>bed-pid-contoller-sim.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\sim\bed-pid-contoller-sim.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>config.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\sim\config.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>events.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\sim\events.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>full-system-simulator.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\sim\full-system-simulator.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>main.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\sim\main.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>network.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\sim\network.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>plant.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\sim\plant.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>soil.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\sim\soil.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>utils.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\sim\utils.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>valve.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\sim\valve.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>weather.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\sim\weather.py</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>firebase-messaging-sw.js</h3>
+              <div class="meta">Language: JavaScript</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\static\firebase-messaging-sw.js</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>watchdog.py</h3>
+              <div class="meta">Language: Python</div>
+              <div class="meta">Path: C:\Users\nickk\Documents\PlantWater-API-server\src\watchdog.py</div>
+            </div>
+            </div></div><div class="section"><h2>JSON data</h2><div class="section-subtitle">Structured JSON values extracted as data facts without classifying them as functions or methods.</div><div class="entity-list">
+            <div class="entity-item">
+              <h3>$</h3>
+              <div class="meta">Type: object · Path: $ · Keys: classes, endpoints, functions, generation, initialized</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>$</h3>
+              <div class="meta">Type: object · Path: $ · Keys: name, type, status, description, principles, components, lifecycle</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>$</h3>
+              <div class="meta">Type: object · Path: $ · Keys: type, project_id, private_key_id, private_key, client_email, client_id, auth_uri, token_uri, auth_provider_x509_cert_url, client_x509_cert_url, universe_domain</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>$</h3>
+              <div class="meta">Type: object · Path: $ · Keys: name, short_name, start_url, display, background_color, theme_color, icons</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>auth_provider_x509_cert_url</h3>
+              <div class="meta">Type: string · Path: $.auth_provider_x509_cert_url · Value: https://www.googleapis.com/oauth2/v1/certs</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>auth_uri</h3>
+              <div class="meta">Type: string · Path: $.auth_uri · Value: https://accounts.google.com/o/oauth2/auth</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>background_color</h3>
+              <div class="meta">Type: string · Path: $.background_color · Value: #0f172a</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes</h3>
+              <div class="meta">Type: object · Path: $.classes · Keys: class:barkly_docs.py:ClassInfo, class:barkly_docs.py:EndpointInfo, class:barkly_docs.py:FunctionInfo, class:barkly_docs.py:ModuleInfo, class:barkly_docs.py:Parameter, class:barkly_docs.py:PythonScanner, class:bot/bot.py:BedSelect, class:bot/bot.py:GardenDashboard, class:esp32-firmware/firmware/garden_api.py:GardenAPI, class:esp32-firmware/firmware/logger.py:Logger, class:esp32-firmware/firmware/pid.py:PIDController, class:esp32-firmware/firmware/soil_sensor.py:SoilSensor, class:esp32-firmware/firmware/valve.py:ValveController, class:esp32-firmware/firmware/wifi_manager.py:WiFiManager, class:src/carriers.py:Carrier, class:src/models.py:APIKey, class:src/models.py:BedConfigDB, class:src/models.py:BedMetaDB, class:src/models.py:BedReading, class:src/models.py:DiscordAccount, class:src/models.py:User, class:src/models.py:UserContact, class:src/routes/bot_bridge.py:Msg, class:src/schemas.py:AlertRequest, class:src/schemas.py:BedConfig, class:src/schemas.py:BedData, class:src/schemas.py:ContactRequest, class:src/schemas.py:ContactUpdate, class:src/schemas.py:DeviceTokenRegister, class:src/schemas.py:DeviceTokenRemove, class:src/schemas.py:Heartbeat, class:src/schemas.py:LoginRequest, class:src/schemas.py:RegisterRequest, class:src/services/notifications.py:EventLevel, class:src/services/notifications.py:GardenEvent, class:src/sim/events.py:Events, class:src/sim/plant.py:Plant, class:src/sim/soil.py:Soil, class:src/sim/valve.py:Valve, class:src/sim/weather.py:Weather</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:barkly_docs.py:ClassInfo</h3>
+              <div class="meta">Type: string · Path: $.classes.class:barkly_docs.py:ClassInfo · Value: 1242a4a6bcf1ba3b</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:barkly_docs.py:EndpointInfo</h3>
+              <div class="meta">Type: string · Path: $.classes.class:barkly_docs.py:EndpointInfo · Value: 5a22b3f88797236d</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:barkly_docs.py:FunctionInfo</h3>
+              <div class="meta">Type: string · Path: $.classes.class:barkly_docs.py:FunctionInfo · Value: 4f86107efd77fd12</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:barkly_docs.py:ModuleInfo</h3>
+              <div class="meta">Type: string · Path: $.classes.class:barkly_docs.py:ModuleInfo · Value: 873cc9f972bd0409</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:barkly_docs.py:Parameter</h3>
+              <div class="meta">Type: string · Path: $.classes.class:barkly_docs.py:Parameter · Value: e353beb4adbf98a3</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:barkly_docs.py:PythonScanner</h3>
+              <div class="meta">Type: string · Path: $.classes.class:barkly_docs.py:PythonScanner · Value: 8f27c16e48a34c80</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:bot/bot.py:BedSelect</h3>
+              <div class="meta">Type: string · Path: $.classes.class:bot/bot.py:BedSelect · Value: 0197618814fce5fa</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:bot/bot.py:GardenDashboard</h3>
+              <div class="meta">Type: string · Path: $.classes.class:bot/bot.py:GardenDashboard · Value: c0a9e1422dde76e9</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:esp32-firmware/firmware/garden_api.py:GardenAPI</h3>
+              <div class="meta">Type: string · Path: $.classes.class:esp32-firmware/firmware/garden_api.py:GardenAPI · Value: 7c483fa7b0adb362</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:esp32-firmware/firmware/logger.py:Logger</h3>
+              <div class="meta">Type: string · Path: $.classes.class:esp32-firmware/firmware/logger.py:Logger · Value: 43e722f2e907de34</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:esp32-firmware/firmware/pid.py:PIDController</h3>
+              <div class="meta">Type: string · Path: $.classes.class:esp32-firmware/firmware/pid.py:PIDController · Value: 214303bfa2efbd5a</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:esp32-firmware/firmware/soil_sensor.py:SoilSensor</h3>
+              <div class="meta">Type: string · Path: $.classes.class:esp32-firmware/firmware/soil_sensor.py:SoilSensor · Value: ad8db28ae2692b08</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:esp32-firmware/firmware/valve.py:ValveController</h3>
+              <div class="meta">Type: string · Path: $.classes.class:esp32-firmware/firmware/valve.py:ValveController · Value: 646ac55328bc3a22</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:esp32-firmware/firmware/wifi_manager.py:WiFiManager</h3>
+              <div class="meta">Type: string · Path: $.classes.class:esp32-firmware/firmware/wifi_manager.py:WiFiManager · Value: db1aa06c2ac3125d</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/carriers.py:Carrier</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/carriers.py:Carrier · Value: 0fce5a996ae36533</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/models.py:APIKey</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/models.py:APIKey · Value: c65e37af2360b25b</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/models.py:BedConfigDB</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/models.py:BedConfigDB · Value: dbdbea4bc646f620</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/models.py:BedMetaDB</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/models.py:BedMetaDB · Value: 966559041a6093a6</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/models.py:BedReading</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/models.py:BedReading · Value: 5aac528d0890c096</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/models.py:DiscordAccount</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/models.py:DiscordAccount · Value: 34202377a1732a88</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/models.py:User</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/models.py:User · Value: 771b915519693ecb</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/models.py:UserContact</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/models.py:UserContact · Value: 6bd2e5e3c025ca0b</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/routes/bot_bridge.py:Msg</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/routes/bot_bridge.py:Msg · Value: 78ccef53412c3098</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/schemas.py:AlertRequest</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/schemas.py:AlertRequest · Value: 834797768bf3addc</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/schemas.py:BedConfig</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/schemas.py:BedConfig · Value: cf6a6a3e089b2408</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/schemas.py:BedData</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/schemas.py:BedData · Value: 58d22a98089c18e3</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/schemas.py:ContactRequest</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/schemas.py:ContactRequest · Value: a919da21ea9e69c0</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/schemas.py:ContactUpdate</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/schemas.py:ContactUpdate · Value: 1acb79e3b6c9865f</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/schemas.py:DeviceTokenRegister</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/schemas.py:DeviceTokenRegister · Value: a4384e3832ee5658</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/schemas.py:DeviceTokenRemove</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/schemas.py:DeviceTokenRemove · Value: bbf82d59a676fbab</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/schemas.py:Heartbeat</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/schemas.py:Heartbeat · Value: 29ee8f2cd26193c7</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/schemas.py:LoginRequest</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/schemas.py:LoginRequest · Value: f813b31759ca3ba2</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/schemas.py:RegisterRequest</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/schemas.py:RegisterRequest · Value: 24b7b4ffd1afbb02</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/services/notifications.py:EventLevel</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/services/notifications.py:EventLevel · Value: f7fbbec0d0dc3b91</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/services/notifications.py:GardenEvent</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/services/notifications.py:GardenEvent · Value: 9b3da4d4783553d9</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/sim/events.py:Events</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/sim/events.py:Events · Value: 47d1a581190e7e3b</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/sim/plant.py:Plant</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/sim/plant.py:Plant · Value: 21402fd7173d198f</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/sim/soil.py:Soil</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/sim/soil.py:Soil · Value: bf3051bbea3b1d47</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/sim/valve.py:Valve</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/sim/valve.py:Valve · Value: fa0c30c6990724e4</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>classes.class:src/sim/weather.py:Weather</h3>
+              <div class="meta">Type: string · Path: $.classes.class:src/sim/weather.py:Weather · Value: 4d5780c4d5ff5156</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>client_email</h3>
+              <div class="meta">Type: string · Path: $.client_email · Value: firebase-adminsdk-fbsvc@smart-garden-4d476.iam.gserviceaccount.com</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>client_id</h3>
+              <div class="meta">Type: string · Path: $.client_id · Value: 104177867785079785842</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>client_x509_cert_url</h3>
+              <div class="meta">Type: string · Path: $.client_x509_cert_url · Value: https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40smart-garden-4d476.iam.gserviceaccount.com</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>components</h3>
+              <div class="meta">Type: array · Path: $.components · Keys: [0], [1], [2], [3], [4], [5]</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>components[0]</h3>
+              <div class="meta">Type: string · Path: $.components[0] · Value: Plant Monitoring</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>components[1]</h3>
+              <div class="meta">Type: string · Path: $.components[1] · Value: Watering Systems</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>components[2]</h3>
+              <div class="meta">Type: string · Path: $.components[2] · Value: Plant Data</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>components[3]</h3>
+              <div class="meta">Type: string · Path: $.components[3] · Value: API + Integrations</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>components[4]</h3>
+              <div class="meta">Type: string · Path: $.components[4] · Value: Automation</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>components[5]</h3>
+              <div class="meta">Type: string · Path: $.components[5] · Value: Tools + Systems</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>description</h3>
+              <div class="meta">Type: string · Path: $.description · Value: Human-centered plant care systems designed to help people understand, monitor, and care for plants through simple, adaptable, and understandable technology.</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>display</h3>
+              <div class="meta">Type: string · Path: $.display · Value: standalone</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints</h3>
+              <div class="meta">Type: object · Path: $.endpoints · Keys: endpoint:src/routes/apikeys.py:create_key:POST:/api/keys/create, endpoint:src/routes/apikeys.py:list_keys:GET:/api/keys, endpoint:src/routes/apikeys.py:revoke_key:POST:/api/keys/{key_id}/revoke, endpoint:src/routes/beds.py:bed_risk_next_hour:GET:/api/beds/{bed_id}/risk, endpoint:src/routes/beds.py:cleanup:DELETE:/api/cleanup, endpoint:src/routes/beds.py:full_graph:GET:/api/beds/{bed_id}/full-graph, endpoint:src/routes/beds.py:get_all_bed_meta:GET:/api/beds/meta, endpoint:src/routes/beds.py:get_bed_health:GET:/api/beds/{bed_id}/health, endpoint:src/routes/beds.py:get_bed_meta:GET:/api/beds/{bed_id}/meta, endpoint:src/routes/beds.py:get_beds:GET:/api/beds, endpoint:src/routes/beds.py:get_config:GET:/api/config/{bed_id}, endpoint:src/routes/beds.py:get_history:GET:/api/beds/{bed_id}/history, endpoint:src/routes/beds.py:get_mode:GET:/api/beds/{bed_id}/mode, endpoint:src/routes/beds.py:get_range:GET:/api/beds/{bed_id}/range, endpoint:src/routes/beds.py:graph_data:GET:/api/beds/{bed_id}/graph, endpoint:src/routes/beds.py:health:GET:/health, endpoint:src/routes/beds.py:history:GET:/api/beds/{bed_id}/history, endpoint:src/routes/beds.py:latest:GET:/api/beds/latest, endpoint:src/routes/beds.py:lifetime_stats:GET:/api/beds/{bed_id}/lifetime, endpoint:src/routes/beds.py:node_heartbeat:POST:/api/node/heartbeat, endpoint:src/routes/beds.py:receive_data:POST:/api/bed-data, endpoint:src/routes/beds.py:save_bed_meta:POST:/api/beds/{bed_id}/meta, endpoint:src/routes/beds.py:set_mode:POST:/api/beds/{bed_id}/mode, endpoint:src/routes/beds.py:should_water:POST:/api/should-water, endpoint:src/routes/beds.py:stats:GET:/api/beds/{bed_id}/stats, endpoint:src/routes/beds.py:system_overview:GET:/api/system/overview, endpoint:src/routes/beds.py:update_config:POST:/api/config/{bed_id}, endpoint:src/routes/beds.py:valve_status:GET:/api/valve/{bed_id}, endpoint:src/routes/beds.py:water_bed:POST:/api/water, endpoint:src/routes/beds.py:water_cycle:POST:/api/beds/{bed_id}/water-cycle, endpoint:src/routes/beds.py:weather_api:GET:/api/will-rain, endpoint:src/routes/beds.py:weather_current:GET:/api/weather/current, endpoint:src/routes/beds.py:weather_summary:GET:/api/weather, endpoint:src/routes/bot_bridge.py:add_message:POST:/queue, endpoint:src/routes/bot_bridge.py:get_messages:GET:/poll, endpoint:src/routes/dis.py:disconnect_discord:DELETE:/api/discord/disconnect, endpoint:src/routes/dis.py:discord_callback:GET:/api/discord/callback, endpoint:src/routes/dis.py:discord_connect:GET:/api/discord/connect, endpoint:src/routes/dis.py:get_discord_users:GET:/api/discord/users, endpoint:src/routes/dis.py:get_my_discord:GET:/api/discord/me, endpoint:src/routes/dis.py:link_discord:POST:/api/user/link-discord, endpoint:src/routes/dis.py:test_discord_dm:POST:/api/discord/test, endpoint:src/routes/firebase.py:disable_firebase:DELETE:/firebase-token, endpoint:src/routes/firebase.py:register_device_token:POST:/register-device, endpoint:src/routes/firebase.py:save_firebase_token:POST:/firebase-token, endpoint:src/routes/notfics.py:get_contact:GET:/contact, endpoint:src/routes/notfics.py:send_alert:POST:/send/alert, endpoint:src/routes/notfics.py:send_error:POST:/send/error, endpoint:src/routes/notfics.py:send_info:POST:/send/info, endpoint:src/routes/notfics.py:test_notification:POST:/test, endpoint:src/routes/pages.py:about_page:GET:/about, endpoint:src/routes/pages.py:api_keys_page:GET:/api-keys, endpoint:src/routes/pages.py:bed_analytics_page:GET:/bed/{bed_id}/analytics, endpoint:src/routes/pages.py:custom_docs:GET:/app/docs, endpoint:src/routes/pages.py:dashboard:GET:/, endpoint:src/routes/pages.py:device_page:GET:/device/{bed_id}, endpoint:src/routes/pages.py:login_page:GET:/login, endpoint:src/routes/pages.py:node_status_page:GET:/nodes, endpoint:src/routes/pages.py:notifications_page:GET:/notifications, endpoint:src/routes/pages.py:register_page:GET:/register, endpoint:src/routes/pages.py:setup_contact:GET:/setup-contact, endpoint:src/routes/users.py:get_carriers:GET:/api/carriers, endpoint:src/routes/users.py:get_notifications:GET:/api/user/notifications, endpoint:src/routes/users.py:login:POST:/api/login, endpoint:src/routes/users.py:logout:GET:/logout, endpoint:src/routes/users.py:register:POST:/api/register, endpoint:src/routes/users.py:save_user_contact:POST:/api/user/contact, endpoint:src/routes/users.py:update_notifications:POST:/api/user/notifications</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/apikeys.py:create_key:POST:/api/keys/create</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/apikeys.py:create_key:POST:/api/keys/create · Value: f524cf11eb3fec5c</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/apikeys.py:list_keys:GET:/api/keys</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/apikeys.py:list_keys:GET:/api/keys · Value: 1d1abaad8d529742</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/apikeys.py:revoke_key:POST:/api/keys/{key_id}/revoke</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/apikeys.py:revoke_key:POST:/api/keys/{key_id}/revoke · Value: abdfbd97649583b6</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:bed_risk_next_hour:GET:/api/beds/{bed_id}/risk</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:bed_risk_next_hour:GET:/api/beds/{bed_id}/risk · Value: ecf81bb5bc095f81</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:cleanup:DELETE:/api/cleanup</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:cleanup:DELETE:/api/cleanup · Value: af38a69f94943ae4</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:full_graph:GET:/api/beds/{bed_id}/full-graph</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:full_graph:GET:/api/beds/{bed_id}/full-graph · Value: e794fe298c703d6c</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:get_all_bed_meta:GET:/api/beds/meta</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:get_all_bed_meta:GET:/api/beds/meta · Value: 4c0b1a89c16b960a</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:get_bed_health:GET:/api/beds/{bed_id}/health</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:get_bed_health:GET:/api/beds/{bed_id}/health · Value: 4ea7d5d7f0baa492</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:get_bed_meta:GET:/api/beds/{bed_id}/meta</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:get_bed_meta:GET:/api/beds/{bed_id}/meta · Value: 61ec489f711b5282</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:get_beds:GET:/api/beds</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:get_beds:GET:/api/beds · Value: beca5b4bdfcc127e</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:get_config:GET:/api/config/{bed_id}</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:get_config:GET:/api/config/{bed_id} · Value: 77e9b4a64aaa93a8</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:get_history:GET:/api/beds/{bed_id}/history</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:get_history:GET:/api/beds/{bed_id}/history · Value: 11e6b27b1284658d</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:get_mode:GET:/api/beds/{bed_id}/mode</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:get_mode:GET:/api/beds/{bed_id}/mode · Value: d272df6632516872</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:get_range:GET:/api/beds/{bed_id}/range</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:get_range:GET:/api/beds/{bed_id}/range · Value: 8907e55f206c2150</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:graph_data:GET:/api/beds/{bed_id}/graph</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:graph_data:GET:/api/beds/{bed_id}/graph · Value: f02a3f8587a3a889</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:health:GET:/health</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:health:GET:/health · Value: 382d573c368ec445</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:history:GET:/api/beds/{bed_id}/history</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:history:GET:/api/beds/{bed_id}/history · Value: 385d2a69a709c321</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:latest:GET:/api/beds/latest</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:latest:GET:/api/beds/latest · Value: 4f5a9b4228a3a537</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:lifetime_stats:GET:/api/beds/{bed_id}/lifetime</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:lifetime_stats:GET:/api/beds/{bed_id}/lifetime · Value: 3337858213a933fa</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:node_heartbeat:POST:/api/node/heartbeat</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:node_heartbeat:POST:/api/node/heartbeat · Value: 2da8d2f323a5dd29</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:receive_data:POST:/api/bed-data</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:receive_data:POST:/api/bed-data · Value: 8dbadcd6c9d5b1a7</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:save_bed_meta:POST:/api/beds/{bed_id}/meta</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:save_bed_meta:POST:/api/beds/{bed_id}/meta · Value: 82bd99fe93e7f75b</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:set_mode:POST:/api/beds/{bed_id}/mode</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:set_mode:POST:/api/beds/{bed_id}/mode · Value: c5b432b4efbab3da</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:should_water:POST:/api/should-water</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:should_water:POST:/api/should-water · Value: ad04f9b879fff7d2</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:stats:GET:/api/beds/{bed_id}/stats</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:stats:GET:/api/beds/{bed_id}/stats · Value: f95bb09db165fc4a</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:system_overview:GET:/api/system/overview</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:system_overview:GET:/api/system/overview · Value: b098c2b256ed0ec6</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:update_config:POST:/api/config/{bed_id}</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:update_config:POST:/api/config/{bed_id} · Value: a26615a3a1e7131b</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:valve_status:GET:/api/valve/{bed_id}</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:valve_status:GET:/api/valve/{bed_id} · Value: 0966f32c2935ade8</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:water_bed:POST:/api/water</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:water_bed:POST:/api/water · Value: e42ecd44a14709c9</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:water_cycle:POST:/api/beds/{bed_id}/water-cycle</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:water_cycle:POST:/api/beds/{bed_id}/water-cycle · Value: 6b7263933c76e417</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:weather_api:GET:/api/will-rain</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:weather_api:GET:/api/will-rain · Value: 3def7de1fc058dfb</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:weather_current:GET:/api/weather/current</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:weather_current:GET:/api/weather/current · Value: b569f94159e6d3ed</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/beds.py:weather_summary:GET:/api/weather</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/beds.py:weather_summary:GET:/api/weather · Value: a9743493020afc50</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/bot_bridge.py:add_message:POST:/queue</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/bot_bridge.py:add_message:POST:/queue · Value: 8aa7eabab2597c73</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/bot_bridge.py:get_messages:GET:/poll</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/bot_bridge.py:get_messages:GET:/poll · Value: 68a2a68bb13ffdf2</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/dis.py:disconnect_discord:DELETE:/api/discord/disconnect</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/dis.py:disconnect_discord:DELETE:/api/discord/disconnect · Value: ada71e1381d3c4fa</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/dis.py:discord_callback:GET:/api/discord/callback</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/dis.py:discord_callback:GET:/api/discord/callback · Value: 197774bad776eb7c</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/dis.py:discord_connect:GET:/api/discord/connect</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/dis.py:discord_connect:GET:/api/discord/connect · Value: d3b14fac4946a522</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/dis.py:get_discord_users:GET:/api/discord/users</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/dis.py:get_discord_users:GET:/api/discord/users · Value: 4184e3f575ad127e</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/dis.py:get_my_discord:GET:/api/discord/me</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/dis.py:get_my_discord:GET:/api/discord/me · Value: 221ad24cd6c3f330</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/dis.py:link_discord:POST:/api/user/link-discord</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/dis.py:link_discord:POST:/api/user/link-discord · Value: 450ca58d6e9ec5ab</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/dis.py:test_discord_dm:POST:/api/discord/test</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/dis.py:test_discord_dm:POST:/api/discord/test · Value: 9869f6eb4ca62aa0</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/firebase.py:disable_firebase:DELETE:/firebase-token</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/firebase.py:disable_firebase:DELETE:/firebase-token · Value: 23e5c70aabb6a748</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/firebase.py:register_device_token:POST:/register-device</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/firebase.py:register_device_token:POST:/register-device · Value: bafa902fc0b771d2</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/firebase.py:save_firebase_token:POST:/firebase-token</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/firebase.py:save_firebase_token:POST:/firebase-token · Value: a82b5cd3174b579c</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/notfics.py:get_contact:GET:/contact</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/notfics.py:get_contact:GET:/contact · Value: 50c103ab83b9af6e</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/notfics.py:send_alert:POST:/send/alert</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/notfics.py:send_alert:POST:/send/alert · Value: e18d62c741e8d12f</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/notfics.py:send_error:POST:/send/error</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/notfics.py:send_error:POST:/send/error · Value: 7b9847281ca572c2</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/notfics.py:send_info:POST:/send/info</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/notfics.py:send_info:POST:/send/info · Value: 721d48103d6e5d4e</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/notfics.py:test_notification:POST:/test</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/notfics.py:test_notification:POST:/test · Value: 3d643c846683c21c</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/pages.py:about_page:GET:/about</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/pages.py:about_page:GET:/about · Value: 0f861620966e834b</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/pages.py:api_keys_page:GET:/api-keys</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/pages.py:api_keys_page:GET:/api-keys · Value: 1c9b87ebc7231f19</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/pages.py:bed_analytics_page:GET:/bed/{bed_id}/analytics</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/pages.py:bed_analytics_page:GET:/bed/{bed_id}/analytics · Value: 6345234ca7ade42e</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/pages.py:custom_docs:GET:/app/docs</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/pages.py:custom_docs:GET:/app/docs · Value: 58b9743c24ffec27</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/pages.py:dashboard:GET:/</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/pages.py:dashboard:GET:/ · Value: 52fca37959b30694</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/pages.py:device_page:GET:/device/{bed_id}</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/pages.py:device_page:GET:/device/{bed_id} · Value: 70239fee5ab362fa</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/pages.py:login_page:GET:/login</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/pages.py:login_page:GET:/login · Value: cd9869eba6415bda</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/pages.py:node_status_page:GET:/nodes</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/pages.py:node_status_page:GET:/nodes · Value: 021b68aa1c408863</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/pages.py:notifications_page:GET:/notifications</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/pages.py:notifications_page:GET:/notifications · Value: cb97b57db5be991e</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/pages.py:register_page:GET:/register</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/pages.py:register_page:GET:/register · Value: 1a8d488dcc1759b4</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/pages.py:setup_contact:GET:/setup-contact</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/pages.py:setup_contact:GET:/setup-contact · Value: 23e69c8b025b03ee</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/users.py:get_carriers:GET:/api/carriers</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/users.py:get_carriers:GET:/api/carriers · Value: 04624a517840c7de</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/users.py:get_notifications:GET:/api/user/notifications</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/users.py:get_notifications:GET:/api/user/notifications · Value: 9db11d483422db48</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/users.py:login:POST:/api/login</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/users.py:login:POST:/api/login · Value: fdc5156325a5a66f</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/users.py:logout:GET:/logout</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/users.py:logout:GET:/logout · Value: 5521a5dcd8153389</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/users.py:register:POST:/api/register</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/users.py:register:POST:/api/register · Value: b6efcdb956d1a3e1</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/users.py:save_user_contact:POST:/api/user/contact</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/users.py:save_user_contact:POST:/api/user/contact · Value: b9f51dcc827e653c</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>endpoints.endpoint:src/routes/users.py:update_notifications:POST:/api/user/notifications</h3>
+              <div class="meta">Type: string · Path: $.endpoints.endpoint:src/routes/users.py:update_notifications:POST:/api/user/notifications · Value: bfbfba41ca89eb19</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions</h3>
+              <div class="meta">Type: object · Path: $.functions · Keys: function:barkly_docs.py:annotation_text, function:barkly_docs.py:apply_state, function:barkly_docs.py:badge, function:barkly_docs.py:build_html, function:barkly_docs.py:build_parser, function:barkly_docs.py:call_root_name, function:barkly_docs.py:class_fingerprint, function:barkly_docs.py:class_group, function:barkly_docs.py:class_key, function:barkly_docs.py:code_line, function:barkly_docs.py:collect_parameters, function:barkly_docs.py:compact_doc, function:barkly_docs.py:decorator_name, function:barkly_docs.py:decorator_text, function:barkly_docs.py:decorators_for, function:barkly_docs.py:endpoint_fingerprint, function:barkly_docs.py:endpoint_from_decorator, function:barkly_docs.py:endpoint_key, function:barkly_docs.py:endpoint_row, function:barkly_docs.py:esc, function:barkly_docs.py:expression_text, function:barkly_docs.py:extract_methods_keyword, function:barkly_docs.py:extract_string_argument, function:barkly_docs.py:full_doc, function:barkly_docs.py:function_fingerprint, function:barkly_docs.py:function_row, function:barkly_docs.py:generate, function:barkly_docs.py:git_branch, function:barkly_docs.py:git_commit, function:barkly_docs.py:git_log, function:barkly_docs.py:info_card, function:barkly_docs.py:init_project, function:barkly_docs.py:load_project_config, function:barkly_docs.py:load_state, function:barkly_docs.py:main, function:barkly_docs.py:method_group, function:barkly_docs.py:module_row, function:barkly_docs.py:node_doc, function:barkly_docs.py:parameter_details, function:barkly_docs.py:parameter_kind, function:barkly_docs.py:parameter_summary, function:barkly_docs.py:relative_file, function:barkly_docs.py:safe_call, function:barkly_docs.py:scan_python, function:barkly_docs.py:search_toolbar, function:barkly_docs.py:section, function:barkly_docs.py:short_hash, function:barkly_docs.py:simple_card_grid, function:barkly_docs.py:status_badges, function:barkly_docs.py:symbol_key, function:bot/bot.py:api_get, function:bot/bot.py:api_post, function:bot/bot.py:get_beds, function:bot/bot.py:get_history, function:bot/bot.py:monitor_system, function:bot/bot.py:on_ready, function:bot/bot.py:poll_messages, function:bot/bot.py:safe_dm, function:bot/bot.py:signal_state, function:esp32-firmware/firmware/main.py:emergency_shutdown, function:esp32-firmware/firmware/main.py:main, function:esp32-firmware/firmware/main.py:run_watering, function:src/auth.py:decode_token, function:src/auth.py:generate_raw_key, function:src/auth.py:get_current_user, function:src/auth.py:hash_key, function:src/auth.py:verify_api_key, function:src/db.py:get_db, function:src/db.py:start_weather_thread, function:src/db.py:weather_loop, function:src/deps.py:get_current_user, function:src/routes/apikeys.py:create_key, function:src/routes/apikeys.py:list_keys, function:src/routes/apikeys.py:revoke_key, function:src/routes/beds.py:bed_risk_next_hour, function:src/routes/beds.py:calculate_health, function:src/routes/beds.py:cleanup, function:src/routes/beds.py:current_weather, function:src/routes/beds.py:full_graph, function:src/routes/beds.py:get_all_bed_meta, function:src/routes/beds.py:get_bed_health, function:src/routes/beds.py:get_bed_meta, function:src/routes/beds.py:get_beds, function:src/routes/beds.py:get_config, function:src/routes/beds.py:get_history, function:src/routes/beds.py:get_mode, function:src/routes/beds.py:get_range, function:src/routes/beds.py:get_weather, function:src/routes/beds.py:graph_data, function:src/routes/beds.py:health, function:src/routes/beds.py:history, function:src/routes/beds.py:is_rain_spike, function:src/routes/beds.py:latest, function:src/routes/beds.py:lifetime_stats, function:src/routes/beds.py:node_heartbeat, function:src/routes/beds.py:receive_data, function:src/routes/beds.py:save_bed_meta, function:src/routes/beds.py:set_mode, function:src/routes/beds.py:should_water, function:src/routes/beds.py:stats, function:src/routes/beds.py:system_overview, function:src/routes/beds.py:update_config, function:src/routes/beds.py:valve_status, function:src/routes/beds.py:water_bed, function:src/routes/beds.py:water_cycle, function:src/routes/beds.py:weather_api, function:src/routes/beds.py:weather_current, function:src/routes/beds.py:weather_summary, function:src/routes/bot_bridge.py:add_message, function:src/routes/bot_bridge.py:get_messages, function:src/routes/bot_bridge.py:push_bot_message, function:src/routes/dis.py:disconnect_discord, function:src/routes/dis.py:discord_callback, function:src/routes/dis.py:discord_connect, function:src/routes/dis.py:get_discord_users, function:src/routes/dis.py:get_my_discord, function:src/routes/dis.py:link_discord, function:src/routes/dis.py:send_discord_dm, function:src/routes/dis.py:test_discord_dm, function:src/routes/firebase.py:disable_firebase, function:src/routes/firebase.py:register_device_token, function:src/routes/firebase.py:save_firebase_token, function:src/routes/notfics.py:get_contact, function:src/routes/notfics.py:send_alert, function:src/routes/notfics.py:send_error, function:src/routes/notfics.py:send_info, function:src/routes/notfics.py:test_notification, function:src/routes/pages.py:about_page, function:src/routes/pages.py:api_keys_page, function:src/routes/pages.py:bed_analytics_page, function:src/routes/pages.py:custom_docs, function:src/routes/pages.py:dashboard, function:src/routes/pages.py:device_page, function:src/routes/pages.py:login_page, function:src/routes/pages.py:node_status_page, function:src/routes/pages.py:notifications_page, function:src/routes/pages.py:page, function:src/routes/pages.py:register_page, function:src/routes/pages.py:setup_contact, function:src/routes/users.py:get_carriers, function:src/routes/users.py:get_notifications, function:src/routes/users.py:login, function:src/routes/users.py:logout, function:src/routes/users.py:register, function:src/routes/users.py:save_user_contact, function:src/routes/users.py:update_notifications, function:src/services/notifications.py:_firebase_token, function:src/services/notifications.py:queue_discord_message, function:src/services/notifications.py:send_email, function:src/services/notifications.py:send_firebase_push, function:src/services/notifications.py:send_notification, function:src/services/notifications.py:should_alert, function:src/services/notifications.py:test_firebase, function:src/sim/bed-pid-contoller-sim.py:controller, function:src/sim/bed-pid-contoller-sim.py:heartbeat, function:src/sim/bed-pid-contoller-sim.py:run, function:src/sim/bed-pid-contoller-sim.py:send, function:src/sim/bed-pid-contoller-sim.py:sensor, function:src/sim/bed-pid-contoller-sim.py:simulate, function:src/sim/bed-pid-contoller-sim.py:update_weather, function:src/sim/full-system-simulator.py:apply_valve_control, function:src/sim/full-system-simulator.py:compute_watering_time, function:src/sim/full-system-simulator.py:heartbeat_loop, function:src/sim/full-system-simulator.py:run, function:src/sim/full-system-simulator.py:send, function:src/sim/full-system-simulator.py:simulate, function:src/sim/full-system-simulator.py:update_weather, function:src/sim/main.py:run, function:src/sim/network.py:heartbeat, function:src/sim/network.py:send, function:src/sim/utils.py:log, function:src/watchdog.py:api_watchdog</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:annotation_text</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:annotation_text · Value: 74acf384c14912c0</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:apply_state</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:apply_state · Value: 83e1b346116a8ae2</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:badge</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:badge · Value: fab6c803f2cff536</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:build_html</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:build_html · Value: 81ec6c9e40ca8f40</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:build_parser</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:build_parser · Value: 09bb3b2222c56400</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:call_root_name</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:call_root_name · Value: ee67622f53a069dc</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:class_fingerprint</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:class_fingerprint · Value: e7e292adcaaf9711</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:class_group</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:class_group · Value: 25af4ed175f9d586</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:class_key</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:class_key · Value: e4fa1423da7c412d</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:code_line</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:code_line · Value: 74aaca3181743dd2</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:collect_parameters</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:collect_parameters · Value: ccbc4399fd708426</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:compact_doc</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:compact_doc · Value: e7bb3bb22d0bee68</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:decorator_name</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:decorator_name · Value: a26602951e473937</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:decorator_text</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:decorator_text · Value: 7ea27ca1dd2d9886</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:decorators_for</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:decorators_for · Value: 8e7e6ce3d16ab7df</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:endpoint_fingerprint</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:endpoint_fingerprint · Value: 2c7866f0ba61dbde</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:endpoint_from_decorator</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:endpoint_from_decorator · Value: 1a3f9b0d8032f78a</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:endpoint_key</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:endpoint_key · Value: 5e538e0945148155</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:endpoint_row</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:endpoint_row · Value: 2b197473c3c89cf6</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:esc</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:esc · Value: 7f670db5962d64d0</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:expression_text</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:expression_text · Value: 3f82594d9f63fda3</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:extract_methods_keyword</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:extract_methods_keyword · Value: a91fd46edb882065</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:extract_string_argument</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:extract_string_argument · Value: 756ab0b452d6a2ad</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:full_doc</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:full_doc · Value: ced1c92cc1f0c2d7</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:function_fingerprint</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:function_fingerprint · Value: 82efb655bb44caee</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:function_row</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:function_row · Value: b621a312e2181823</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:generate</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:generate · Value: 5e303b5682747412</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:git_branch</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:git_branch · Value: 0254453b2e1296ad</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:git_commit</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:git_commit · Value: e65852d76b3e6822</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:git_log</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:git_log · Value: 44f4e37e0f29a042</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:info_card</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:info_card · Value: 4caba8b5bf348a14</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:init_project</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:init_project · Value: 57b1234bc5b8fcdc</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:load_project_config</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:load_project_config · Value: 067b291a49ac5585</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:load_state</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:load_state · Value: f7c6ef6b4725a404</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:main</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:main · Value: fd6704f3d95e740d</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:method_group</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:method_group · Value: 214e0912f5cb56a3</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:module_row</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:module_row · Value: 69d1007d904957a9</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:node_doc</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:node_doc · Value: 8ab3ad3d305a27c4</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:parameter_details</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:parameter_details · Value: cc4f6daaa9f58e3a</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:parameter_kind</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:parameter_kind · Value: 78222f72c710fa67</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:parameter_summary</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:parameter_summary · Value: e142f64d1eead222</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:relative_file</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:relative_file · Value: 81dc95c1d35d6771</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:safe_call</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:safe_call · Value: 88c5ea54cf510395</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:scan_python</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:scan_python · Value: 60d969e77c32ddf2</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:search_toolbar</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:search_toolbar · Value: d6faa9417210c122</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:section</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:section · Value: 48f882a5e6a07b74</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:short_hash</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:short_hash · Value: a7bb77fe6db0617d</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:simple_card_grid</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:simple_card_grid · Value: 0b729c28521c7200</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:status_badges</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:status_badges · Value: 5495b1f67931b362</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:barkly_docs.py:symbol_key</h3>
+              <div class="meta">Type: string · Path: $.functions.function:barkly_docs.py:symbol_key · Value: 9323db2cdf20e536</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:bot/bot.py:api_get</h3>
+              <div class="meta">Type: string · Path: $.functions.function:bot/bot.py:api_get · Value: 0aaf39f179668e37</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:bot/bot.py:api_post</h3>
+              <div class="meta">Type: string · Path: $.functions.function:bot/bot.py:api_post · Value: 907162589a975594</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:bot/bot.py:get_beds</h3>
+              <div class="meta">Type: string · Path: $.functions.function:bot/bot.py:get_beds · Value: ca30691b265effde</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:bot/bot.py:get_history</h3>
+              <div class="meta">Type: string · Path: $.functions.function:bot/bot.py:get_history · Value: 7e192e5f72352c87</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:bot/bot.py:monitor_system</h3>
+              <div class="meta">Type: string · Path: $.functions.function:bot/bot.py:monitor_system · Value: fa46c7e17f83705b</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:bot/bot.py:on_ready</h3>
+              <div class="meta">Type: string · Path: $.functions.function:bot/bot.py:on_ready · Value: 3767e06f3f962fe4</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:bot/bot.py:poll_messages</h3>
+              <div class="meta">Type: string · Path: $.functions.function:bot/bot.py:poll_messages · Value: a167f71eee16dc7f</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:bot/bot.py:safe_dm</h3>
+              <div class="meta">Type: string · Path: $.functions.function:bot/bot.py:safe_dm · Value: 7ddad896f80b4497</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:bot/bot.py:signal_state</h3>
+              <div class="meta">Type: string · Path: $.functions.function:bot/bot.py:signal_state · Value: 431071340823d242</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:esp32-firmware/firmware/main.py:emergency_shutdown</h3>
+              <div class="meta">Type: string · Path: $.functions.function:esp32-firmware/firmware/main.py:emergency_shutdown · Value: 207e4d1cfb8d6e0c</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:esp32-firmware/firmware/main.py:main</h3>
+              <div class="meta">Type: string · Path: $.functions.function:esp32-firmware/firmware/main.py:main · Value: 077bbbee859f1d19</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:esp32-firmware/firmware/main.py:run_watering</h3>
+              <div class="meta">Type: string · Path: $.functions.function:esp32-firmware/firmware/main.py:run_watering · Value: 1f33facf30eab5c5</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/auth.py:decode_token</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/auth.py:decode_token · Value: f726bc97f03d3619</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/auth.py:generate_raw_key</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/auth.py:generate_raw_key · Value: 9a84a539f255da53</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/auth.py:get_current_user</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/auth.py:get_current_user · Value: 8313582f7332bff5</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/auth.py:hash_key</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/auth.py:hash_key · Value: 74b7f5ac71627066</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/auth.py:verify_api_key</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/auth.py:verify_api_key · Value: 774db0c037b75907</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/db.py:get_db</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/db.py:get_db · Value: 0796557d91626638</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/db.py:start_weather_thread</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/db.py:start_weather_thread · Value: 0cba53ce5da161b1</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/db.py:weather_loop</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/db.py:weather_loop · Value: 6bb643a4e6ba5ff6</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/deps.py:get_current_user</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/deps.py:get_current_user · Value: 408a40ca072ebeb6</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/apikeys.py:create_key</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/apikeys.py:create_key · Value: dc867e4c79d28428</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/apikeys.py:list_keys</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/apikeys.py:list_keys · Value: 0a902fde42634452</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/apikeys.py:revoke_key</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/apikeys.py:revoke_key · Value: 042c30454ea522b8</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:bed_risk_next_hour</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:bed_risk_next_hour · Value: 915f5bc809a3130a</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:calculate_health</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:calculate_health · Value: 0466baeeeacfd145</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:cleanup</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:cleanup · Value: 5b23549eac2630a9</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:current_weather</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:current_weather · Value: ae7e43ad6f0810c2</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:full_graph</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:full_graph · Value: 32d2299ef0398e6d</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:get_all_bed_meta</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:get_all_bed_meta · Value: dcca24cf2b410d5a</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:get_bed_health</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:get_bed_health · Value: 185f62dbd899d493</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:get_bed_meta</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:get_bed_meta · Value: 15000215e507d61e</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:get_beds</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:get_beds · Value: a3a21949b5dc44a5</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:get_config</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:get_config · Value: 32292b5c9f5fb156</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:get_history</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:get_history · Value: 5ed6f7c86fbb3f9b</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:get_mode</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:get_mode · Value: 7d35a64df601ccb2</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:get_range</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:get_range · Value: bf972b7b8981cfca</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:get_weather</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:get_weather · Value: bdbade92e5875ca6</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:graph_data</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:graph_data · Value: ed52003f3dba8627</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:health</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:health · Value: f75ae9de36bcddd0</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:history</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:history · Value: d26f465e7ff6af86</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:is_rain_spike</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:is_rain_spike · Value: 588e1717e8712a85</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:latest</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:latest · Value: 3bca5421da475c0f</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:lifetime_stats</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:lifetime_stats · Value: 7e622105fbb665ed</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:node_heartbeat</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:node_heartbeat · Value: 0ab6597e82ed17d2</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:receive_data</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:receive_data · Value: c30c4c2741943d39</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:save_bed_meta</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:save_bed_meta · Value: 5dfe2ccccce7de30</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:set_mode</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:set_mode · Value: 9892d85f0b5a9023</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:should_water</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:should_water · Value: 86477eb249c5a01d</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:stats</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:stats · Value: ac3b2521d2723db3</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:system_overview</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:system_overview · Value: 4ceda4767434b37d</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:update_config</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:update_config · Value: 9bdc52064994dffc</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:valve_status</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:valve_status · Value: 9a97873c3062f329</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:water_bed</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:water_bed · Value: dfda4f3df7c842a3</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:water_cycle</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:water_cycle · Value: 215a01c980d97d9c</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:weather_api</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:weather_api · Value: e8f3e9c4ecd90656</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:weather_current</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:weather_current · Value: 8e95845ca01c28ec</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/beds.py:weather_summary</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/beds.py:weather_summary · Value: af97183039ee4c1c</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/bot_bridge.py:add_message</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/bot_bridge.py:add_message · Value: 9303a11aeae2bc02</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/bot_bridge.py:get_messages</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/bot_bridge.py:get_messages · Value: fbabd9ddb4db8576</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/bot_bridge.py:push_bot_message</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/bot_bridge.py:push_bot_message · Value: b6946515f3e0e28d</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/dis.py:disconnect_discord</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/dis.py:disconnect_discord · Value: 033d6c761fc88a0a</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/dis.py:discord_callback</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/dis.py:discord_callback · Value: b17f3e30f6a9cb96</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/dis.py:discord_connect</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/dis.py:discord_connect · Value: 214627a252838307</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/dis.py:get_discord_users</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/dis.py:get_discord_users · Value: 47e9b5b1f83e155d</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/dis.py:get_my_discord</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/dis.py:get_my_discord · Value: 2c9dc7f17aa0ac58</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/dis.py:link_discord</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/dis.py:link_discord · Value: 73c59cfa6d2d2afc</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/dis.py:send_discord_dm</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/dis.py:send_discord_dm · Value: ee3a12d00ee52346</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/dis.py:test_discord_dm</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/dis.py:test_discord_dm · Value: 3ef8ba062f05e8db</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/firebase.py:disable_firebase</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/firebase.py:disable_firebase · Value: c8f8d7b48dd7a138</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/firebase.py:register_device_token</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/firebase.py:register_device_token · Value: 591b1d6e14fbb268</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/firebase.py:save_firebase_token</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/firebase.py:save_firebase_token · Value: d494c7fa5242e7f6</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/notfics.py:get_contact</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/notfics.py:get_contact · Value: 5f27663ce53f0c90</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/notfics.py:send_alert</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/notfics.py:send_alert · Value: 320bccd5f4c4ee8d</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/notfics.py:send_error</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/notfics.py:send_error · Value: c83395d30ab02472</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/notfics.py:send_info</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/notfics.py:send_info · Value: c6b5427d2dd33df9</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/notfics.py:test_notification</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/notfics.py:test_notification · Value: 38d8eb546f71873c</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/pages.py:about_page</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/pages.py:about_page · Value: ec34035ce6c0b26b</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/pages.py:api_keys_page</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/pages.py:api_keys_page · Value: 389d3bf2d2204a6f</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/pages.py:bed_analytics_page</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/pages.py:bed_analytics_page · Value: 7c321c8944e820cd</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/pages.py:custom_docs</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/pages.py:custom_docs · Value: ab6611ef87e6d81c</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/pages.py:dashboard</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/pages.py:dashboard · Value: db3690868af59378</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/pages.py:device_page</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/pages.py:device_page · Value: b2edcbcd74249d2c</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/pages.py:login_page</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/pages.py:login_page · Value: e2b49025f7558bb3</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/pages.py:node_status_page</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/pages.py:node_status_page · Value: 60c31e605d45a2a9</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/pages.py:notifications_page</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/pages.py:notifications_page · Value: 2de797408cfbeddb</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/pages.py:page</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/pages.py:page · Value: 6a34f3caed47b419</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/pages.py:register_page</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/pages.py:register_page · Value: 7d0a7d9fa66c5547</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/pages.py:setup_contact</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/pages.py:setup_contact · Value: 7e0cea6123cbc0e4</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/users.py:get_carriers</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/users.py:get_carriers · Value: b1f6623f70c3b777</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/users.py:get_notifications</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/users.py:get_notifications · Value: f3f5f001e17c819a</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/users.py:login</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/users.py:login · Value: c9fb459e96f6eb48</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/users.py:logout</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/users.py:logout · Value: cc07542989e03283</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/users.py:register</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/users.py:register · Value: 3ad5245f7ea46f4f</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/users.py:save_user_contact</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/users.py:save_user_contact · Value: d55c0a402062eb0f</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/routes/users.py:update_notifications</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/routes/users.py:update_notifications · Value: 4a412d85b884a15f</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/services/notifications.py:_firebase_token</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/services/notifications.py:_firebase_token · Value: e8209df44f436e1e</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/services/notifications.py:queue_discord_message</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/services/notifications.py:queue_discord_message · Value: 00b83aa030e8a970</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/services/notifications.py:send_email</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/services/notifications.py:send_email · Value: 5c3cbd28c883fffc</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/services/notifications.py:send_firebase_push</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/services/notifications.py:send_firebase_push · Value: d4b5777a29c61f40</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/services/notifications.py:send_notification</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/services/notifications.py:send_notification · Value: dd3babfd234c7589</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/services/notifications.py:should_alert</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/services/notifications.py:should_alert · Value: 1d0460f1d8cb3cd1</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/services/notifications.py:test_firebase</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/services/notifications.py:test_firebase · Value: 4afb68cdccdbbc6c</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/sim/bed-pid-contoller-sim.py:controller</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/sim/bed-pid-contoller-sim.py:controller · Value: 8abb71446cf2428d</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/sim/bed-pid-contoller-sim.py:heartbeat</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/sim/bed-pid-contoller-sim.py:heartbeat · Value: 933bb72d34b1ab30</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/sim/bed-pid-contoller-sim.py:run</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/sim/bed-pid-contoller-sim.py:run · Value: 756402cece9b3481</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/sim/bed-pid-contoller-sim.py:send</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/sim/bed-pid-contoller-sim.py:send · Value: b669adbec23f6267</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/sim/bed-pid-contoller-sim.py:sensor</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/sim/bed-pid-contoller-sim.py:sensor · Value: e10c236794ee927d</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/sim/bed-pid-contoller-sim.py:simulate</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/sim/bed-pid-contoller-sim.py:simulate · Value: e0c92256cb9bd576</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/sim/bed-pid-contoller-sim.py:update_weather</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/sim/bed-pid-contoller-sim.py:update_weather · Value: bc12117a09e7f5e4</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/sim/full-system-simulator.py:apply_valve_control</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/sim/full-system-simulator.py:apply_valve_control · Value: 12e992b2c045f76f</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/sim/full-system-simulator.py:compute_watering_time</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/sim/full-system-simulator.py:compute_watering_time · Value: fa9c3fb1dd302bf8</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/sim/full-system-simulator.py:heartbeat_loop</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/sim/full-system-simulator.py:heartbeat_loop · Value: 717ab214b8eae5db</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/sim/full-system-simulator.py:run</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/sim/full-system-simulator.py:run · Value: 756402cece9b3481</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/sim/full-system-simulator.py:send</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/sim/full-system-simulator.py:send · Value: d315d15f02f03121</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/sim/full-system-simulator.py:simulate</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/sim/full-system-simulator.py:simulate · Value: 0ce488ad52af75bb</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/sim/full-system-simulator.py:update_weather</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/sim/full-system-simulator.py:update_weather · Value: bc12117a09e7f5e4</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/sim/main.py:run</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/sim/main.py:run · Value: 756402cece9b3481</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/sim/network.py:heartbeat</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/sim/network.py:heartbeat · Value: 933bb72d34b1ab30</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/sim/network.py:send</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/sim/network.py:send · Value: 74ee78b6dbffed9b</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/sim/utils.py:log</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/sim/utils.py:log · Value: 47fe9dd578beb3a9</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>functions.function:src/watchdog.py:api_watchdog</h3>
+              <div class="meta">Type: string · Path: $.functions.function:src/watchdog.py:api_watchdog · Value: 98137644b479a9ae</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>generation</h3>
+              <div class="meta">Type: number · Path: $.generation · Value: 1</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>icons</h3>
+              <div class="meta">Type: array · Path: $.icons · Keys: [0], [1]</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>icons[0]</h3>
+              <div class="meta">Type: object · Path: $.icons[0] · Keys: src, sizes, type</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>icons[0].sizes</h3>
+              <div class="meta">Type: string · Path: $.icons[0].sizes · Value: 192x192</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>icons[0].src</h3>
+              <div class="meta">Type: string · Path: $.icons[0].src · Value: /icon-192.png</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>icons[0].type</h3>
+              <div class="meta">Type: string · Path: $.icons[0].type · Value: image/png</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>icons[1]</h3>
+              <div class="meta">Type: object · Path: $.icons[1] · Keys: src, sizes, type</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>icons[1].sizes</h3>
+              <div class="meta">Type: string · Path: $.icons[1].sizes · Value: 512x512</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>icons[1].src</h3>
+              <div class="meta">Type: string · Path: $.icons[1].src · Value: /icon-512.png</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>icons[1].type</h3>
+              <div class="meta">Type: string · Path: $.icons[1].type · Value: image/png</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>initialized</h3>
+              <div class="meta">Type: boolean · Path: $.initialized · Value: True</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>lifecycle</h3>
+              <div class="meta">Type: array · Path: $.lifecycle · Keys: [0], [1], [2], [3], [4], [5], [6], [7], [8], [9]</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>lifecycle[0]</h3>
+              <div class="meta">Type: string · Path: $.lifecycle[0] · Value: Idea</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>lifecycle[1]</h3>
+              <div class="meta">Type: string · Path: $.lifecycle[1] · Value: Research</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>lifecycle[2]</h3>
+              <div class="meta">Type: string · Path: $.lifecycle[2] · Value: Experiment</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>lifecycle[3]</h3>
+              <div class="meta">Type: string · Path: $.lifecycle[3] · Value: Prototype</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>lifecycle[4]</h3>
+              <div class="meta">Type: string · Path: $.lifecycle[4] · Value: Community Testing</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>lifecycle[5]</h3>
+              <div class="meta">Type: string · Path: $.lifecycle[5] · Value: Engineering</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>lifecycle[6]</h3>
+              <div class="meta">Type: string · Path: $.lifecycle[6] · Value: Productization</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>lifecycle[7]</h3>
+              <div class="meta">Type: string · Path: $.lifecycle[7] · Value: Release</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>lifecycle[8]</h3>
+              <div class="meta">Type: string · Path: $.lifecycle[8] · Value: Feedback</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>lifecycle[9]</h3>
+              <div class="meta">Type: string · Path: $.lifecycle[9] · Value: Continued Development</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>name</h3>
+              <div class="meta">Type: string · Path: $.name · Value: PlantWater</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>name</h3>
+              <div class="meta">Type: string · Path: $.name · Value: Garden Control System</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>principles</h3>
+              <div class="meta">Type: array · Path: $.principles · Keys: [0], [1], [2], [3], [4], [5]</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>principles[0]</h3>
+              <div class="meta">Type: string · Path: $.principles[0] · Value: Human First</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>principles[1]</h3>
+              <div class="meta">Type: string · Path: $.principles[1] · Value: Understandable</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>principles[2]</h3>
+              <div class="meta">Type: string · Path: $.principles[2] · Value: Privacy Where Practical</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>principles[3]</h3>
+              <div class="meta">Type: string · Path: $.principles[3] · Value: Accessible</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>principles[4]</h3>
+              <div class="meta">Type: string · Path: $.principles[4] · Value: Experimental</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>principles[5]</h3>
+              <div class="meta">Type: string · Path: $.principles[5] · Value: Open and Extensible</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>private_key</h3>
+              <div class="meta">Type: string · Path: $.private_key · Value: -----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC0HZJpQbgYlmlb
+KZqFAxZ5LMI5PfetV1oTP5kPl8W7IZg6iLzdtaisl5DGQ9Q+nyx7rJpnhegL6r5a
+1J3Uopm8rwmSwkVrKLLjJpuJ/2idAUTnStD2LqWqoP74/8yxl8efgk5GcnEdyoq3
++TgBv0ea77dF5ZlqjPD9Y68TA+TOXxmEZ8PjB4qDl5cUnj0aTdPf4mYi3W7ztupG
+nn9C00CjqKuFCQ5CO1HLtPGHU8HEB5PMKac3hwm4QMVOkOZ7xhCjxwvojMzRBOfl
+YOHidb3zIIv81xn8THt9QpXAi18EHPFJAYsJjjg1Rf0Q78oL5SkWv3M5DxusPq2O
+bRDtKrq7AgMBAAECggEAUA10rWOQNx1i5imvi767lk/WYyqvklNorXVuygdi0rEz
+v5BWoRPETDFxHy22f76vPqiQV8KkR+elgylMnN1IBxyk3J2LzPzhxSO7rbHfBSkz
+Prl59nD1IMk9id3nVGdpSfPYZmcm716+GNajleM2KB6zDlXlwf2yfmx3u7PXVgEe
+0LGCHldN42hMz8jqj2X3MEpCegoDzedFQF0yYMmCbxOobTWRz/JOo0FoCLvKi0Yn
+PO4bK4a8QvglS7GBS1D5QX5IyFS+WTXa3dXA5NVgqteRq+1Y4bVm//2uDDAJcMCh
+q1eSCvRrm9AQa5lUWgd4p+UhHDLLjDLMDF2ZStLpgQKBgQDsIrV9pxL3RzcTnCpr
+/zn8ra7dWI3rnhodl2QIYe17vNWs1ZQ21zrR4YmQvxJokFkOpl/yE8fRjkHcLPlk
+qJuUMER+hs9vEC80WWKifIbDMteI2FfHV1IbpfUq5vseOJydtTXlgc1jvvE/5LaC
+/AZSKOGT+WOsCHeEYN1h1+h/8wKBgQDDRHHGaUsFC2L49Vf0DBjGVkH+c7gVXqfP
+gAdTG7aQBesLnWd9uUqehWoQ5BCGNW7v/gP+dYBLIgMOgKl2dmgbrrcf2bX+yC4v
+rriUzXIPWaFITBc4o04/l2tjB2w0adJtfKcJs0nyn5InKydZUCu8SYAjuCW1QX+n
+LnX4jbvUGQKBgQDW07D38tL/YqvJzG6PuDAiIEURHOporHqn5z5bnfP3edGPnvNr
+fR4HKcAEjsCJnqFXAagSTUqh7GEglU4C9J4uEEeQMMdxDHFVl+hzWQUlexC5b9FU
+Cq4pdy9365IUaX6av+ybsx6Pm3xSG5qryetaPdUT0XSLY1yQc6uUw1/DXwKBgAvE
+3k6lHf5p10dGEk0FRaD+pe+eLeQr1lVtVAOwUeqQUMBcdlZfip3PULs/47cTFWKl
+nrwBfQAKRsDjBFO9gzzX5PWoe42lpxL8pudhEpTWRCBFZcjmHts6VyCa2+y0zBgJ
+QVAWXEihUX/G3BJIALrSe0Sr3qn0DquW40ld0YpRAoGAYLzI3TbzU3WccfaMz6AK
+lUBlHfPBj7QB1e2WZV08dTKxZqsP/aUSJVJxu3dqfLE6xV248pkIP673hL9Rj3S7
+FsaHgOtfmpDMtQr86FHvzPpq4JtUVsw/WTVOGoZXGPk3IAKRDjYF3/wYZcPeMBKL
+1WkneGer8+hfk5TmkhqEsOQ=
+-----END PRIVATE KEY-----
+</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>private_key_id</h3>
+              <div class="meta">Type: string · Path: $.private_key_id · Value: ca3439506523e33bac8de93d7d94b4a29f7ea40c</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>project_id</h3>
+              <div class="meta">Type: string · Path: $.project_id · Value: smart-garden-4d476</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>short_name</h3>
+              <div class="meta">Type: string · Path: $.short_name · Value: Garden</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>start_url</h3>
+              <div class="meta">Type: string · Path: $.start_url · Value: /login</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>status</h3>
+              <div class="meta">Type: string · Path: $.status · Value: Active</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>theme_color</h3>
+              <div class="meta">Type: string · Path: $.theme_color · Value: #16a34a</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>token_uri</h3>
+              <div class="meta">Type: string · Path: $.token_uri · Value: https://oauth2.googleapis.com/token</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>type</h3>
+              <div class="meta">Type: string · Path: $.type · Value: API / Software / Systems</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>type</h3>
+              <div class="meta">Type: string · Path: $.type · Value: service_account</div>
+            </div>
+            
+            <div class="entity-item">
+              <h3>universe_domain</h3>
+              <div class="meta">Type: string · Path: $.universe_domain · Value: googleapis.com</div>
+            </div>
+            </div></div>
+  </main>
+  <footer class="site-footer"><div class="container">Generated from the shared Barkly Project Model.</div></footer>
+</body>
+</html>

@@ -14,43 +14,47 @@ The implementation in this repository is a work in progress. It currently suppor
 - JavaScript, Java, Ruby, and Rust static readers
 - project summaries printed by the CLI
 - optional HTML website generation from the shared project model
-- no graph renderer, no explanation layer, and no full Markdown/JSON generation pipeline beyond the static HTML site
+- Structurizr DSL generation for a project-level C4 container view
+- optional Structurizr Lite rendering through Docker Compose
+- no function-level graph is used for the project architecture overview
 
 ## Supported CLI
 
-The current CLI supports two working modes:
+The main command now runs the full local workflow:
 
-1. analyze a project directory and print a project summary
-2. generate a small static HTML documentation site in an output directory
+1. analyze the selected project
+2. generate the Barkly Docs HTML site and Structurizr workspace
+3. start Structurizr Lite with Docker Compose
+4. start the local documentation preview server
+5. open the documentation index page in your default browser
 
-```bash
-python -m cli .
-python -m cli . --name BarklyDocs
-python -m cli . --name BarklyDocs --output docs-site
-python -m cli . --name BarklyDocs --output docs-site --serve --port 8000
-```
-
-For compatibility with the repository root entry point, this also works:
-
-```bash
+```powershell
 python __main__.py .
-python __main__.py . --name BarklyDocs
-python __main__.py . --name BarklyDocs --output docs-site
-python __main__.py . --name BarklyDocs --output docs-site --serve --port 8000
 ```
 
-The CLI accepts:
+Choose a different project name or output folder when needed:
 
-- positional `project`: path to the project to analyze
-- optional `--name`: display name for the project in the output
-- optional `-o` / `--output`: output directory for a static HTML website
-- optional `--serve`: generate the site and serve it on `127.0.0.1`
-- optional `--host`: override the local host interface for preview serving (defaults to `127.0.0.1`)
-- optional `--port`: choose the local preview port (defaults to `8000`)
+```powershell
+python __main__.py . --name BarklyDocs --output docs-site
+```
 
-When `--serve` is used, Barkly Docs validates that `index.html` exists, opens the landing page in the default browser, and keeps the local preview server running until you press Ctrl+C. The server is bound to the local machine only unless you explicitly override `--host`.
+The generated documentation is served by nginx in Docker at `http://127.0.0.1:8000/`. The project-level Structurizr graph is served by Structurizr Lite at `http://127.0.0.1:8080/`. The two services use separate host/container ports.
 
-There is no `barkly_docs` package entry point in this repository, and no `init` / `generate` subcommands are implemented beyond the optional HTML output and local preview flow above.
+### Requirements
+
+- Docker Desktop for Windows installed and running (Docker Compose is included).
+- A supported Python version for Barkly Docs.
+- Ports `8000` (Barkly Docs site) and `8080` (Structurizr Lite) available locally by default; change the documentation port with `--port` (do not use `8080`, which is reserved for the graph).
+
+To generate files without launching Docker or opening a browser:
+
+```powershell
+python __main__.py . --generate-only
+```
+
+Use `--output docs-site` to choose the output directory. If omitted, generated files go to `.barkly-docs-site` inside the project being analyzed. The `--host` and `--port` flags configure the browser URL and host port for the Docker-served documentation site. The generated `Dockerfile` uses nginx to serve the static site; the generated `architecture/docker-compose.yml` starts both nginx and Structurizr Lite. Stop both containers with `docker compose down` from the generated `architecture` directory.
+
+The older `--serve` flag remains accepted for compatibility, but launching is now the default unless `--generate-only` is supplied.
 
 ## Architecture
 
@@ -68,8 +72,28 @@ READERS / LANGUAGE ANALYZERS
         ↓
 BARKLY PROJECT MODEL
         ↓
-PROJECT SUMMARY / FUTURE GRAPH / RENDERERS
+PROJECT SUMMARY / STRUCTURIZR ARCHITECTURE / HTML RENDERERS
 ```
+
+## Project-level architecture graph (Structurizr)
+
+The generated HTML site includes a **Project Architecture** page backed by a Structurizr DSL workspace. The workspace intentionally contains only top-level project components and aggregated component-to-component dependencies; individual files, classes, functions, and methods are not graph nodes. Detailed code entities and relationships remain available on their separate documentation pages.
+
+The normal CLI workflow generates and builds the Docker services automatically. To start them manually after generating the site:
+
+```powershell
+cd docs-site/architecture
+# Docker Desktop must be running.
+docker compose up -d --build
+```
+
+Then open <http://localhost:8000> for the Barkly Docs site and <http://localhost:8080> for Structurizr Lite. The generated files are:
+
+- `docs-site/Dockerfile` — nginx image definition for serving the static documentation.
+- `docs-site/architecture/workspace.dsl` — the project-level C4 container view.
+- `docs-site/architecture/docker-compose.yml` — starts the documentation website and Structurizr Lite on separate ports.
+
+The workspace uses Barkly's dark, pink, and green visual styling. Component grouping is inferred from source paths and detected relationships, so review the result as an architecture aid rather than a definitive statement of intended design.
 
 ## Design principles
 

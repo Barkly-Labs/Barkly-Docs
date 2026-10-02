@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import re
+import sys
+from importlib.metadata import packages_distributions
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -300,10 +302,147 @@ def _sort_nodes(nodes: list[GraphNode]) -> list[GraphNode]:
     return sorted(nodes, key=lambda item: (order.get(item.kind, 999), item.label.lower(), item.id.lower()))
 
 
+def _project_component_name(project: Project, value: str | Path | None) -> str | None:
+    """Map a source path to a readable top-level project component."""
+    if not value or not _is_project_source_path(project, str(value)):
+        return None
+    raw = Path(str(value).replace("\\", "/"))
+    root = Path(project.root).resolve() if project.root else None
+    try:
+        relative = raw.resolve().relative_to(root) if raw.is_absolute() and root else raw
+    except (OSError, ValueError):
+        return None
+    parts = [part for part in relative.parts if part not in {".", ""}]
+    if not parts:
+        return "Project root"
+    # Treat common source containers as layout, not as components themselves.
+    if parts[0].casefold() in {"src", "source", "sources", "lib", "app", "apps", "packages"} and len(parts) > 1:
+        return parts[1]
+    if len(parts) == 1:
+        return "Project root"
+    return parts[0]
+
+
+def _collapse_to_project_overview(graph: RelationGraph) -> None:
+    """Replace symbol-level graph contents with a component-level architecture map."""
+    original_nodes = list(graph.nodes)
+    original_edges = list(graph.edges)
+    node_component: dict[str, str] = {}
+    component_files: dict[str, set[str]] = {}
+    component_node_counts: dict[str, dict[str, int]] = {}
+    component_path: dict[str, str] = {}
+
+    for node in original_nodes:
+        source_path = node.source_file or node.path
+        component = _project_component_name(graph.project, source_path)
+        if component is None:
+            continue
+        node_component[node.id] = component
+        component_files.setdefault(component, set())
+        if source_path:
+            component_files[component].add(str(source_path))
+            component_path.setdefault(component, component)
+        counts = component_node_counts.setdefault(component, {})
+        counts[node.kind] = counts.get(node.kind, 0) + 1
+
+    # Resolve imported module targets to their source component when possible.
+    module_component: dict[str, str] = {}
+    for module in graph.project.modules:
+        component = _project_component_name(graph.project, _node_source_path(module))
+        if component:
+            module_component[module.name] = component
+            module_component[f"module:{module.name}"] = component
+            if module.path:
+                module_component[module.path] = component
+                module_component[f"file:{module.path}"] = component
+    for file_node in graph.project.files:
+        component = _project_component_name(graph.project, _node_source_path(file_node))
+        if component:
+            module_component[file_node.path] = component
+            module_component[f"file:{file_node.path}"] = component
+
+    # A component can exist even if it has no relationship edges.
+    component_nodes: dict[str, GraphNode] = {}
+    for name in sorted(component_node_counts, key=str.casefold):
+        counts = component_node_counts[name]
+        total = sum(counts.values())
+        component_nodes[name] = GraphNode(
+            id=f"component:{name}", label=name, kind="component",
+            qualified_name=name, path=name, source_file=None, evidence="DETECTED",
+            metadata={
+                "project_level": True,
+                "entity_count": total,
+                "entity_types": counts,
+                "file_count": len(component_files.get(name, set())),
+                "internal_relationship_count": 0,
+            },
+        )
+
+    grouped_edges: dict[tuple[str, str], dict[str, Any]] = {}
+    for edge in original_edges:
+        source_component = node_component.get(edge.source)
+        if source_component is None and edge.source_file:
+            source_component = _project_component_name(graph.project, edge.source_file)
+        target_component = node_component.get(edge.target) or module_component.get(edge.target)
+        if target_component is None:
+            # A target can be a path-qualified file or module identifier.
+            candidate = edge.target.removeprefix("file:").removeprefix("module:")
+            target_component = module_component.get(candidate)
+            if target_component is None and "." in candidate:
+                # A package import often names a submodule even when only its
+                # parent package is represented as a scanned component.
+                target_component = module_component.get(candidate.split(".", 1)[0])
+                if target_component is None:
+                    top_level = candidate.split(".", 1)[0]
+                    if top_level in component_nodes:
+                        target_component = top_level
+            if target_component is None and ("/" in candidate or "\\" in candidate):
+                target_component = _project_component_name(graph.project, candidate)
+        if source_component is None:
+            continue
+        if target_component is None:
+            # Do not turn third-party/unresolved libraries into project components.
+            continue
+        if source_component == target_component:
+            node = component_nodes.get(source_component)
+            if node:
+                node.metadata["internal_relationship_count"] += 1
+            continue
+        key = (source_component, target_component)
+        aggregate = grouped_edges.setdefault(key, {"count": 0, "kinds": set(), "evidence": set(), "examples": []})
+        aggregate["count"] += 1
+        aggregate["kinds"].add(edge.kind)
+        aggregate["evidence"].add(edge.evidence or "UNKNOWN")
+        if len(aggregate["examples"]) < 3:
+            aggregate["examples"].append({"kind": edge.kind, "source": edge.source, "target": edge.target})
+
+    overview_edges: list[GraphEdge] = []
+    for (source_name, target_name), aggregate in sorted(grouped_edges.items()):
+        evidence = "DECLARED" if "DECLARED" in aggregate["evidence"] else ("DETECTED" if "DETECTED" in aggregate["evidence"] else "INFERRED")
+        kinds = sorted(aggregate["kinds"])
+        overview_edges.append(GraphEdge(
+            id=f"component:{source_name}->component:{target_name}",
+            source=f"component:{source_name}", target=f"component:{target_name}",
+            kind="connects_to", label="connects to", source_file=None,
+            evidence=evidence,
+            explanation=f"{aggregate['count']} relationship(s) connect these project components.",
+            metadata={"relationship_count": aggregate["count"], "relationship_kinds": kinds, "examples": aggregate["examples"]},
+        ))
+
+    graph.nodes = list(component_nodes.values())
+    graph.edges = overview_edges
+    graph.unresolved = []
+    graph._node_ids = {node.id for node in graph.nodes}
+    graph._edge_ids = {edge.id for edge in graph.edges}
+    graph.max_nodes = None
+    graph.max_edges = None
+    graph.warnings = ["Project overview groups files, modules, classes, and functions into top-level components. Detailed symbols remain available on the Entities and Relationships pages."]
+
+
 def build_relation_graph(
     project: Project,
     *,
-    view: str = "project_overview",
+    view: str = "relation_map",
     max_nodes: int | None = 200,
     max_edges: int | None = 400,
     progress_callback: Callable[[str, int, int], None] | None = None,
@@ -442,7 +581,7 @@ def build_relation_graph(
                 )
         for base in class_node.bases:
             base_name = _normalize_identifier(base)
-            if not base_name:
+            if not base_name or base_name not in symbol_index:
                 continue
             graph.add_edge(
                 GraphEdge(
@@ -602,6 +741,50 @@ def build_relation_graph(
                 )
             )
 
+    # Import edges in the default project map are intentionally project-internal.
+    # Third-party and standard-library imports remain available in the source
+    # inventory, but should not become hundreds of dangling nodes in the map.
+    project_module_names = {
+        _normalize_identifier(module.name)
+        for module in project.modules
+        if _is_project_source_path(project, _node_source_path(module))
+    }
+    project_file_stems = {
+        Path(str(file.path).replace("\\", "/")).stem
+        for file in project.files
+        if _is_project_source_path(project, _node_source_path(file))
+    }
+    project_file_paths = {
+        str(file.path).replace("\\", "/")
+        for file in project.files
+        if _is_project_source_path(project, _node_source_path(file))
+    }
+    ignored_import_roots = {name.casefold() for name in _DEFAULT_IGNORED_SOURCE_DIRS}
+    try:
+        installed_import_roots = {name.casefold() for name in packages_distributions()}
+    except Exception:
+        installed_import_roots = set()
+    stdlib_import_roots = {name.casefold() for name in sys.stdlib_module_names}
+
+    def is_project_import_target(target: str | None) -> bool:
+        normalized = _normalize_identifier(target)
+        if not normalized:
+            return False
+        # Readers may report dotted Python names, slash paths, or file names.
+        root_name = normalized.replace("\\", "/").split("/", 1)[0].split(".", 1)[0]
+        folded_root = root_name.casefold()
+        if folded_root in ignored_import_roots or folded_root in stdlib_import_roots:
+            return False
+        if normalized in symbol_index or normalized in project_module_names:
+            return True
+        if normalized.replace("\\", "/") in project_file_paths:
+            return True
+        if root_name in project_module_names or root_name in project_file_stems:
+            return True
+        # Installed third-party packages are external dependencies, not project
+        # source nodes. Unknown names remain visible as unresolved evidence.
+        return folded_root not in installed_import_roots
+
     import_total = len(project.imports)
     report_progress("imports", 0, import_total)
     for import_index, import_node in enumerate(project.imports, start=1):
@@ -615,6 +798,8 @@ def build_relation_graph(
         if not _is_project_source_path(project, import_node.source_file):
             continue
         source_id = _match_known_symbol(project, import_node.source_file, symbol_index=symbol_index) or import_node.source_file
+        if not is_project_import_target(import_node.target):
+            continue
         target_id = _match_known_symbol(project, import_node.target, symbol_index=symbol_index) or import_node.target
         graph.add_edge(
             GraphEdge(
@@ -653,9 +838,11 @@ def build_relation_graph(
         )
         graph.add_edge(edge)
 
+    if view == "project_overview":
+        _collapse_to_project_overview(graph)
     graph.nodes = _sort_nodes(graph.nodes)
     graph.edges = sorted(graph.edges, key=lambda edge: (edge.kind, edge.source, edge.target, edge.source_file or ""))
-    graph.unresolved = _record_unresolved(graph.edges, set(known_identifiers), project)
+    graph.unresolved = _record_unresolved(graph.edges, set(known_identifiers), project) if view != "project_overview" else []
     if graph.max_nodes is not None and len(graph.nodes) > graph.max_nodes:
         graph.warnings.append(f"Relation graph was limited to the first {graph.max_nodes} nodes to keep the view responsive.")
         graph.nodes = graph.nodes[: graph.max_nodes]

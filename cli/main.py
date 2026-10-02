@@ -8,9 +8,14 @@ Initial project analysis command.
 from __future__ import annotations
 
 import argparse
+import os
+import shutil
+import subprocess
 import sys
 import time
 import webbrowser
+from urllib.error import URLError
+from urllib.request import urlopen
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -26,6 +31,9 @@ from rendering.html import render_project_website
 
 DEFAULT_PREVIEW_HOST = "127.0.0.1"
 DEFAULT_PREVIEW_PORT = 8000
+DEFAULT_STRUCTURIZR_PORT = 8080
+DEFAULT_STRUCTURIZR_URL = f"http://127.0.0.1:{DEFAULT_STRUCTURIZR_PORT}"
+DEFAULT_OUTPUT_DIR = ".barkly-docs-site"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -64,10 +72,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--serve",
         action="store_true",
-        help=(
-            "Generate the website and serve it locally on "
-            f"{DEFAULT_PREVIEW_HOST}:{DEFAULT_PREVIEW_PORT}."
-        ),
+        help="Compatibility flag; the default command now launches the generated site.",
+    )
+
+    parser.add_argument(
+        "--generate-only",
+        action="store_true",
+        help="Generate the documentation without starting Docker or opening a browser.",
     )
 
     parser.add_argument(
@@ -191,6 +202,87 @@ def build_preview_server(output_dir: Path, host: str = DEFAULT_PREVIEW_HOST, por
     return server
 
 
+def start_structurizr(
+    architecture_dir: Path,
+    url: str = DEFAULT_STRUCTURIZR_URL,
+    docs_port: int = DEFAULT_PREVIEW_PORT,
+) -> None:
+    """Start the generated documentation site and Structurizr Lite with Docker Compose."""
+
+    if docs_port == DEFAULT_STRUCTURIZR_PORT:
+        raise RuntimeError(
+            f"Documentation port {docs_port} conflicts with Structurizr Lite's port "
+            f"{DEFAULT_STRUCTURIZR_PORT}. Choose another documentation port with --port."
+        )
+
+    compose_file = architecture_dir / "docker-compose.yml"
+    if not compose_file.is_file():
+        raise FileNotFoundError(
+            f"Structurizr Docker Compose file was not generated: {compose_file}"
+        )
+    if shutil.which("docker") is None:
+        raise RuntimeError(
+            "Docker was not found. Install Docker Desktop for Windows, start it, "
+            "then run Barkly Docs again. The HTML site has already been generated."
+        )
+
+    print("Starting Structurizr Lite with Docker Compose...")
+    try:
+        compose_env = os.environ.copy()
+        compose_env["BARKLY_DOCS_PORT"] = str(docs_port)
+        compose_env["STRUCTURIZR_PORT"] = str(DEFAULT_STRUCTURIZR_PORT)
+        completed = subprocess.run(
+            ["docker", "compose", "up", "-d", "--build"],
+            cwd=str(architecture_dir),
+            env=compose_env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as exc:
+        raise RuntimeError(f"Could not start Docker Compose: {exc}") from exc
+
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "Docker Compose failed.").strip()
+        raise RuntimeError(
+            "Docker Compose could not start the Barkly Docs site and Structurizr Lite. "
+            "Make sure Docker Desktop is running and the documentation/architecture "
+            f"ports are free. Details: {detail}"
+        )
+
+    # `compose up -d` can return before the application is ready. Wait up to 45s,
+    # but do not block the documentation preview forever if the container is slow.
+    deadline = time.monotonic() + 45
+    while time.monotonic() < deadline:
+        try:
+            with urlopen(url, timeout=2):
+                print(f"Structurizr Lite is ready at {url}")
+                return
+        except (OSError, URLError):
+            time.sleep(1)
+
+    print(
+        f"Docker started, but Structurizr Lite has not responded at {url} yet. "
+        "The documentation page will still open; the embedded graph may take a little longer."
+    )
+
+
+def wait_for_site(url: str, timeout: int = 45) -> None:
+    """Wait for the nginx-served documentation site to become reachable."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            with urlopen(url, timeout=2):
+                print(f"Barkly Docs site is ready at {url}")
+                return
+        except (OSError, URLError):
+            time.sleep(1)
+    raise RuntimeError(
+        f"The Docker-served documentation site did not become ready within {timeout} seconds. "
+        "Check it with 'docker compose logs' from the generated architecture directory."
+    )
+
+
 def main() -> int:
     """
     Run Barkly Docs.
@@ -301,11 +393,9 @@ def main() -> int:
         for error in result.errors:
             print(f"X {error}")
 
-    output_dir = None
-    if args.output is not None:
-        output_dir = Path(args.output)
-    elif args.serve:
-        output_dir = args.project.resolve() / ".barkly-docs-site"
+    # The normal command now performs the full workflow. Use --generate-only
+    # when the caller only wants to write files without launching Docker/browser.
+    output_dir = Path(args.output) if args.output is not None else args.project.resolve() / DEFAULT_OUTPUT_DIR
 
     if output_dir is not None:
         try:
@@ -329,38 +419,38 @@ def main() -> int:
             terminal.close()
             return 1
 
-    if args.serve:
+    if not args.generate_only:
         try:
-            server = build_preview_server(output_dir, host=args.host, port=args.port)
-            url = f"http://{args.host}:{args.port}/"
+            architecture_dir = output_dir / "architecture"
+            if args.port == DEFAULT_STRUCTURIZR_PORT:
+                raise RuntimeError(
+                    f"--port {args.port} conflicts with Structurizr Lite on port "
+                    f"{DEFAULT_STRUCTURIZR_PORT}. Use --port 8000 (the default) or another free port."
+                )
+            start_structurizr(architecture_dir, docs_port=args.port)
+            preview_url = f"http://{args.host}:{args.port}/"
+            wait_for_site(preview_url)
             print()
-            print("LOCAL WEBSITE PREVIEW")
+            print("BARKLY DOCS IS READY")
             print("-" * 50)
-            print(f"URL: {url}")
-            print(f"Directory: {output_dir}")
-            print("Press Ctrl+C to stop the preview.")
+            print(f"Documentation: {preview_url}")
+            print(f"Architecture:  {DEFAULT_STRUCTURIZR_URL}")
+            print(f"Output:        {output_dir}")
+            print("Both services are running in Docker. Press Ctrl+C to exit this launcher; containers stay running.")
 
-            if webbrowser.open(url):
-                print("Opened the landing page in your default browser.")
+            if webbrowser.open(preview_url):
+                print("Opened the Barkly Docs index page in your default browser.")
             else:
-                print("Open the URL above in your browser to view the generated website.")
-
-            try:
-                server.serve_forever()
-            except KeyboardInterrupt:
-                print()
-                print("Stopping preview server...")
-            finally:
-                server.server_close()
-                print("Preview server stopped.")
+                print(f"Open {preview_url} in your browser to view the generated site.")
             terminal.close()
             return 0
         except (FileNotFoundError, OSError, RuntimeError, ValueError) as exc:
-            terminal.event("preview.failed", level="ERROR", error=str(exc), message="Local preview failed.")
+            terminal.event("launch.failed", level="ERROR", error=str(exc), message="Automatic launch failed.")
             print()
-            print("LOCAL WEBSITE ERROR")
+            print("BARKLY DOCS LAUNCH ERROR")
             print("-" * 50)
             print(f"{exc}")
+            print(f"The generated HTML files are still available in: {output_dir}")
             terminal.close()
             return 1
 

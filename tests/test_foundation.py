@@ -41,6 +41,8 @@ def test_project_discovery_finds_supported_files_and_skips_ignored_dirs(tmp_path
     (tmp_path / "notes.txt").write_text("ignore me\n", encoding="utf-8")
     (tmp_path / "node_modules").mkdir()
     (tmp_path / "node_modules" / "pkg.js").write_text("console.log('ignore me')\n", encoding="utf-8")
+    (tmp_path / "docs-site").mkdir()
+    (tmp_path / "docs-site" / "generated.py").write_text("def generated(): pass\n", encoding="utf-8")
 
     result = ProjectDiscovery(
         [PythonReader(), JavaScriptReader()],
@@ -50,6 +52,7 @@ def test_project_discovery_finds_supported_files_and_skips_ignored_dirs(tmp_path
     assert {"app.py", "ui.js"}.issubset(processed)
     assert "notes.txt" not in processed
     assert not any(path.name == "pkg.js" for path in result.processed_files)
+    assert not any(path.name == "generated.py" for path in result.processed_files)
     assert result.project.name == "fixture"
 
 
@@ -281,7 +284,7 @@ def test_cli_runs_on_a_small_project_and_returns_zero(tmp_path):
     )
 
     result = subprocess.run(
-        [sys.executable, "-m", "cli", str(project_dir), "--name", "Fixture"],
+        [sys.executable, "-m", "cli", str(project_dir), "--name", "Fixture", "--generate-only"],
         capture_output=True,
         text=True,
         cwd=str(REPO_ROOT),
@@ -361,11 +364,14 @@ def test_html_site_generation_renders_pages_and_relationships(tmp_path):
 
     relation_map_html = output_dir.joinpath("relation-map.html").read_text(encoding="utf-8")
     assert "Relation Map" in relation_map_html
-    assert "relation-map-data" in relation_map_html
-    assert "assets/relation-map.js" in relation_map_html
-    assert "data-filter-evidence" in relation_map_html
-    assert "Reset filters" in relation_map_html
-    assert "Fit" in relation_map_html
+    assert "Structurizr" in relation_map_html
+    assert "Structurizr project-level graph is displayed on the Project overview page" in relation_map_html
+    assert "<iframe" not in relation_map_html
+    assert "Structurizr project-level architecture" in index_html
+    assert "<iframe" in index_html
+    assert "architecture/workspace.dsl" in relation_map_html
+    assert output_dir.joinpath("architecture", "workspace.dsl").exists()
+    assert output_dir.joinpath("architecture", "docker-compose.yml").exists()
 
 
 def test_relation_graph_normalizes_scan_relationships_and_unresolved_refs():
@@ -482,7 +488,7 @@ def test_cli_can_generate_html_site(tmp_path):
     output_dir = tmp_path / "site-output"
 
     result = subprocess.run(
-        [sys.executable, "-m", "cli", str(project_dir), "--name", "Fixture", "--output", str(output_dir)],
+        [sys.executable, "-m", "cli", str(project_dir), "--name", "Fixture", "--output", str(output_dir), "--generate-only"],
         capture_output=True,
         text=True,
         cwd=str(REPO_ROOT),
@@ -512,6 +518,9 @@ def test_cli_parser_supports_preview_flags():
     assert args.output == Path("site-output")
     assert args.host == "127.0.0.1"
     assert args.port == 8123
+
+    generate_only = parser.parse_args([".", "--generate-only"])
+    assert generate_only.generate_only is True
 
 
 def test_preview_page_validation_requires_index_file(tmp_path):
@@ -571,3 +580,9 @@ def test_relation_graph_connects_path_qualified_classes_to_all_methods(tmp_path)
     assert (class_id, "Tool.first", "contains") in edge_pairs
     assert (class_id, "Tool.second", "contains") in edge_pairs
     assert ("Tool.first", "Tool.second", "calls") in edge_pairs
+
+
+def test_structurizr_launcher_rejects_documentation_port_collision(tmp_path):
+    cli_main = importlib.import_module("cli.main")
+    with pytest.raises(RuntimeError, match="conflicts with Structurizr Lite"):
+        cli_main.start_structurizr(tmp_path, docs_port=8080)

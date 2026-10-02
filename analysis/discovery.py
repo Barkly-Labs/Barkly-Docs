@@ -234,6 +234,8 @@ class ProjectDiscovery:
         ".mypy_cache",
         ".docs-check",
         ".barkly-docs-site",
+        # Common generated documentation output; never recursively document it.
+        "docs-site",
         ".ruff_cache",
     }
 
@@ -509,7 +511,7 @@ class ProjectDiscovery:
             # Emit actual work-loop progress, not timer-based/fabricated progress.
             if event_logger is None:
                 return
-            if current == 0 or current == stage_total or current % 25 == 0 or substage.startswith("import_item "):
+            if current == 0 or current == stage_total or current % 250 == 0:
                 event_logger.event(
                     "relationship_map.progress",
                     level="INFO",
@@ -745,7 +747,7 @@ class ProjectDiscovery:
             # Emit actual work-loop progress, not timer-based/fabricated progress.
             if event_logger is None:
                 return
-            if current == 0 or current == stage_total or current % 25 == 0 or substage.startswith("import_item "):
+            if current == 0 or current == stage_total or current % 250 == 0:
                 event_logger.event(
                     "relationship_map.progress",
                     level="INFO",
