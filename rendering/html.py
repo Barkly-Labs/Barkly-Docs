@@ -1696,15 +1696,22 @@ def _render_relationship_group(items) -> str:
 
 
 def _render_index_data_section(title: str, description: str, action: str, body: str) -> str:
+    search_id = "search-" + "".join(ch.lower() if ch.isalnum() else "-" for ch in title).strip("-")
     return (
-        '<details class="index-section-card">'
+        '<details class="index-section-card searchable-section">'
         '<summary><div class="index-section-heading">'
         f'<h2>{_escape(title)}</h2><p>{_escape(description)}</p>'
         '</div>'
         f'<span class="index-section-action" aria-hidden="true">{_escape(action)} ↓</span>'
         '</summary>'
-        f'<div class="index-section-body">{body}</div>'
-        '</details>'
+        '<div class="index-section-body">'
+        '<div class="index-card-tools">'
+        f'<input id="{_escape(search_id)}" class="index-card-search" type="search" '
+        f'placeholder="Search {_escape(title.lower())}…" aria-label="Search {_escape(title.lower())}">'
+        '<span class="index-card-count" aria-live="polite"></span>'
+        '</div>'
+        f'{body}<div class="index-no-results">No matching items.</div>'
+        '</div></details>'
     )
 
 def _is_json_project_file(item) -> bool:
@@ -1786,6 +1793,35 @@ def _page_shell(title: str, current: str, body: str) -> str:
     {body}
   </main>
   <footer class="site-footer"><div class="container">Generated from the shared Barkly Project Model.</div></footer>
+<script>
+(() => {{
+  const norm = v => (v || "").toLowerCase().trim();
+  document.querySelectorAll(".searchable-section").forEach(section => {{
+    const input = section.querySelector(".index-card-search");
+    const count = section.querySelector(".index-card-count");
+    const items = [...section.querySelectorAll(".entity-list > .entity-item")];
+    const empty = section.querySelector(".index-no-results");
+    if (!input || !items.length) {{
+      if (input) input.closest(".index-card-tools").style.display = "none";
+      return;
+    }}
+    const update = () => {{
+      const q = norm(input.value);
+      let visible = 0;
+      items.forEach(item => {{
+        const show = !q || norm(item.textContent).includes(q);
+        item.hidden = !show;
+        if (show) visible++;
+      }});
+      count.textContent = q ? `${{visible}} of ${{items.length}}` : `${{items.length}} items`;
+      if (empty) empty.style.display = visible ? "none" : "block";
+    }};
+    input.addEventListener("input", update);
+    input.addEventListener("keydown", e => e.stopPropagation());
+    update();
+  }});
+}})();
+</script>
 </body>
 </html>"""
 
@@ -2498,6 +2534,21 @@ def _render_three_layer_architecture(project: Project) -> str:
   }
 }
 
+
+/* Searchable, low-cognitive-load Barkly data cards */
+.index-card-tools{display:flex;align-items:center;gap:10px;margin:0 0 14px}
+.index-card-search{width:100%;min-height:40px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:rgba(255,255,255,.025);color:var(--text);font:500 12px/1.35 "SFMono-Regular",Consolas,monospace;outline:none}
+.index-card-search::placeholder{color:var(--muted)}
+.index-card-search:focus{border-color:rgba(255,107,157,.55);box-shadow:0 0 0 3px rgba(255,107,157,.08)}
+.index-card-count{flex:0 0 auto;color:var(--muted);font:600 9px/1 "SFMono-Regular",Consolas,monospace;white-space:nowrap}
+.index-section-body .entity-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+.index-section-body .entity-item{min-width:0;padding:13px 14px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.018)}
+.index-section-body .entity-item:hover{border-color:rgba(255,107,157,.28);background:rgba(255,107,157,.025)}
+.index-section-body .entity-item h3{margin:0 0 8px;font-size:13px;line-height:1.35;overflow-wrap:anywhere}
+.index-section-body .entity-item .meta{display:block;margin-top:4px;color:var(--muted);font-size:10px;line-height:1.45;overflow-wrap:anywhere}
+.index-no-results{display:none;padding:18px;color:var(--muted);text-align:center;font-size:12px}
+@media(max-width:620px){.index-section-body .entity-list{grid-template-columns:1fr}.index-card-tools{align-items:stretch;flex-direction:column}}
+
 /* Human-centered README presentation */
 .readme-panel {
   border: 1px solid rgba(255,255,255,.075);
@@ -2618,12 +2669,11 @@ def _render_index(project: Project, graph_generated: bool = True) -> str:
         + '</div></details>'
     )
 
-    other_files_section = (
-        '<details class="index-section-card">'
-        '<summary><div class="index-section-heading"><h2>Other project files</h2>'
-        '<p>All discovered non-JSON files, kept separate from structured JSON data.</p></div>'
-        '<span class="index-section-action" aria-hidden="true">Explore files ↓</span></summary>'
-        '<div class="index-section-body">' + _render_other_files(project) + '</div></details>'
+    other_files_section = _render_index_data_section(
+        "Other project files",
+        "All discovered non-JSON files, kept separate so file browsing stays predictable.",
+        "Explore files",
+        _render_other_files(project),
     )
     classes_section = _render_index_data_section(
         "Classes",
@@ -2667,12 +2717,11 @@ def _render_index(project: Project, graph_generated: bool = True) -> str:
         _render_relationship_group(_collect_relationships(project)),
     )
 
-    json_section = (
-        '<details class="index-section-card">'
-        '<summary><div class="index-section-heading"><h2>JSON</h2>'
-        '<p>JSON files and structured JSON values only. Other project files are kept in their own section.</p></div>'
-        '<span class="index-section-action" aria-hidden="true">Explore JSON ↓</span></summary>'
-        '<div class="index-section-body">' + _render_json_data(project) + '</div></details>'
+    json_section = _render_index_data_section(
+        "JSON",
+        "JSON files only. Source symbols and other file types stay in their own sections.",
+        "Explore JSON",
+        _render_json_data(project),
     )
 
     body = (
