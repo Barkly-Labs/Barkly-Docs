@@ -2209,6 +2209,105 @@ def _render_three_layer_architecture(project: Project) -> str:
 .architecture-item[open] > summary .architecture-expand { color: #ff86ad; }
 
 
+
+
+/* Barkly Standard index — same palette, lower cognitive load. */
+.index-human-flow{display:grid;gap:18px;margin-top:26px}
+.index-section-card{border:1px solid var(--line);border-radius:16px;background:var(--panel);overflow:hidden}
+.index-section-card > summary{list-style:none;cursor:pointer;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:18px;user-select:none}
+.index-section-card > summary::-webkit-details-marker{display:none}
+.index-section-card > summary:hover{background:rgba(255,107,157,.025)}
+.index-section-card[open]{border-color:rgba(255,107,157,.24)}
+.index-section-card[open] > summary{border-bottom:1px solid var(--line)}
+.index-section-heading{min-width:0}
+.index-section-heading h2{margin:0 0 6px;font-size:1.18rem}
+.index-section-heading p{margin:0;color:var(--muted);font-size:.84rem;line-height:1.55;max-width:760px}
+.index-section-action{flex:0 0 auto;color:var(--muted);font:600 9px/1.2 "SFMono-Regular",Consolas,monospace;white-space:nowrap}
+.index-section-card:hover .index-section-action{color:var(--accent)}
+.index-section-card[open] .index-section-action{font-size:0}
+.index-section-card[open] .index-section-action:after{content:"Hide ↑";font-size:9px}
+.index-section-body{padding:18px 20px 20px}
+.index-glance{margin-top:26px}
+.index-glance-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:12px}
+.index-glance-head h2{margin:0;font-size:1.25rem}
+.index-glance-head p{margin:4px 0 0;color:var(--muted);font-size:.82rem;max-width:720px;line-height:1.55}
+.index-glance-grid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px}
+.index-glance-card{min-width:0;border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:16px 17px}
+.index-glance-card-purpose{grid-row:span 2}
+.index-glance-card h3{margin:0 0 8px;color:var(--muted);font:700 9px/1.2 "SFMono-Regular",Consolas,monospace;letter-spacing:.08em;text-transform:uppercase}
+.index-glance-card p{margin:0;color:var(--text-soft);line-height:1.6;overflow-wrap:anywhere}
+.index-glance-card-purpose p{font-size:.98rem;color:var(--text)}
+.index-evidence{margin-top:12px;border-top:1px solid var(--line);padding-top:14px}
+.index-evidence h3{margin:0 0 5px;font-size:.9rem}
+.index-evidence > p{margin:0 0 12px;color:var(--muted);font-size:.8rem;line-height:1.55}
+.index-deep-label{margin:30px 0 0;color:var(--accent);font:800 8px/1 "SFMono-Regular",Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+.index-deep-title{margin:7px 0 4px;font-size:1.35rem}
+.index-deep-copy{margin:0 0 14px;color:var(--muted);font-size:.84rem;line-height:1.55;max-width:760px}
+@media(max-width:820px){.index-glance-grid{grid-template-columns:1fr 1fr}.index-glance-card-purpose{grid-column:1/-1;grid-row:auto}}
+@media(max-width:560px){.index-glance-grid{grid-template-columns:1fr}.index-glance-card-purpose{grid-column:auto}.index-section-card > summary{align-items:flex-start;flex-direction:column}.index-glance-head{align-items:flex-start;flex-direction:column}}
+
+/* Collapsible Documentation references card */
+.documentation-card {
+  margin-top: 32px;
+  overflow: hidden;
+}
+.documentation-card > summary {
+  display: block;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  padding: 18px 20px;
+}
+.documentation-card > summary::-webkit-details-marker { display: none; }
+.documentation-card > summary:hover {
+  background: rgba(255,107,157,.025);
+}
+.documentation-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.documentation-card-title {
+  min-width: 0;
+}
+.documentation-card-title h2 {
+  margin: 0 0 8px;
+  font-size: 1.5rem;
+}
+.documentation-card-title .section-subtitle {
+  margin: 0;
+}
+.documentation-card-action {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font: 600 9px/1.2 "SFMono-Regular",Consolas,monospace;
+  white-space: nowrap;
+}
+.documentation-card:hover .documentation-card-action {
+  color: var(--accent);
+}
+.documentation-card[open] .documentation-card-action {
+  font-size: 0;
+}
+.documentation-card[open] .documentation-card-action::after {
+  content: "Hide documentation ↑";
+  font-size: 9px;
+}
+.documentation-card-body {
+  padding: 0 20px 20px;
+  border-top: 1px solid var(--line);
+}
+.documentation-card[open] {
+  border-color: rgba(255,107,157,.28);
+}
+@media (max-width: 560px) {
+  .documentation-card-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 /* Human-centered README presentation */
 .readme-panel {
   border: 1px solid rgba(255,255,255,.075);
@@ -2289,52 +2388,71 @@ def _render_index(project: Project, graph_generated: bool = True) -> str:
         + _stat_card("Relationships", str(len(project.relationships)))
         + "</div>"
     )
+
+    # Human-first orientation: answer the basic project questions before exposing
+    # architecture and source-level detail. No project data is removed.
     overview = (
-        '<div class="section">'
-        "<h2>Project overview</h2>"
-        '<div class="section-subtitle">What this project appears to do, based on declared project metadata and static source evidence.</div>'
-        '<div class="grid">'
-        f'<div class="tile"><h3>Purpose</h3><p>{_escape(description)}</p></div>'
-        f'<div class="tile"><h3>Languages</h3><p>{_escape(", ".join(languages) if languages else "Unknown")}</p></div>'
-        f'<div class="tile"><h3>Root</h3><p>{_escape(project.root)}</p></div>'
-        f'<div class="tile"><h3>Documentation</h3><p>{_escape("README present" if _readme_path(project) else "README not discovered")}</p></div>'
-        "</div>"
-        "</div>"
-    )
-    evidence = (
-        '<div class="section">'
-        "<h2>Evidence and limits</h2>"
-        '<div class="section-subtitle">Declared facts, detected structure, inferred patterns, and unknown areas remain clearly separated.</div>'
+        '<section class="index-glance" aria-labelledby="at-a-glance-title">'
+        '<div class="index-glance-head"><div>'
+        '<h2 id="at-a-glance-title">Project at a glance</h2>'
+        '<p>Start here. The essential project facts are grouped together so the page can be understood before exploring implementation detail.</p>'
+        '</div></div>'
+        '<div class="index-glance-grid">'
+        f'<article class="index-glance-card index-glance-card-purpose"><h3>Purpose</h3><p>{_escape(description)}</p></article>'
+        f'<article class="index-glance-card"><h3>Languages</h3><p>{_escape(", ".join(languages) if languages else "Unknown")}</p></article>'
+        f'<article class="index-glance-card"><h3>Documentation</h3><p>{_escape("README present" if _readme_path(project) else "README not discovered")}</p></article>'
+        f'<article class="index-glance-card"><h3>Project root</h3><p>{_escape(project.root)}</p></article>'
+        '<article class="index-glance-card"><h3>Analysis basis</h3><p>Static project evidence with declared, detected, inferred, and unknown states kept separate.</p></article>'
+        '</div>'
+        '<div class="index-evidence">'
+        '<h3>Evidence and limits</h3>'
+        '<p>Confidence stays visible without competing with the main project summary.</p>'
         + _evidence_summary(project)
-        + '<div class="tile" style="margin-top:12px;"><h3>Evidence labels</h3><p>DECLARED = explicitly stated in source or project metadata; DETECTED = directly identified through static analysis; INFERRED = derived but not directly observed; UNKNOWN = not established by available evidence.</p></div>'
-        + "</div>"
+        + '</div>'
+        '</section>'
     )
+
     documentation = (
-        '<div class="section">'
-        "<h2>Documentation references</h2>"
-        '<div class="section-subtitle">The project README is rendered as Markdown when it exists, preserving its headings, lists, links, code blocks, and other readable structure.</div>'
+        '<details class="card documentation-card">'
+        '<summary>'
+        '<div class="documentation-card-heading">'
+        '<div class="documentation-card-title">'
+        '<h2>Documentation references</h2>'
+        '<div class="section-subtitle">Read the project README and its preserved Markdown structure when you need source documentation.</div>'
+        '</div>'
+        '<span class="documentation-card-action" aria-hidden="true">View documentation ↓</span>'
+        '</div>'
+        '</summary>'
+        '<div class="documentation-card-body">'
         + _render_readme(project)
-        + "</div>"
+        + '<div class="tile" style="margin-top:12px;"><h3>Evidence labels</h3><p>DECLARED = explicitly stated in source or project metadata; DETECTED = directly identified through static analysis; INFERRED = derived but not directly observed; UNKNOWN = not established by available evidence.</p></div>'
+        + '</div></details>'
     )
+
     structure = (
-        '<div class="section">'
-        "<h2>Project structure</h2>"
-        '<div class="section-subtitle">Discovered files and their source identities.</div>'
-        + _render_files(project)
-        + "</div>"
+        '<details class="index-section-card">'
+        '<summary><div class="index-section-heading"><h2>Project structure</h2>'
+        '<p>Discovered files and their source identities. Open this when you need the file-level view.</p></div>'
+        '<span class="index-section-action" aria-hidden="true">Explore files ↓</span></summary>'
+        '<div class="index-section-body">' + _render_files(project) + '</div></details>'
     )
     json_section = (
-        '<div class="section">'
-        "<h2>JSON data</h2>"
-        '<div class="section-subtitle">Structured JSON values extracted as data facts without classifying them as functions or methods.</div>'
-        + _render_json_data(project)
-        + "</div>"
+        '<details class="index-section-card">'
+        '<summary><div class="index-section-heading"><h2>JSON data</h2>'
+        '<p>Structured JSON values extracted as data facts, separated from functions and methods.</p></div>'
+        '<span class="index-section-action" aria-hidden="true">Explore data ↓</span></summary>'
+        '<div class="index-section-body">' + _render_json_data(project) + '</div></details>'
     )
 
     body = (
         f'<section class="hero">{project_summary}{stats}</section>'
-        f"{_render_three_layer_architecture(project)}"
-        f"{documentation}{overview}{evidence}{structure}{json_section}"
+        f'{overview}'
+        f'{_render_three_layer_architecture(project)}'
+        f'{documentation}'
+        '<div class="index-deep-label">Reference layer</div>'
+        '<h2 class="index-deep-title">Deeper project detail</h2>'
+        '<p class="index-deep-copy">The overview stays calm by default. File-level and structured-data detail remains available here when you need to investigate further.</p>'
+        f'<div class="index-human-flow">{structure}{json_section}</div>'
     )
     return _page_shell(
         f"{_project_name(project)} — Barkly Docs",
