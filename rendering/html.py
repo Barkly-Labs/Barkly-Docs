@@ -539,8 +539,8 @@ a:focus-visible {
 .entity-row-action { color: var(--accent); font-size: .68rem; white-space: nowrap; }
 .entity-expandable[open] .entity-row-action { font-size: 0; }
 .entity-expandable[open] .entity-row-action::after { content: "Hide ↑"; font-size: .68rem; }
-.entity-expandable[open] { border-color: rgba(255,107,157,.34); }
-.entity-expanded-view { padding: 16px 18px 18px; border-top: 1px solid var(--line); background: #0b0b0b; }
+.entity-expandable[open] { border-color: rgba(255,107,157,.34); width: 100%; min-width: 0; }
+.entity-expanded-view { width: 100%; min-width: 0; padding: 16px 18px 18px; border-top: 1px solid var(--line); background: #0b0b0b; }
 .entity-expanded-description { margin: 0 0 14px; color: var(--muted); }
 .entity-expanded-facts { display: grid; gap: 8px; margin: 0 0 14px; }
 .entity-expanded-facts > div { display: grid; grid-template-columns: 100px minmax(0,1fr); gap: 12px; }
@@ -550,9 +550,9 @@ a:focus-visible {
 .entity-child-row { display: grid; gap: 4px; padding: 9px 0; border-bottom: 1px solid #202020; }
 .entity-child-row:last-child { border-bottom: 0; }
 .entity-child-row span { color: var(--muted); font-size: .82rem; }
-.entity-source-preview { margin-top: 14px; }
+.entity-source-preview { width: 100%; min-width: 0; margin-top: 14px; }
 .entity-source-preview .entity-detail-label { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 7px; }
-.entity-source-preview pre { margin: 0; max-height: 300px; overflow: auto; padding: 13px; border: 1px solid var(--line); border-radius: 10px; background: #070707; }
+.entity-source-preview pre { width: 100%; min-width: 0; margin: 0; max-height: 300px; overflow: auto; padding: 13px; border: 1px solid var(--line); border-radius: 10px; background: #070707; }
 .entity-source-preview code { font-family: Consolas, "SFMono-Regular", monospace; font-size: .78rem; white-space: pre; }
 @media (max-width: 900px) {
   .entity-row-summary { grid-template-columns: 1fr auto; }
@@ -2554,6 +2554,7 @@ def _render_three_layer_architecture(project: Project) -> str:
         ".architecture-item{margin:0!important;padding:0!important;min-width:0;min-height:112px;"
         "overflow:hidden;overflow-wrap:anywhere;border:1px solid var(--border,#383838);"
         "background:linear-gradient(180deg,rgba(255,255,255,.018),rgba(255,255,255,.006));}"
+        ".architecture-item[open]{grid-column:1/-1;width:100%;min-width:0}"
         ".architecture-item-summary{display:block;min-height:112px;padding:.7rem .75rem;"
         "cursor:pointer;list-style:none;box-sizing:border-box}"
         ".architecture-item-summary::-webkit-details-marker{display:none}"
@@ -2569,13 +2570,20 @@ def _render_three_layer_architecture(project: Project) -> str:
         ".architecture-expand{align-self:end;white-space:nowrap;color:#9b979a;font-size:.63rem}"
         ".architecture-item[open] .architecture-expand{font-size:0}"
         '.architecture-item[open] .architecture-expand:after{content:"Hide details ↑";font-size:.63rem}'
-        ".architecture-item-details{padding:.7rem .75rem .8rem;border-top:1px solid #222;"
+        ".architecture-item-details{width:100%;min-width:0;padding:.7rem .75rem .8rem;border-top:1px solid #222;"
         "color:var(--muted,#aaa);font-size:.78rem;line-height:1.5}"
         ".architecture-path{font-size:.72rem;overflow-wrap:anywhere}"
-        ".architecture-source-preview{margin-top:.65rem;border:1px solid #292929;border-radius:9px;overflow:hidden;background:#090909}"
+        ".architecture-expanded-heading{width:100%;margin:0 0 .35rem;font-weight:700;color:var(--text,#f5f5f5)}"
+        ".architecture-entity-description{width:100%;max-width:none;margin:.25rem 0 .75rem}"
+        ".architecture-entity-facts{display:grid!important;grid-template-columns:1fr!important;width:100%!important;max-width:none!important;min-width:0!important;margin:.5rem 0!important;padding:0!important;gap:.45rem}"
+        ".architecture-entity-facts>div{display:grid!important;grid-template-columns:minmax(90px,140px) minmax(0,1fr)!important;width:100%!important;max-width:none!important;min-width:0!important;align-items:start;gap:.75rem;padding:.45rem .55rem;border:1px solid #242424;border-radius:8px;background:#0b0b0b;box-sizing:border-box}"
+        ".architecture-entity-facts dt{margin:0;color:#8f898d;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em}"
+        ".architecture-entity-facts dd{margin:0!important;min-width:0!important;width:auto!important;max-width:none!important;overflow-wrap:normal!important;word-break:normal!important;white-space:normal}"
+        ".architecture-entity-facts dd.code{white-space:pre-wrap!important;overflow-wrap:anywhere!important;word-break:normal!important}"
+        ".architecture-source-preview{display:block!important;width:100%!important;max-width:none!important;min-width:0!important;box-sizing:border-box;margin-top:.65rem;border:1px solid #292929;border-radius:9px;overflow:hidden;background:#090909}"
         ".architecture-source-label{display:flex;justify-content:space-between;gap:.75rem;padding:.38rem .55rem;border-bottom:1px solid #242424;color:#d4d0d2;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.045em}"
         ".architecture-source-label span{color:#777;font-weight:500;text-transform:none;letter-spacing:0}"
-        ".architecture-source-preview pre{margin:0;padding:.6rem;max-height:15rem;overflow:auto;background:#090909}"
+        ".architecture-source-preview pre{display:block!important;width:100%!important;max-width:100%!important;min-width:0!important;box-sizing:border-box;margin:0;padding:.6rem;max-height:15rem;overflow:auto;background:#090909}"
         ".architecture-source-preview code{font-family:Consolas,\"SFMono-Regular\",monospace;font-size:.7rem;line-height:1.5;color:#ddd;white-space:pre;tab-size:4}"
         ".architecture-match-note{margin:.45rem 0 0;color:#7f7a7e;font-size:.68rem}"
         ".architecture-empty,.architecture-more{color:var(--muted,#aaa);font-size:.82rem}"
@@ -2912,6 +2920,76 @@ def _render_three_layer_architecture(project: Project) -> str:
 .subpage-header + .section,
 .subpage-header + .card {
   margin-top: 12px;
+}
+
+
+/* Entity disclosure layout fix.
+   The expandable <details> owns the full row. Only its <summary> is a grid. */
+.index-section-body .entity-item.entity-expandable {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  min-height: 0;
+}
+
+.index-section-body .entity-item.entity-expandable > .entity-row-summary {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns:
+    minmax(180px, 1.15fr)
+    minmax(100px, .55fr)
+    minmax(110px, .55fr)
+    minmax(260px, 2fr)
+    auto;
+  align-items: center;
+  gap: 10px 18px;
+  padding: 10px 12px;
+}
+
+.index-section-body .entity-item.entity-expandable > .entity-expanded-view {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  grid-column: 1 / -1;
+  padding: 16px 18px 18px;
+}
+
+.index-section-body .entity-item.entity-expandable .entity-source-preview,
+.index-section-body .entity-item.entity-expandable .entity-source-preview pre {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.index-section-body.show-all .entity-item.entity-expandable:nth-child(n+13) {
+  display: block;
+}
+
+@media (max-width: 900px) {
+  .index-section-body .entity-item.entity-expandable > .entity-row-summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .index-section-body .entity-item.entity-expandable > .entity-row-summary .meta {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 620px) {
+  .index-section-body .entity-item.entity-expandable {
+    padding: 0;
+  }
+  .index-section-body .entity-item.entity-expandable > .entity-row-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 11px 12px;
+  }
+  .index-section-body .entity-item.entity-expandable > .entity-row-summary .meta,
+  .index-section-body .entity-item.entity-expandable > .entity-row-summary .entity-row-action {
+    grid-column: 1;
+  }
 }
 
 </style>"""
