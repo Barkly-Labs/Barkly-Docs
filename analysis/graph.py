@@ -113,16 +113,25 @@ class RelationGraph:
     max_nodes: int | None = None
     max_edges: int | None = None
     generated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    _node_ids: set[str] = field(default_factory=set, init=False, repr=False)
+    _edge_ids: set[str] = field(default_factory=set, init=False, repr=False)
 
     def add_node(self, node: GraphNode) -> None:
-        if any(existing.id == node.id for existing in self.nodes):
+        # Seed indexes if callers initialized the public lists directly.
+        if not self._node_ids and self.nodes:
+            self._node_ids.update(existing.id for existing in self.nodes)
+        if node.id in self._node_ids:
             return
         self.nodes.append(node)
+        self._node_ids.add(node.id)
 
     def add_edge(self, edge: GraphEdge) -> None:
-        if any(existing.id == edge.id for existing in self.edges):
+        if not self._edge_ids and self.edges:
+            self._edge_ids.update(existing.id for existing in self.edges)
+        if edge.id in self._edge_ids:
             return
         self.edges.append(edge)
+        self._edge_ids.add(edge.id)
 
     def summary(self) -> dict[str, int]:
         return {
@@ -206,48 +215,61 @@ def _relationship_explanation(kind: str, detail: dict[str, Any] | None = None) -
     return detail.get("message", "Static source evidence captured by the project analysis pipeline.")
 
 
-def _match_known_symbol(project: Project, name: str | None, *, path: str | None = None) -> str | None:
+def _build_symbol_index(project: Project) -> tuple[dict[str, str], dict[tuple[str, str], str]]:
+    """Index known project symbols once so resolving thousands of imports is O(1)."""
+    symbols: dict[str, str] = {}
+    classes_by_name_path: dict[tuple[str, str], Any] = {}
+
+    def add(name: str | None, identifier: str) -> None:
+        normalized = _normalize_identifier(name)
+        if normalized:
+            # setdefault preserves the same first-match priority as the old scans.
+            symbols.setdefault(normalized, identifier)
+
+    for module in project.modules:
+        if _is_project_source_path(project, _node_source_path(module)):
+            add(module.name, f"module:{module.name}")
+            add(module.path, f"module:{module.name}")
+    for file in project.files:
+        if _is_project_source_path(project, _node_source_path(file)):
+            add(file.path, f"file:{file.path}")
+    for class_node in project.classes:
+        if _is_project_source_path(project, _node_source_path(class_node)):
+            add(class_node.name, class_node.name)
+            add(class_node.path, class_node.name)
+            classes_by_name_path.setdefault((class_node.name, class_node.path or ""), class_node)
+    for function in project.functions:
+        if _is_project_source_path(project, _node_source_path(function)):
+            add(function.name, function.name)
+            add(function.metadata.get("qualified_name"), str(function.metadata.get("qualified_name") or ""))
+    for method in project.methods:
+        if _is_project_source_path(project, _node_source_path(method)):
+            add(method.name, method.class_name + "." + method.name if method.class_name else method.name)
+            add(method.metadata.get("qualified_name"), str(method.metadata.get("qualified_name") or ""))
+    for endpoint in project.endpoints:
+        if _is_project_source_path(project, _node_source_path(endpoint)):
+            add(endpoint.path, endpoint.handler or endpoint.path)
+            add(endpoint.handler, endpoint.handler or endpoint.path)
+    return symbols, classes_by_name_path
+
+
+def _match_known_symbol(
+    project: Project,
+    name: str | None,
+    *,
+    path: str | None = None,
+    symbol_index: dict[str, str] | None = None,
+) -> str | None:
     if not name:
         return None
     normalized = _normalize_identifier(name)
     if not normalized:
         return None
-    for module in project.modules:
-        if not _is_project_source_path(project, _node_source_path(module)):
-            continue
-        if module.name == normalized or module.path == normalized:
-            return f"module:{module.name}"
-    for file in project.files:
-        if not _is_project_source_path(project, _node_source_path(file)):
-            continue
-        if file.path == normalized:
-            return f"file:{file.path}"
-    for class_node in project.classes:
-        if not _is_project_source_path(project, _node_source_path(class_node)):
-            continue
-        if class_node.name == normalized:
-            return class_node.name
-        if class_node.path == normalized:
-            return class_node.name
-    for function in project.functions:
-        if not _is_project_source_path(project, _node_source_path(function)):
-            continue
-        if function.name == normalized:
-            return function.name
-        if function.metadata.get("qualified_name") == normalized:
-            return str(function.metadata.get("qualified_name"))
-    for method in project.methods:
-        if not _is_project_source_path(project, _node_source_path(method)):
-            continue
-        if method.name == normalized:
-            return method.class_name + "." + method.name if method.class_name else method.name
-        if method.metadata.get("qualified_name") == normalized:
-            return str(method.metadata.get("qualified_name"))
-    for endpoint in project.endpoints:
-        if not _is_project_source_path(project, _node_source_path(endpoint)):
-            continue
-        if endpoint.path == normalized or endpoint.handler == normalized:
-            return endpoint.handler or endpoint.path
+    if symbol_index is None:
+        symbol_index, _ = _build_symbol_index(project)
+    match = symbol_index.get(normalized)
+    if match is not None:
+        return match
     if path:
         file_name = str(Path(path)).replace("\\", "/").rsplit("/", 1)[-1]
         if file_name == normalized:
@@ -289,7 +311,7 @@ def build_relation_graph(
     """Build the relation graph and optionally report real loop progress.
 
     The callback receives (stage_name, current_item, total_items). Updates are
-    emitted at the beginning, every 250 items, and at completion of each stage.
+    emitted at the beginning, every 25 items, and at completion of each stage.
     """
     graph = RelationGraph(project=project, view=view, max_nodes=max_nodes, max_edges=max_edges)
 
@@ -302,10 +324,11 @@ def build_relation_graph(
         report_progress(stage, 0, total)
         for index, item in enumerate(items, start=1):
             yield item
-            if index % 250 == 0 or index == total:
+            if index % 25 == 0 or index == total:
                 report_progress(stage, index, total)
 
     known_identifiers: set[str] = set()
+    symbol_index, classes_by_name_path = _build_symbol_index(project)
 
     for file in progress_items("files", project.files):
         if not _is_project_source_path(project, _node_source_path(file)):
@@ -524,13 +547,15 @@ def build_relation_graph(
         )
         if method.class_name:
             class_id = method.class_name
-            matching_class = next(
-                (item for item in project.classes
-                 if item.name == method.class_name
-                 and _is_project_source_path(project, _node_source_path(item))
-                 and (not method.path or not item.path or item.path == method.path)),
-                None,
+            matching_class = (
+                classes_by_name_path.get((method.class_name, method.path or ""))
+                or classes_by_name_path.get((method.class_name, ""))
             )
+            if matching_class is None and not method.path:
+                matching_class = next(
+                    (item for (name, _), item in classes_by_name_path.items() if name == method.class_name),
+                    None,
+                )
             if matching_class is not None and matching_class.path:
                 class_id = f"{matching_class.name}@{matching_class.path}"
             graph.add_edge(
@@ -577,11 +602,20 @@ def build_relation_graph(
                 )
             )
 
-    for import_node in progress_items("imports", project.imports):
+    import_total = len(project.imports)
+    report_progress("imports", 0, import_total)
+    for import_index, import_node in enumerate(project.imports, start=1):
+        # Log the specific import before resolution, so a slow item is identifiable.
+        if import_index == 1 or import_index % 25 == 0 or import_index == import_total:
+            report_progress(
+                f"import_item {import_node.source_file} -> {import_node.target}",
+                import_index,
+                import_total,
+            )
         if not _is_project_source_path(project, import_node.source_file):
             continue
-        source_id = _match_known_symbol(project, import_node.source_file) or import_node.source_file
-        target_id = _match_known_symbol(project, import_node.target) or import_node.target
+        source_id = _match_known_symbol(project, import_node.source_file, symbol_index=symbol_index) or import_node.source_file
+        target_id = _match_known_symbol(project, import_node.target, symbol_index=symbol_index) or import_node.target
         graph.add_edge(
             GraphEdge(
                 id=f"{source_id}->{target_id}",
@@ -597,11 +631,13 @@ def build_relation_graph(
             )
         )
 
+    report_progress("imports", import_total, import_total)
+
     for relationship in progress_items("relationships", project.relationships):
         if not _is_project_source_path(project, relationship.source_file):
             continue
-        source_id = _match_known_symbol(project, relationship.source, path=relationship.source_file) or relationship.source
-        target_id = _match_known_symbol(project, relationship.target, path=relationship.source_file) or relationship.target
+        source_id = _match_known_symbol(project, relationship.source, path=relationship.source_file, symbol_index=symbol_index) or relationship.source
+        target_id = _match_known_symbol(project, relationship.target, path=relationship.source_file, symbol_index=symbol_index) or relationship.target
         kind = relationship.kind
         edge = GraphEdge(
             id=f"{source_id}->{target_id}:{kind}:{relationship.source_file or 'unknown'}:{relationship.source_location.get('line') if relationship.source_location else ''}",
