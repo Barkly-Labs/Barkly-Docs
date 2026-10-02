@@ -684,6 +684,15 @@ def _read_readme(project: Project) -> str:
 
 def _markdown_inline(value: str) -> str:
     """Render common README Markdown inline syntax to safe HTML."""
+    # Preserve only bare <i> / </i> tags through the fallback escaping pass.
+    # Attributes are intentionally not accepted, so normal HTML remains escaped.
+    italic_tokens: list[str] = []
+
+    def preserve_italic(match: re.Match[str]) -> str:
+        italic_tokens.append(match.group(0).lower())
+        return f"\x00BARKLYITALICTOKEN{len(italic_tokens) - 1}ZZ\x00"
+
+    value = re.sub(r"</?i\s*>", preserve_italic, value, flags=re.IGNORECASE)
     escaped = html.escape(value, quote=False)
     escaped = re.sub(
         r'!\[([^\]]*)\]\(([^)\s]+)(?:\s+["\']([^"\']*)["\'])?\)',
@@ -717,6 +726,8 @@ def _markdown_inline(value: str) -> str:
     escaped = re.sub(r"~~([^~]+)~~", r"<del>\1</del>", escaped)
     escaped = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<em>\1</em>", escaped)
     escaped = re.sub(r"(?<!_)_([^_]+)_(?!_)", r"<em>\1</em>", escaped)
+    for index, tag in enumerate(italic_tokens):
+        escaped = escaped.replace(f"\x00BARKLYITALICTOKEN{index}ZZ\x00", tag)
     return escaped
 
 

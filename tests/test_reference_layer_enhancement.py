@@ -39,3 +39,22 @@ def test_existing_main_page_sections_and_order_are_preserved(tmp_path):
     positions = [page.index(f'<h2>{title}</h2>') for title in expected]
     assert positions == sorted(positions)
     assert 'Project documentation context' not in page
+
+
+def test_readme_inline_i_tag_is_preserved_and_other_html_is_escaped():
+    from rendering.html import _markdown_inline
+
+    rendered = _markdown_inline("before <i>italic text</i> after <script>alert(1)</script>")
+
+    assert "<i>italic text</i>" in rendered
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in rendered
+    assert "<script>" not in rendered
+
+
+def test_readme_inline_i_tag_with_attributes_is_not_broadly_allowed():
+    from rendering.html import _markdown_inline
+
+    rendered = _markdown_inline('<i onclick="alert(1)">unsafe attrs</i>')
+
+    assert '&lt;i onclick="alert(1)"&gt;' in rendered
+    assert "<i onclick=" not in rendered

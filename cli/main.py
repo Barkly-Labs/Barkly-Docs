@@ -347,7 +347,7 @@ def ensure_website_generated(
     if output_dir is None:
         raise FileNotFoundError("No output directory supplied for the HTML website.")
 
-    output_dir = Path(output_dir)
+    output_dir = Path(output_dir).resolve()
 
     # Always regenerate so preview never serves stale HTML from an older run.
     render_project_website(project_obj, output_dir)
@@ -369,7 +369,9 @@ def build_preview_server(
 
 
 
+    output_dir = Path(output_dir).resolve()
     validate_preview_landing_page(output_dir)
+    serve_root = str(output_dir)
 
 
 
@@ -381,7 +383,7 @@ def build_preview_server(
 
                 *args,
 
-                directory=str(Path(output_dir).resolve()),
+                directory=serve_root,
 
                 **kwargs,
 
