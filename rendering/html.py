@@ -257,7 +257,9 @@ nav.site-nav a.active {
   grid-template-columns: minmax(0, 2fr) minmax(260px, 360px);
   gap: 18px;
   margin-top: 24px;
+  min-width: 0;
 }
+#relation-map-shell > * { min-width: 0; }
 #relation-map-panel,
 #relation-map-details {
   background: var(--panel);
@@ -686,13 +688,15 @@ a:focus-visible {
   gap: 16px; align-items: center; padding: 13px 14px;
 }
 .entity-explorer-primary { display: flex; gap: 9px; align-items: center; min-width: 0; flex-wrap: wrap; }
+.entity-row-name { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
 .entity-type-tag {
   display: inline-flex; align-items: center; border: 1px solid rgba(255,107,157,.28);
   background: rgba(255,107,157,.1); color: var(--accent); border-radius: 999px;
   padding: 2px 7px; font-size: .68rem; letter-spacing: .04em; text-transform: uppercase;
 }
 .entity-explorer-meta { display: grid; min-width: 0; color: var(--muted); font-size: .76rem; }
-.entity-explorer-meta span { overflow-wrap: anywhere; }
+.entity-explorer-meta span { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+.entity-expanded-description, .entity-related, .entity-members, .entity-expanded-facts code { overflow-wrap: anywhere; word-break: break-word; }
 .entity-disclosure-button { white-space: nowrap; }
 .entity-explorer-item .entity-expanded-view { border-top: 1px solid var(--line); }
 .entity-related { margin-top: 14px; }
@@ -734,11 +738,12 @@ a:focus-visible {
 .index-reference-docs .tile li{margin:7px 0}
 .readme-content img{max-width:100%;height:auto}
 /* Secondary pages use the same surfaces, controls, and hierarchy as index.html. */
-.subpage-header { display:block; width:100%; margin:32px 0 0; padding:0 0 22px; text-align:left; }
-.subpage-header .kicker { display:block; width:100%; margin:0 0 8px; }
-.subpage-header h1 { margin:0 0 8px; font-size:clamp(2rem,4vw,3.25rem); line-height:1.1; letter-spacing:-.045em; }
-.subpage-header p { max-width:72ch; margin:0; color:var(--muted); }
-.subpage-header + .section, .subpage-header + .card { margin-top:12px; }
+.subpage-header { display:block; width:100%; margin:32px 0 0; padding:28px; text-align:left; }
+.subpage-header .kicker { display:block; width:100%; margin:0 0 10px; }
+.subpage-header h1 { margin:0 0 12px; font-size:clamp(2.4rem,5vw,4.5rem); line-height:1.08; letter-spacing:-.06em; }
+.subpage-header p { max-width:60ch; margin:0; color:var(--muted); }
+.subpage-header + .section, .subpage-header + .card { margin-top:32px; }
+.entity-explorer-section.card { padding:28px; }
 .entity-explorer-tools, .relation-map-toolbar { border:1px solid rgba(255,255,255,.06); border-radius:10px; background:rgba(15,15,16,.94); box-shadow:0 10px 30px var(--shadow); backdrop-filter:blur(10px); }
 .entity-search-row input[type="search"], .relationship-filter-row select, .relation-map-search-wrap input, .relation-map-filter-grid select { min-height:40px; border:1px solid var(--line); border-radius:9px; background:rgba(255,255,255,.025); color:var(--text); }
 .entity-search-row input[type="search"]:focus, .relationship-filter-row select:focus, .relation-map-search-wrap input:focus, .relation-map-filter-grid select:focus { border-color:rgba(255,107,157,.55); box-shadow:0 0 0 3px rgba(255,107,157,.08); }
@@ -751,7 +756,23 @@ a:focus-visible {
 .relation-map-accessible, .relation-map-legend { border-color:rgba(255,255,255,.065); background:linear-gradient(135deg,rgba(255,107,157,.035),transparent 58%),var(--panel); }
 .relation-map-search-results { background:var(--panel); box-shadow:0 10px 30px var(--shadow); }
 .relation-map-search-results button { background:transparent; }
-@media (max-width:760px) { .subpage-header { margin-top:24px; } }
+.relation-map-toolbar { margin-bottom:0; }
+.relation-map-search-wrap input::placeholder { color:#858585; opacity:1; }
+.relation-map-search-results button:focus-visible, .relation-map-actions button:focus-visible, .relation-link:focus-visible, .entity-search-clear:focus-visible, .entity-disclosure-button:focus-visible { border-color:var(--accent); }
+#relation-map-panel, #relation-map-details, #relation-map-canvas { min-width:0; }
+#relation-map-details { scrollbar-color:var(--line) var(--panel); }
+.relation-map-accessible button { max-width:100%; overflow-wrap:anywhere; text-align:left; }
+.entity-explorer-section, .entity-explorer, .entity-explorer-list, .entity-explorer-item, .entity-expanded-view { min-width:0; }
+@media (max-width:760px) {
+  .subpage-header { margin-top:24px; padding:22px; }
+  .entity-explorer-section.card { padding:18px; }
+  .relation-map-toolbar { padding:14px; }
+  .relation-map-actions > button { flex:1 1 140px; }
+}
+@media (max-width:560px) {
+  .subpage-header h1 { font-size:clamp(2.15rem,12vw,3.2rem); letter-spacing:-.05em; }
+  .relation-map-actions > button { width:100%; flex-basis:100%; }
+}
 
 """
 

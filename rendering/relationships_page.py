@@ -216,7 +216,7 @@ RELATIONSHIP_EXPLORER_SCRIPT = r"""
 
 def render_relationships_page(project: Project) -> str:
     body = (
-        '<section class="subpage-header">'
+        '<section class="subpage-header card">'
         '<div class="kicker">Barkly Docs · Project relationships</div>'
         '<h1>Relationships</h1>'
         '<p>Search detected connections, then expand a relationship to inspect its direction, evidence, source, and recorded metadata.</p>'

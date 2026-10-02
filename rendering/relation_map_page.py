@@ -16,7 +16,7 @@ def render_relation_map_page(project: Project) -> str:
     payload = payload.replace("&", "\\u0026").replace("<", "\\u003c").replace(">", "\\u003e")
 
     body = (
-        '<section class="subpage-header">'
+        '<section class="subpage-header card">'
         '<div class="kicker">Barkly Docs · Project explorer</div>'
         '<h1>Relationship Map</h1>'
         '<p>Explore the real project graph as a focused spider map. Search the complete '

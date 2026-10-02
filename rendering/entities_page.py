@@ -362,12 +362,12 @@ ENTITY_EXPLORER_SCRIPT = r"""
 
 def render_entities_page(project: Project) -> str:
     body = (
-        '<section class="subpage-header">'
+        '<section class="subpage-header card">'
         '<div class="kicker">Barkly Docs · Project entities</div>'
         '<h1>Entities</h1>'
         '<p>Search the project model, then expand an entity to understand its purpose, source, members, and recorded relationships.</p>'
         '</section>'
-        '<section class="section entity-explorer-section">'
+        '<section class="section entity-explorer-section card">'
         '<h2>Entity explorer</h2>'
         '<div class="section-subtitle">Descriptions and relationships reflect the documentation and evidence already present in the shared project model.</div>'
         + _render_entity_explorer(project)
