@@ -1235,6 +1235,11 @@ def _project_description(project: Project) -> str:
                 if lead:
                     break
                 continue
+            # README badges and image-only lines are media, not project prose.
+            # Rendering them as the lead escapes valid Markdown and duplicates the
+            # same content that is correctly rendered in the README body below.
+            if re.match(r"^\s*(?:\[)?!\[", stripped):
+                continue
             lead.append(re.sub(r"[`*_>#]", "", stripped))
             if len(" ".join(lead)) >= 220:
                 break

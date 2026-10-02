@@ -69,3 +69,63 @@ def test_generated_index_contains_clickable_badges(tmp_path, monkeypatch):
     assert "[![Gem Version]" not in readme.get_text()
     assert (out/"relation-map.html").is_file()
     assert (out/"assets"/"relation-map.js").is_file()
+
+
+def test_fenced_code_keeps_linked_image_markdown_literal():
+    markdown = """\
+```markdown
+[![Gem Version](https://badge.fury.io/rb/sinatra.svg)](https://badge.fury.io/rb/sinatra)
+```
+"""
+    soup = BeautifulSoup(_fallback(markdown), "html.parser")
+    pre = soup.find("pre")
+    assert pre is not None
+    assert "[![Gem Version](https://badge.fury.io/rb/sinatra.svg)](https://badge.fury.io/rb/sinatra)" in pre.get_text()
+    assert pre.find("a") is None
+    assert pre.find("img") is None
+
+
+def test_sinatra_badges_are_not_reused_as_readme_lead(tmp_path):
+    source = (
+        "# Sinatra\n\n"
+        "[![Gem Version](https://badge.fury.io/rb/sinatra.svg)](https://badge.fury.io/rb/sinatra)\n\n"
+        "[![Testing](https://github.com/sinatra/sinatra/actions/workflows/test.yml/badge.svg)](https://github.com/sinatra/sinatra/actions/workflows/test.yml)\n\n"
+        "Sinatra is a DSL for quickly creating web applications in Ruby with minimal effort.\n"
+    )
+    project_dir = tmp_path / "sinatra"
+    project_dir.mkdir()
+    readme = project_dir / "README.md"
+    readme.write_text(source, encoding="utf-8")
+    project = Project(name="Sinatra", root=str(project_dir))
+
+    # Source/file-reader stage is lossless.
+    assert readme.read_text(encoding="utf-8") == source
+    assert renderer._read_readme(project) == source
+
+    # Asset rewriting must not alter remote badge Markdown.
+    body = "\n".join(source.splitlines()[1:])
+    assert renderer._rewrite_readme_asset_urls(project, body) == body
+
+    # Badge-only media lines must not become escaped project prose.
+    assert renderer._project_description(project).startswith("Sinatra is a DSL")
+
+    output = tmp_path / "site"
+    renderer.render_project_website(project, output)
+    generated = (output / "index.html").read_text(encoding="utf-8")
+    soup = BeautifulSoup(generated, "html.parser")
+    panel = soup.select_one(".readme-panel")
+    assert panel is not None
+    lead = panel.select_one(".readme-lead")
+    assert lead is not None
+    assert "[![" not in lead.get_text()
+    assert lead.get_text().startswith("Sinatra is a DSL")
+    assert panel.find("a", href="https://badge.fury.io/rb/sinatra").find(
+        "img", src="https://badge.fury.io/rb/sinatra.svg", alt="Gem Version"
+    )
+    assert panel.find(
+        "a", href="https://github.com/sinatra/sinatra/actions/workflows/test.yml"
+    ).find(
+        "img",
+        src="https://github.com/sinatra/sinatra/actions/workflows/test.yml/badge.svg",
+        alt="Testing",
+    )
