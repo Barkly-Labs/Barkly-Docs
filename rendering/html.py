@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import json
 import re
+import shutil
 from pathlib import Path
 
 from analysis.graph import build_relation_graph
@@ -110,6 +111,22 @@ nav.site-nav a.active {
   box-shadow: 0 10px 30px var(--shadow);
 }
 .hero-main { padding: 28px; }
+.hero-readme-image {
+  margin: 0 0 18px;
+  width: 100%;
+  max-height: 280px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #0b0b0b;
+}
+.hero-readme-image img {
+  display: block;
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  object-position: left center;
+}
 .hero-main h1 {
   font-size: clamp(2.4rem, 5vw, 4.5rem);
   margin: 0 0 12px;
@@ -1113,6 +1130,97 @@ def _stat_card(label: str, value: str) -> str:
         "</div>"
     )
 
+
+
+def _readme_image_reference(project: Project) -> tuple[Path, str] | None:
+    """Return the first usable local image referenced by the README."""
+    readme = _readme_path(project)
+    text = _read_readme(project)
+    if readme is None or not text:
+        return None
+
+    candidates: list[tuple[str, str]] = []
+
+    markdown = re.search(
+        r'!\[([^\]]*)\]\(\s*<?([^)\s>]+)>?(?:\s+["\'][^"\']*["\'])?\s*\)',
+        text,
+        flags=re.IGNORECASE,
+    )
+    if markdown:
+        candidates.append((markdown.group(2), markdown.group(1) or "Project image"))
+
+    html_image = re.search(
+        r'<img\b[^>]*?\bsrc\s*=\s*["\']([^"\']+)["\'][^>]*>',
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if html_image:
+        candidates.append((html_image.group(1), "Project image"))
+
+    root = Path(project.root).resolve()
+    for raw_src, alt in candidates:
+        src = html.unescape(raw_src.strip())
+        if not src or src.startswith(("http://", "https://", "//", "data:", "#")):
+            continue
+
+        local_ref = src.split("#", 1)[0].split("?", 1)[0].replace("\\", "/")
+        candidate = (readme.parent / Path(local_ref)).resolve()
+
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            continue
+
+        if candidate.is_file() and candidate.suffix.lower() in {
+            ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"
+        }:
+            return candidate, alt
+
+    return None
+
+
+def _prepare_readme_title_image(project: Project, output_path: Path) -> None:
+    """Copy the README's first local image into assets/readme for the title card."""
+    metadata = getattr(project, "metadata", None)
+    if not isinstance(metadata, dict):
+        return
+
+    metadata.pop("_barkly_readme_title_image", None)
+    metadata.pop("_barkly_readme_title_image_alt", None)
+
+    image = _readme_image_reference(project)
+    if image is None:
+        return
+
+    source, alt = image
+    target_dir = output_path / "assets" / "readme"
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "-", source.name).strip("-") or "readme-image"
+    target = target_dir / safe_name
+    shutil.copy2(source, target)
+
+    metadata["_barkly_readme_title_image"] = f"assets/readme/{safe_name}"
+    metadata["_barkly_readme_title_image_alt"] = alt
+
+
+def _render_readme_title_image(project: Project) -> str:
+    """Render the prepared README image inside the main title card."""
+    metadata = getattr(project, "metadata", None)
+    if not isinstance(metadata, dict):
+        return ""
+
+    src = metadata.get("_barkly_readme_title_image")
+    if not src:
+        return ""
+
+    alt = metadata.get("_barkly_readme_title_image_alt") or "Project image"
+    return (
+        '<div class="hero-readme-image">'
+        f'<img src="{html.escape(str(src), quote=True)}" '
+        f'alt="{html.escape(str(alt), quote=True)}" loading="eager">'
+        '</div>'
+    )
 
 def _render_readme(project: Project) -> str:
     """Render README content as a calm, structured, human-readable document."""
@@ -3154,6 +3262,7 @@ def render_project_website(project: Project, output_dir: str | Path) -> list[Pat
     assets_dir.mkdir(exist_ok=True)
     (assets_dir / "site.css").write_text(CSS, encoding="utf-8")
     (assets_dir / "relation-map.js").write_text(RELATION_MAP_JS, encoding="utf-8")
+    _prepare_readme_title_image(project_obj, output_path)
 
     index_path = output_path / "index.html"
     entities_path = output_path / "entities.html"

@@ -16,6 +16,7 @@ from rendering.html import (
     _render_json_data,
     _render_other_files,
     _render_readme,
+    _render_readme_title_image,
     _render_relationship_group,
     _render_three_layer_architecture,
     _stat_card,
@@ -25,12 +26,15 @@ from rendering.html import (
 def render_index(project: Project, graph_generated: bool = True) -> str:
     description = _project_description(project)
     languages = _languages(project)
+    title_image = _render_readme_title_image(project)
+    hero_class = "card hero-main has-readme-image" if title_image else "card hero-main"
     project_summary = (
-        '<div class="card hero-main">'
-        '<div class="kicker">Project documentation</div>'
-        f"<h1>{_escape(_project_name(project))}</h1>"
-        f"<p>{_escape(description)}</p>"
-        "</div>"
+        f'<div class="{hero_class}">'
+        + '<div class="kicker">Project documentation</div>'
+        + f"<h1>{_escape(_project_name(project))}</h1>"
+        + f"<p>{_escape(description)}</p>"
+        + title_image
+        + "</div>"
     )
     stats = (
         '<div class="card metrics">'
