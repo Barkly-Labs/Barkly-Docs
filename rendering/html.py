@@ -1711,6 +1711,7 @@ def _render_index_data_section(title: str, description: str, action: str, body: 
         '<span class="index-card-count" aria-live="polite"></span>'
         '</div>'
         f'{body}<div class="index-no-results">No matching items.</div>'
+        '<button class="index-card-more" type="button">Show all</button>'
         '</div></details>'
     )
 
@@ -1797,25 +1798,47 @@ def _page_shell(title: str, current: str, body: str) -> str:
 (() => {{
   const norm = v => (v || "").toLowerCase().trim();
   document.querySelectorAll(".searchable-section").forEach(section => {{
+    const body = section.querySelector(".index-section-body");
     const input = section.querySelector(".index-card-search");
     const count = section.querySelector(".index-card-count");
     const items = [...section.querySelectorAll(".entity-list > .entity-item")];
     const empty = section.querySelector(".index-no-results");
+    const more = section.querySelector(".index-card-more");
     if (!input || !items.length) {{
       if (input) input.closest(".index-card-tools").style.display = "none";
+      if (more) more.style.display = "none";
       return;
     }}
+
+    let expanded = false;
     const update = () => {{
       const q = norm(input.value);
-      let visible = 0;
+      let matches = 0;
       items.forEach(item => {{
-        const show = !q || norm(item.textContent).includes(q);
-        item.hidden = !show;
-        if (show) visible++;
+        const match = !q || norm(item.textContent).includes(q);
+        item.dataset.searchMatch = match ? "true" : "false";
+        item.hidden = !match;
+        if (match) matches++;
       }});
-      count.textContent = q ? `${{visible}} of ${{items.length}}` : `${{items.length}} items`;
-      if (empty) empty.style.display = visible ? "none" : "block";
+
+      if (q) {{
+        body.classList.add("show-all");
+        if (more) more.style.display = "none";
+      }} else {{
+        body.classList.toggle("show-all", expanded);
+        if (more) {{
+          more.style.display = items.length > 12 ? "block" : "none";
+          more.textContent = expanded ? "Show less" : `Show all ${{items.length}}`;
+        }}
+      }}
+      count.textContent = q ? `${{matches}} of ${{items.length}}` : `${{items.length}} items`;
+      if (empty) empty.style.display = matches ? "none" : "block";
     }};
+
+    if (more) more.addEventListener("click", () => {{
+      expanded = !expanded;
+      update();
+    }});
     input.addEventListener("input", update);
     input.addEventListener("keydown", e => e.stopPropagation());
     update();
@@ -2548,6 +2571,95 @@ def _render_three_layer_architecture(project: Project) -> str:
 .index-section-body .entity-item .meta{display:block;margin-top:4px;color:var(--muted);font-size:10px;line-height:1.45;overflow-wrap:anywhere}
 .index-no-results{display:none;padding:18px;color:var(--muted);text-align:center;font-size:12px}
 @media(max-width:620px){.index-section-body .entity-list{grid-template-columns:1fr}.index-card-tools{align-items:stretch;flex-direction:column}}
+
+
+/* Calm Barkly data browser: one readable row per entity */
+.index-section-body .entity-list{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.index-section-body .entity-item{
+  display:grid;
+  grid-template-columns:minmax(180px,1.15fr) minmax(100px,.55fr) minmax(110px,.55fr) minmax(260px,2fr);
+  align-items:center;
+  gap:10px 18px;
+  padding:10px 12px;
+  min-height:52px;
+  border:1px solid rgba(255,255,255,.065);
+  border-radius:8px;
+  background:rgba(255,255,255,.012);
+}
+.index-section-body .entity-item:hover{
+  border-color:rgba(255,107,157,.22);
+  background:rgba(255,107,157,.018);
+}
+.index-section-body .entity-item h3{
+  margin:0;
+  font-size:12px;
+  line-height:1.3;
+}
+.index-section-body .entity-item .meta{
+  margin:0;
+  font-size:9px;
+  line-height:1.35;
+}
+.index-section-body .entity-item .meta:last-child{
+  color:rgba(255,255,255,.52);
+}
+.index-section-body .entity-item:nth-child(n+13){
+  display:none;
+}
+.index-section-body.show-all .entity-item:nth-child(n+13){
+  display:grid;
+}
+.index-card-tools{
+  position:sticky;
+  top:8px;
+  z-index:2;
+  padding:8px;
+  margin:0 0 10px;
+  border:1px solid rgba(255,255,255,.06);
+  border-radius:10px;
+  background:rgba(15,15,16,.94);
+  backdrop-filter:blur(10px);
+}
+.index-card-search{
+  min-height:36px;
+  border:0;
+  background:transparent;
+}
+.index-card-more{
+  display:block;
+  width:100%;
+  margin-top:10px;
+  padding:9px 12px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:transparent;
+  color:var(--muted);
+  cursor:pointer;
+  font:600 9px/1.2 "SFMono-Regular",Consolas,monospace;
+}
+.index-card-more:hover{
+  color:var(--text);
+  border-color:rgba(255,107,157,.3);
+}
+@media(max-width:900px){
+  .index-section-body .entity-item{
+    grid-template-columns:minmax(150px,1fr) minmax(90px,.55fr) minmax(220px,1.5fr);
+  }
+  .index-section-body .entity-item .meta:nth-of-type(2){display:none}
+}
+@media(max-width:620px){
+  .index-section-body .entity-item{
+    display:block;
+    padding:11px 12px;
+  }
+  .index-section-body.show-all .entity-item:nth-child(n+13){display:block}
+  .index-section-body .entity-item h3{margin-bottom:6px}
+  .index-section-body .entity-item .meta{margin-top:3px}
+}
 
 /* Human-centered README presentation */
 .readme-panel {
