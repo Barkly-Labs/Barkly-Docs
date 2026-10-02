@@ -604,9 +604,17 @@ def _read_readme(project: Project) -> str:
     if path is None:
         return ""
     try:
-        return path.read_text(encoding="utf-8", errors="replace")
+        raw = path.read_bytes()
     except OSError:
         return ""
+    for encoding in ("utf-8-sig", "utf-8", "utf-16", "utf-16-le", "utf-16-be", "cp1252"):
+        try:
+            text = raw.decode(encoding)
+            if "\x00" not in text:
+                return text
+        except (UnicodeDecodeError, UnicodeError):
+            continue
+    return raw.decode("utf-8", errors="replace")
 
 
 def _markdown_inline(value: str) -> str:
@@ -635,138 +643,6 @@ def _markdown_inline(value: str) -> str:
     return escaped
 
 
-def _normalize_readme_markdown(text: str) -> str:
-    """Normalize common README transport/encoding artifacts before parsing."""
-    text = text.replace("\ufeff", "")
-    text = text.replace("\ufffd", "")
-    text = text.replace("\\r\\n", "\n").replace("\\n", "\n")
-    text = text.replace("\\t", "\t")
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
-
-    # Some generated/transported READMEs arrive flattened into one line with
-    # Markdown section separators. Turn those separators back into real lines.
-    text = re.sub(r'\s+---\s+(?=#{1,6}\s+)', '\n\n', text)
-    text = re.sub(r'(?<!\n)\s+(#{1,6}\s+[^\n]+)', r'\n\n\1', text)
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    return text.strip()
-
-
-def _render_markdown(text: str) -> str:
-    """Convert README Markdown into structured HTML at generation time."""
-    lines = _normalize_readme_markdown(text).split("\n")
-    out: list[str] = []
-    paragraph: list[str] = []
-    list_items: list[tuple[str, str]] = []
-    quote_lines: list[str] = []
-    in_code = False
-    code_lang = ""
-    code_lines: list[str] = []
-    table_rows: list[list[str]] = []
-
-    def flush_paragraph() -> None:
-        if paragraph:
-            out.append("<p>" + " ".join(_markdown_inline(x.strip()) for x in paragraph) + "</p>")
-            paragraph.clear()
-
-    def flush_list() -> None:
-        if not list_items:
-            return
-        tag = list_items[0][0]
-        out.append("<" + tag + ">" + "".join("<li>" + item + "</li>" for _, item in list_items) + "</" + tag + ">")
-        list_items.clear()
-
-    def flush_quote() -> None:
-        if quote_lines:
-            out.append("<blockquote>" + "\n".join(_markdown_inline(x) for x in quote_lines) + "</blockquote>")
-            quote_lines.clear()
-
-    def flush_table() -> None:
-        nonlocal table_rows
-        if len(table_rows) < 2:
-            table_rows = []
-            return
-        header = table_rows[0]
-        body = table_rows[2:] if re.match(r'^\\s*:?-{3,}:?\\s*$', '|'.join(table_rows[1])) else table_rows[1:]
-        parts = ['<div class="readme-table-wrap"><table><thead><tr>']
-        parts.extend('<th>' + _markdown_inline(cell.strip()) + '</th>' for cell in header)
-        parts.append('</tr></thead>')
-        if body:
-            parts.append('<tbody>')
-            for row in body:
-                parts.append('<tr>')
-                parts.extend('<td>' + _markdown_inline(cell.strip()) + '</td>' for cell in row)
-                parts.append('</tr>')
-            parts.append('</tbody>')
-        parts.append('</table></div>')
-        out.append(''.join(parts))
-        table_rows = []
-
-    def is_table_separator(line: str) -> bool:
-        cells = [c.strip() for c in line.strip().strip('|').split('|')]
-        return bool(cells) and all(re.match(r'^:?-{3,}:?$', c) for c in cells)
-
-    for raw in lines:
-        line = raw.rstrip()
-        fence = re.match(r'^\s*```\s*([\w+.-]*)\s*$', line)
-        if fence:
-            flush_paragraph(); flush_list(); flush_quote(); flush_table()
-            if in_code:
-                cls = f' class="language-{html.escape(code_lang, quote=True)}"' if code_lang else ""
-                out.append('<pre><code' + cls + '>' + html.escape("\n".join(code_lines), quote=False) + '</code></pre>')
-                in_code = False; code_lang = ""; code_lines = []
-            else:
-                in_code = True; code_lang = fence.group(1); code_lines = []
-            continue
-        if in_code:
-            code_lines.append(line)
-            continue
-        if not line.strip():
-            flush_paragraph(); flush_list(); flush_quote(); flush_table(); continue
-
-        heading = re.match(r'^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$', line)
-        if heading:
-            flush_paragraph(); flush_list(); flush_quote(); flush_table()
-            level = len(heading.group(1))
-            out.append(f'<h{level}>' + _markdown_inline(heading.group(2)) + f'</h{level}>')
-            continue
-
-        if re.match(r'^\s*([-*_])(?:\s*\1){2,}\s*$', line):
-            flush_paragraph(); flush_list(); flush_quote(); flush_table(); out.append('<hr>'); continue
-
-        if '|' in line and (table_rows or (lines.index(raw) + 1 < len(lines) and is_table_separator(lines[lines.index(raw) + 1]))):
-            flush_paragraph(); flush_list(); flush_quote()
-            table_rows.append([c.strip() for c in line.strip().strip('|').split('|')])
-            continue
-        if table_rows and is_table_separator(line):
-            table_rows.append([c.strip() for c in line.strip().strip('|').split('|')])
-            continue
-        if table_rows and '|' not in line:
-            flush_table()
-
-        bullet = re.match(r'^\s*[-*+]\s+(.+)$', line)
-        if bullet:
-            flush_paragraph(); flush_quote(); flush_table()
-            if list_items and list_items[0][0] != 'ul': flush_list()
-            list_items.append(('ul', _markdown_inline(bullet.group(1))))
-            continue
-        ordered = re.match(r'^\s*\d+[.)]\s+(.+)$', line)
-        if ordered:
-            flush_paragraph(); flush_quote(); flush_table()
-            if list_items and list_items[0][0] != 'ol': flush_list()
-            list_items.append(('ol', _markdown_inline(ordered.group(1))))
-            continue
-        quote = re.match(r'^\s*>\s?(.*)$', line)
-        if quote:
-            flush_paragraph(); flush_list(); flush_table(); quote_lines.append(quote.group(1)); continue
-
-        flush_list(); flush_quote(); flush_table()
-        paragraph.append(line.strip())
-
-    if in_code:
-        cls = f' class="language-{html.escape(code_lang, quote=True)}"' if code_lang else ""
-        out.append('<pre><code' + cls + '>' + html.escape("\n".join(code_lines), quote=False) + '</code></pre>')
-    flush_paragraph(); flush_list(); flush_quote(); flush_table()
-    return ''.join(out)
 
 def _readme_sections(project: Project) -> dict[str, str]:
     """Return README sections keyed by normalized heading name."""
@@ -874,39 +750,87 @@ def _stat_card(label: str, value: str) -> str:
     )
 
 
+def _render_readme_markdown(text: str) -> str:
+    """Convert README Markdown into structured HTML, including flattened input."""
+    text = (text or "").replace("\ufeff", "").replace("\ufffd", "")
+    text = text.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = "".join(ch for ch in text if ch in "\n\t" or ord(ch) >= 32)
+    text = re.sub(r"[ \t]+(?=#{1,6}[ \t]+)", "\n\n", text)
+    text = re.sub(r"(?<!\n)[ \t]+(?=```)", "\n", text)
+    text = re.sub(r"(?<!\n)(```)[ \t]+", r"\n\1\n", text)
+    text = re.sub(r"[ \t]+(?=>[ \t]+)", "\n", text)
+    text = re.sub(r"[ \t]+(?=---{3,}[ \t]*(?:\n|$))", "\n\n", text)
+    text = re.sub(r"```([A-Za-z0-9_+.-]+)[ \t]+", r"```\1\n", text)
+    text = re.sub(r"[ \t]+```", "\n```", text)
+    text = re.sub(r"[ \t]{2,}(?=[-*+][ \t]+)", "\n", text)
+    text = re.sub(r"[ \t]{2,}(?=\d+\.[ \t]+)", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+
+    def inline(value: str) -> str:
+        value = html.escape(value, quote=False)
+        value = re.sub(r"!\[([^\]]*)\]\(([^)\s]+)(?:\s+[\"']([^\"']*)[\"'])?\)", lambda m: '<img alt="'+html.escape(m.group(1),quote=True)+'" src="'+html.escape(m.group(2),quote=True)+'"'+((' title="'+html.escape(m.group(3),quote=True)+'"') if m.group(3) else '')+'>', value)
+        value = re.sub(r"\[([^\]]+)\]\(([^)\s]+)(?:\s+[\"']([^\"']*)[\"'])?\)", lambda m: '<a href="'+html.escape(m.group(2),quote=True)+'" target="_blank" rel="noopener noreferrer">'+m.group(1)+'</a>', value)
+        value = re.sub(r"<((?:https?://)[^>]+)>", r'<a href="\1" target="_blank" rel="noopener noreferrer">\1</a>', value)
+        value = re.sub(r"`([^`]+)`", r"<code>\1</code>", value)
+        value = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", value)
+        value = re.sub(r"__([^_]+)__", r"<strong>\1</strong>", value)
+        value = re.sub(r"~~([^~]+)~~", r"<del>\1</del>", value)
+        value = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"<em>\1</em>", value)
+        value = re.sub(r"(?<!_)_([^_\n]+)_(?!_)", r"<em>\1</em>", value)
+        return value
+
+    lines=text.split("\n"); out=[]; i=0
+    while i<len(lines):
+        line=lines[i]
+        if not line.strip(): i+=1; continue
+        fence=re.match(r"^\s*```(?:([A-Za-z0-9_+.-]+))?\s*$",line)
+        if fence:
+            lang=fence.group(1) or ""; code=[]; i+=1
+            while i<len(lines) and not re.match(r"^\s*```\s*$",lines[i]): code.append(lines[i]); i+=1
+            if i<len(lines): i+=1
+            cls=(' class="language-'+html.escape(lang,quote=True)+'"') if lang else ""
+            out.append("<pre><code"+cls+">"+html.escape("\n".join(code))+"</code></pre>"); continue
+        heading=re.match(r"^\s*(#{1,6})\s+(.+?)\s*#*\s*$",line)
+        if heading:
+            n=len(heading.group(1)); out.append(f"<h{n}>{inline(heading.group(2))}</h{n}>"); i+=1; continue
+        if re.match(r"^\s*(?:-{3,}|\*{3,}|_{3,})\s*$",line): out.append("<hr>"); i+=1; continue
+        if re.match(r"^\s*>\s?",line):
+            q=[]
+            while i<len(lines) and re.match(r"^\s*>\s?",lines[i]): q.append(re.sub(r"^\s*>\s?","",lines[i])); i+=1
+            out.append("<blockquote>"+"".join(f"<p>{inline(x)}</p>" for x in q if x.strip())+"</blockquote>"); continue
+        if re.match(r"^\s*(?:[-*+]|\d+\.)\s+",line):
+            ordered=bool(re.match(r"^\s*\d+\.",line)); tag="ol" if ordered else "ul"; items=[]
+            while i<len(lines):
+                m=re.match(r"^\s*(?:[-*+]|\d+\.)\s+(.*)$",lines[i])
+                if not m: break
+                item=m.group(1); tm=re.match(r"\[([ xX])\]\s+(.*)$",item)
+                if tm: item='<label><input type="checkbox" disabled'+(' checked' if tm.group(1).lower()=='x' else '')+'> '+inline(tm.group(2))+'</label>'
+                else: item=inline(item)
+                items.append('<li>'+item+'</li>'); i+=1
+            out.append(f"<{tag}>"+"".join(items)+f"</{tag}>"); continue
+        if i+1<len(lines) and '|' in line and re.match(r"^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)+\|?\s*$",lines[i+1]):
+            heads=[x.strip() for x in line.strip().strip('|').split('|')]; i+=2; rows=[]
+            while i<len(lines) and '|' in lines[i] and lines[i].strip(): rows.append([x.strip() for x in lines[i].strip().strip('|').split('|')]); i+=1
+            out.append('<table><thead><tr>'+''.join(f'<th>{inline(x)}</th>' for x in heads)+'</tr></thead><tbody>'+''.join('<tr>'+''.join(f'<td>{inline(x)}</td>' for x in row)+'</tr>' for row in rows)+'</tbody></table>'); continue
+        para=[line.strip()]; i+=1
+        while i<len(lines) and lines[i].strip() and not re.match(r"^\s*(?:#{1,6}\s+|```|>|[-*+]\s+|\d+\.\s+|(?:-{3,}|\*{3,}|_{3,})\s*$)",lines[i]): para.append(lines[i].strip()); i+=1
+        out.append('<p>'+inline(' '.join(para))+'</p>')
+    return "\n".join(out)
+
+
 def _render_readme(project: Project) -> str:
-    """Render README content as a calm, structured, human-readable document."""
     text = _read_readme(project)
     if not text:
-        if _readme_path(project) is None:
-            return '<div class="empty-state">No README was found in the project root.</div>'
-        return '<div class="empty-state">README exists but could not be read.</div>'
-
+        return '<div class="empty-state">No README was found in the project root.</div>'
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     title = _readme_title(project)
-    body_lines: list[str] = []
-    skipped_title = False
+    body=[]; skipped=False
     for line in lines:
-        if not skipped_title and re.match(r"^\s*#\s+", line):
-            skipped_title = True
-            continue
-        body_lines.append(line)
-
-    rendered = _render_markdown("\n".join(body_lines))
-    if not rendered.strip():
-        return '<div class="empty-state">README is present but contains no readable content.</div>'
-
-    return (
-        '<article class="readme-panel">'
-        '<header class="readme-intro">'
-        '<span class="readme-kicker">PROJECT README</span>'
-        f'<h2>{_escape(title or "Project documentation")}</h2>'
-        f'<p class="readme-lead">{_escape(_project_description(project))}</p>'
-        '</header>'
-        f'<div class="readme-content">{rendered}</div>'
-        '</article>'
-    )
-
+        if not skipped and re.match(r"^\s*#\s+", line): skipped=True; continue
+        body.append(line)
+    rendered=_render_readme_markdown("\n".join(body))
+    return '<article class="readme-panel"><header class="readme-intro"><span class="readme-kicker">PROJECT README</span><h2>'+_escape(title or "Project documentation")+'</h2><p class="readme-lead">'+_escape(_project_description(project))+'</p></header><div class="readme-content">'+rendered+'</div></article>'
 
 def _render_entity_summary(project: Project) -> str:
     items = []
@@ -2219,6 +2143,7 @@ def render_project_website(project: Project, output_dir: str | Path) -> list[Pat
     relation_map_path.write_text(_render_relation_map_page(project_obj), encoding="utf-8")
 
     return [index_path, entities_path, relationships_path, relation_map_path, assets_dir / "site.css", assets_dir / "relation-map.js"]
+
 
 
 def generate_html_website(project: Project, output_dir: str | Path) -> list[Path]:
