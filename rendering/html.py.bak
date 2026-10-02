@@ -610,58 +610,27 @@ def _read_readme(project: Project) -> str:
 
 
 def _markdown_inline(value: str) -> str:
-    """Render common README Markdown inline syntax to safe HTML."""
+    """Small dependency-free Markdown inline renderer for documentation output."""
     escaped = html.escape(value, quote=False)
-    escaped = re.sub(
-        r'!\[([^\]]*)\]\(([^)\s]+)(?:\s+["\']([^"\']*)["\'])?\)',
-        lambda m: '<img alt="' + html.escape(m.group(1), quote=True) +
-                  '" src="' + html.escape(m.group(2), quote=True) + '"' +
-                  ((' title="' + html.escape(m.group(3), quote=True) + '"') if m.group(3) else '') + '>',
-        escaped,
-    )
-    escaped = re.sub(
-        r'\[([^\]]+)\]\(([^)\s]+)(?:\s+["\']([^"\']*)["\'])?\)',
-        lambda m: '<a href="' + html.escape(m.group(2), quote=True) + '"' +
-                  '>' + m.group(1) + '</a>',
-        escaped,
-    )
-    escaped = re.sub(r'<(https?://[^>]+)>', r'<a href="\1">\1</a>', escaped)
+    escaped = re.sub(r'!\[([^\]]*)\]\(([^)]+)\)', r'<img alt="\1" src="\2">', escaped)
+    escaped = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', escaped)
     escaped = re.sub(r'`([^`]+)`', r'<code>\1</code>', escaped)
     escaped = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', escaped)
     escaped = re.sub(r'__([^_]+)__', r'<strong>\1</strong>', escaped)
-    escaped = re.sub(r'~~([^~]+)~~', r'<del>\1</del>', escaped)
     escaped = re.sub(r'(?<!\*)\*([^*]+)\*(?!\*)', r'<em>\1</em>', escaped)
     escaped = re.sub(r'(?<!_)_([^_]+)_(?!_)', r'<em>\1</em>', escaped)
     return escaped
 
 
-def _normalize_readme_markdown(text: str) -> str:
-    """Normalize common README transport/encoding artifacts before parsing."""
-    text = text.replace("\ufeff", "")
-    text = text.replace("\ufffd", "")
-    text = text.replace("\\r\\n", "\n").replace("\\n", "\n")
-    text = text.replace("\\t", "\t")
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
-
-    # Some generated/transported READMEs arrive flattened into one line with
-    # Markdown section separators. Turn those separators back into real lines.
-    text = re.sub(r'\s+---\s+(?=#{1,6}\s+)', '\n\n', text)
-    text = re.sub(r'(?<!\n)\s+(#{1,6}\s+[^\n]+)', r'\n\n\1', text)
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    return text.strip()
-
-
 def _render_markdown(text: str) -> str:
-    """Convert README Markdown into structured HTML at generation time."""
-    lines = _normalize_readme_markdown(text).split("\n")
+    """Render the README as Markdown-shaped HTML while preserving its structure."""
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     out: list[str] = []
     paragraph: list[str] = []
     list_items: list[tuple[str, str]] = []
-    quote_lines: list[str] = []
     in_code = False
     code_lang = ""
     code_lines: list[str] = []
-    table_rows: list[list[str]] = []
 
     def flush_paragraph() -> None:
         if paragraph:
@@ -671,102 +640,61 @@ def _render_markdown(text: str) -> str:
     def flush_list() -> None:
         if not list_items:
             return
-        tag = list_items[0][0]
+        ordered = list_items[0][0] == "ol"
+        tag = "ol" if ordered else "ul"
         out.append("<" + tag + ">" + "".join("<li>" + item + "</li>" for _, item in list_items) + "</" + tag + ">")
         list_items.clear()
 
-    def flush_quote() -> None:
-        if quote_lines:
-            out.append("<blockquote>" + "\n".join(_markdown_inline(x) for x in quote_lines) + "</blockquote>")
-            quote_lines.clear()
-
-    def flush_table() -> None:
-        nonlocal table_rows
-        if len(table_rows) < 2:
-            table_rows = []
-            return
-        header = table_rows[0]
-        body = table_rows[2:] if re.match(r'^\\s*:?-{3,}:?\\s*$', '|'.join(table_rows[1])) else table_rows[1:]
-        parts = ['<div class="readme-table-wrap"><table><thead><tr>']
-        parts.extend('<th>' + _markdown_inline(cell.strip()) + '</th>' for cell in header)
-        parts.append('</tr></thead>')
-        if body:
-            parts.append('<tbody>')
-            for row in body:
-                parts.append('<tr>')
-                parts.extend('<td>' + _markdown_inline(cell.strip()) + '</td>' for cell in row)
-                parts.append('</tr>')
-            parts.append('</tbody>')
-        parts.append('</table></div>')
-        out.append(''.join(parts))
-        table_rows = []
-
-    def is_table_separator(line: str) -> bool:
-        cells = [c.strip() for c in line.strip().strip('|').split('|')]
-        return bool(cells) and all(re.match(r'^:?-{3,}:?$', c) for c in cells)
+    def flush_code() -> None:
+        nonlocal in_code, code_lang
+        if in_code:
+            cls = f' class="language-{html.escape(code_lang, quote=True)}"' if code_lang else ""
+            out.append("<pre><code" + cls + ">" + html.escape("\n".join(code_lines), quote=False) + "</code></pre>")
+            code_lines.clear()
+            in_code = False
+            code_lang = ""
 
     for raw in lines:
         line = raw.rstrip()
-        fence = re.match(r'^\s*```\s*([\w+.-]*)\s*$', line)
+        fence = re.match(r'^\s*```\s*([\w+-]*)\s*$', line)
         if fence:
-            flush_paragraph(); flush_list(); flush_quote(); flush_table()
+            flush_paragraph()
+            flush_list()
             if in_code:
-                cls = f' class="language-{html.escape(code_lang, quote=True)}"' if code_lang else ""
-                out.append('<pre><code' + cls + '>' + html.escape("\n".join(code_lines), quote=False) + '</code></pre>')
-                in_code = False; code_lang = ""; code_lines = []
+                flush_code()
             else:
-                in_code = True; code_lang = fence.group(1); code_lines = []
+                in_code = True
+                code_lang = fence.group(1)
             continue
         if in_code:
             code_lines.append(line)
             continue
         if not line.strip():
-            flush_paragraph(); flush_list(); flush_quote(); flush_table(); continue
-
+            flush_paragraph()
+            flush_list()
+            continue
         heading = re.match(r'^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$', line)
         if heading:
-            flush_paragraph(); flush_list(); flush_quote(); flush_table()
+            flush_paragraph(); flush_list()
             level = len(heading.group(1))
-            out.append(f'<h{level}>' + _markdown_inline(heading.group(2)) + f'</h{level}>')
+            out.append(f"<h{level}>{_markdown_inline(heading.group(2))}</h{level}>")
             continue
-
         if re.match(r'^\s*([-*_])(?:\s*\1){2,}\s*$', line):
-            flush_paragraph(); flush_list(); flush_quote(); flush_table(); out.append('<hr>'); continue
-
-        if '|' in line and (table_rows or (lines.index(raw) + 1 < len(lines) and is_table_separator(lines[lines.index(raw) + 1]))):
-            flush_paragraph(); flush_list(); flush_quote()
-            table_rows.append([c.strip() for c in line.strip().strip('|').split('|')])
-            continue
-        if table_rows and is_table_separator(line):
-            table_rows.append([c.strip() for c in line.strip().strip('|').split('|')])
-            continue
-        if table_rows and '|' not in line:
-            flush_table()
-
+            flush_paragraph(); flush_list(); out.append('<hr>'); continue
         bullet = re.match(r'^\s*[-*+]\s+(.+)$', line)
         if bullet:
-            flush_paragraph(); flush_quote(); flush_table()
-            if list_items and list_items[0][0] != 'ul': flush_list()
-            list_items.append(('ul', _markdown_inline(bullet.group(1))))
-            continue
+            flush_paragraph(); list_items.append(("ul", _markdown_inline(bullet.group(1)))); continue
         ordered = re.match(r'^\s*\d+[.)]\s+(.+)$', line)
         if ordered:
-            flush_paragraph(); flush_quote(); flush_table()
-            if list_items and list_items[0][0] != 'ol': flush_list()
-            list_items.append(('ol', _markdown_inline(ordered.group(1))))
-            continue
+            flush_paragraph(); list_items.append(("ol", _markdown_inline(ordered.group(1)))); continue
         quote = re.match(r'^\s*>\s?(.*)$', line)
         if quote:
-            flush_paragraph(); flush_list(); flush_table(); quote_lines.append(quote.group(1)); continue
-
-        flush_list(); flush_quote(); flush_table()
+            flush_paragraph(); flush_list(); out.append('<blockquote>' + _markdown_inline(quote.group(1)) + '</blockquote>'); continue
         paragraph.append(line.strip())
 
-    if in_code:
-        cls = f' class="language-{html.escape(code_lang, quote=True)}"' if code_lang else ""
-        out.append('<pre><code' + cls + '>' + html.escape("\n".join(code_lines), quote=False) + '</code></pre>')
-    flush_paragraph(); flush_list(); flush_quote(); flush_table()
-    return ''.join(out)
+    flush_code(); flush_paragraph(); flush_list()
+    return "".join(out)
+
 
 def _readme_sections(project: Project) -> dict[str, str]:
     """Return README sections keyed by normalized heading name."""

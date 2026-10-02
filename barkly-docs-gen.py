@@ -4627,6 +4627,291 @@ code {
 
   </script>
 
+
+<script>
+(function () {
+  function esc(s) {
+    return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+  function inline(s) {
+    s = esc(s);
+    s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+    s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/__([^_]+)__/g, "<strong>$1</strong>");
+    s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    return s;
+  }
+  window.barklyRenderMarkdown = function (source) {
+    const lines = String(source || "").replace(/\r\n?/g,"\n").split("\n");
+    const out = [];
+    let para = [], list = null, quote = [], code = false, codeLines = [], codeLang = "";
+    function p(){ if(para.length){out.push("<p>"+inline(para.join(" ").trim())+"</p>");para=[];} }
+    function l(){ if(list){out.push("<"+list.t+">"+list.i.map(x=>"<li>"+inline(x)+"</li>").join("")+"</"+list.t+">");list=null;} }
+    function q(){ if(quote.length){out.push("<blockquote>"+quote.map(x=>"<p>"+inline(x)+"</p>").join("")+"</blockquote>");quote=[];} }
+    for(let i=0;i<lines.length;i++){
+      let x=lines[i];
+      if(/^```/.test(x.trim())){
+        p();l();q();
+        if(!code){code=true;codeLang=x.trim().slice(3).trim();codeLines=[];}
+        else{out.push('<pre><code class="language-'+esc(codeLang)+'">'+esc(codeLines.join("\n"))+'</code></pre>');code=false;}
+        continue;
+      }
+      if(code){codeLines.push(x);continue;}
+      if(!x.trim()){p();l();q();continue;}
+      let h=x.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
+      if(h){p();l();q();out.push("<h"+h[1].length+">"+inline(h[2])+"</h"+h[1].length+">");continue;}
+      if(/^[-*+]\s+/.test(x)){p();q();if(!list||list.t!=="ul"){l();list={t:"ul",i:[]};}list.i.push(x.replace(/^[-*+]\s+/,""));continue;}
+      if(/^\d+\.\s+/.test(x)){p();q();if(!list||list.t!=="ol"){l();list={t:"ol",i:[]};}list.i.push(x.replace(/^\d+\.\s+/,""));continue;}
+      if(/^>\s?/.test(x)){p();l();quote.push(x.replace(/^>\s?/,""));continue;}
+      if(/^(-{3,}|\*{3,})\s*$/.test(x)){p();l();q();out.push("<hr>");continue;}
+      l();q();para.push(x.trim());
+    }
+    p();l();q();
+    return out.join("\n");
+  };
+  document.addEventListener("DOMContentLoaded",function(){
+    document.querySelectorAll(".barkly-readme-markdown").forEach(function(el){
+      const source=el.querySelector("script[type='text/plain']")?.textContent || el.textContent;
+      el.innerHTML=window.barklyRenderMarkdown(source);
+    });
+  });
+})();
+</script>
+<style>
+.barkly-readme-markdown{max-width:980px;color:var(--text-soft,#d2cfd1);line-height:1.72}
+.barkly-readme-markdown h1,.barkly-readme-markdown h2,.barkly-readme-markdown h3,.barkly-readme-markdown h4{color:var(--text,#f5f3f4);letter-spacing:-.02em}
+.barkly-readme-markdown h2{padding-bottom:6px;border-bottom:1px solid var(--line,#272727)}
+.barkly-readme-markdown li::marker{color:var(--accent,#ff6b9d)}
+.barkly-readme-markdown a{color:var(--accent-bright,#ff86ad)}
+.barkly-readme-markdown code{padding:.12em .35em;border:1px solid var(--line,#272727);border-radius:5px;background:#090909}
+.barkly-readme-markdown pre{overflow:auto;padding:14px;border:1px solid var(--line,#272727);border-radius:9px;background:#090909}
+.barkly-readme-markdown blockquote{margin:12px 0;padding:8px 15px;border-left:3px solid var(--accent,#ff6b9d);background:rgba(255,107,157,.055)}
+.barkly-readme-markdown hr{border:0;border-top:1px solid var(--line,#272727);margin:22px 0}
+</style>
+
+
+<style>
+.barkly-readme-rendered {
+  max-width: 980px;
+  color: var(--text-soft, #d2cfd1);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.barkly-readme-rendered > :first-child { margin-top: 0; }
+.barkly-readme-rendered h1,
+.barkly-readme-rendered h2,
+.barkly-readme-rendered h3,
+.barkly-readme-rendered h4,
+.barkly-readme-rendered h5,
+.barkly-readme-rendered h6 {
+  color: var(--text, #f5f3f4);
+  line-height: 1.25;
+  letter-spacing: -.025em;
+  margin: 1.45em 0 .55em;
+}
+.barkly-readme-rendered h1 { font-size: 25px; }
+.barkly-readme-rendered h2 {
+  font-size: 19px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--line, #272727);
+}
+.barkly-readme-rendered h3 { font-size: 15px; }
+.barkly-readme-rendered h4 { font-size: 13px; }
+.barkly-readme-rendered p { margin: .75em 0; }
+.barkly-readme-rendered ul,
+.barkly-readme-rendered ol {
+  margin: .75em 0;
+  padding-left: 25px;
+}
+.barkly-readme-rendered li { margin: .3em 0; }
+.barkly-readme-rendered li::marker { color: var(--accent, #ff6b9d); }
+.barkly-readme-rendered a {
+  color: var(--accent-bright, #ff86ad);
+  text-decoration: none;
+}
+.barkly-readme-rendered a:hover { text-decoration: underline; }
+.barkly-readme-rendered strong { color: var(--text, #f5f3f4); }
+.barkly-readme-rendered code {
+  padding: .12em .36em;
+  border: 1px solid var(--line, #272727);
+  border-radius: 5px;
+  background: #090909;
+  color: #e7e3e6;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: .92em;
+}
+.barkly-readme-rendered pre {
+  overflow-x: auto;
+  margin: 13px 0;
+  padding: 14px;
+  border: 1px solid var(--line, #272727);
+  border-radius: 9px;
+  background: #090909;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
+}
+.barkly-readme-rendered pre code {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.barkly-readme-rendered blockquote {
+  margin: 13px 0;
+  padding: 8px 15px;
+  border-left: 3px solid var(--accent, #ff6b9d);
+  background: rgba(255,107,157,.055);
+  color: #bdb9bc;
+}
+.barkly-readme-rendered hr {
+  border: 0;
+  border-top: 1px solid var(--line, #272727);
+  margin: 24px 0;
+}
+.barkly-readme-rendered table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0;
+  overflow: hidden;
+  border: 1px solid var(--line, #272727);
+  border-radius: 9px;
+}
+.barkly-readme-rendered th,
+.barkly-readme-rendered td {
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line-soft, #1b1b1b);
+}
+.barkly-readme-rendered th {
+  color: var(--text, #f5f3f4);
+  background: rgba(255,255,255,.025);
+}
+.barkly-readme-rendered img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+</style>
+
+<script>
+(function () {
+  const esc = (s) => String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+  function inlineMarkdown(s) {
+    let x = esc(s);
+    x = x.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g,
+      (_, alt, src, title) =>
+        '<img src="' + src + '" alt="' + alt + '"' +
+        (title ? ' title="' + title + '"' : '') + '>');
+    x = x.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    x = x.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    x = x.replace(/__([^_]+)__/g, "<strong>$1</strong>");
+    x = x.replace(/`([^`]+)`/g, "<code>$1</code>");
+    x = x.replace(/~~([^~]+)~~/g, "<del>$1</del>");
+    return x;
+  }
+
+  function renderMarkdown(source) {
+    const lines = String(source || "").replace(/\r\n?/g, "\n").split("\n");
+    const out = [];
+    let i = 0, paragraph = [], list = null, quote = [];
+    const flushParagraph = () => {
+      if (paragraph.length) {
+        out.push("<p>" + inlineMarkdown(paragraph.join(" ").trim()) + "</p>");
+        paragraph = [];
+      }
+    };
+    const flushList = () => {
+      if (!list) return;
+      out.push("<" + list.type + ">" +
+        list.items.map(v => "<li>" + inlineMarkdown(v) + "</li>").join("") +
+        "</" + list.type + ">");
+      list = null;
+    };
+    const flushQuote = () => {
+      if (!quote.length) return;
+      out.push("<blockquote>" + quote.map(v => "<p>" + inlineMarkdown(v) + "</p>").join("") + "</blockquote>");
+      quote = [];
+    };
+
+    while (i < lines.length) {
+      const line = lines[i];
+
+      if (/^```/.test(line.trim())) {
+        flushParagraph(); flushList(); flushQuote();
+        const lang = line.trim().slice(3).trim();
+        const code = [];
+        i++;
+        while (i < lines.length && !/^```/.test(lines[i].trim())) {
+          code.push(lines[i++]);
+        }
+        if (i < lines.length) i++;
+        out.push("<pre><code" + (lang ? ' class="language-' + esc(lang) + '"' : "") + ">" +
+          esc(code.join("\n")) + "</code></pre>");
+        continue;
+      }
+
+      if (!line.trim()) {
+        flushParagraph(); flushList(); flushQuote(); i++; continue;
+      }
+
+      const heading = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
+      if (heading) {
+        flushParagraph(); flushList(); flushQuote();
+        const n = heading[1].length;
+        out.push("<h" + n + ">" + inlineMarkdown(heading[2]) + "</h" + n + ">");
+        i++; continue;
+      }
+
+      if (/^\s*[-*+]\s+/.test(line)) {
+        flushParagraph(); flushQuote();
+        if (!list || list.type !== "ul") { flushList(); list = {type:"ul", items:[]}; }
+        list.items.push(line.replace(/^\s*[-*+]\s+/, ""));
+        i++; continue;
+      }
+
+      if (/^\s*\d+\.\s+/.test(line)) {
+        flushParagraph(); flushQuote();
+        if (!list || list.type !== "ol") { flushList(); list = {type:"ol", items:[]}; }
+        list.items.push(line.replace(/^\s*\d+\.\s+/, ""));
+        i++; continue;
+      }
+
+      if (/^>\s?/.test(line)) {
+        flushParagraph(); flushList();
+        quote.push(line.replace(/^>\s?/, ""));
+        i++; continue;
+      }
+
+      if (/^\s*([-*_])(?:\s*\1){2,}\s*$/.test(line)) {
+        flushParagraph(); flushList(); flushQuote();
+        out.push("<hr>");
+        i++; continue;
+      }
+
+      flushList(); flushQuote();
+      paragraph.push(line.trim());
+      i++;
+    }
+
+    flushParagraph(); flushList(); flushQuote();
+    return out.join("\n");
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll("[data-readme-markdown]").forEach(function (el) {
+      const source = el.querySelector("script[type='text/plain']")?.textContent || "";
+      el.innerHTML = renderMarkdown(source);
+      el.classList.add("barkly-readme-rendered");
+    });
+  });
+})();
+</script>
+
 </body>
 
 </html>
