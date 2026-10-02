@@ -1540,8 +1540,13 @@ def _render_files(project: Project) -> str:
         items.append(f"""
             <div class="entity-item">
               <h3>{_escape(item.name)}</h3>
-              <div class="meta">Language: {_escape(item.language or 'Unknown')}</div>
-              <div class="meta">Path: {_escape(item.path)}</div>
+              <div class="meta entity-kind-column">
+                <span class="entity-type-tag">{_escape(item.language or 'Unknown')}</span>
+              </div>
+              <div class="meta file-path">
+                <span class="meta-label">Path</span>
+                {_escape(item.path)}
+              </div>
             </div>
             """)
     return '<div class="entity-list">' + "".join(items) + "</div>"
@@ -1562,7 +1567,11 @@ def _render_entity_group(items, empty_message: str) -> str:
         line = getattr(item, "line", None)
 
         meta = [
-            f'<span class="meta">Type: {_escape(str(kind))}</span>',
+            (
+                '<span class="meta entity-kind-column">'
+                f'<span class="entity-type-tag">{_escape(str(kind))}</span>'
+                '</span>'
+            ),
             f'<span class="meta">Language: {_escape(str(language))}</span>',
         ]
         if path:
@@ -2659,6 +2668,48 @@ def _render_three_layer_architecture(project: Project) -> str:
   .index-section-body.show-all .entity-item:nth-child(n+13){display:block}
   .index-section-body .entity-item h3{margin-bottom:6px}
   .index-section-body .entity-item .meta{margin-top:3px}
+}
+
+
+/* Barkly entity type tags */
+.entity-type-tag {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 107, 157, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 107, 157, 0.15);
+  color: var(--accent);
+  font-family: "Consolas", "SFMono-Regular", monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.entity-kind-column {
+  display: flex;
+  align-items: center;
+  margin: 0;
+}
+
+/* Cleaner file path metadata */
+.file-path {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.file-path .meta-label {
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 /* Human-centered README presentation */
