@@ -733,6 +733,26 @@ a:focus-visible {
 .index-reference-docs .tile ul{margin:0;padding-left:18px}
 .index-reference-docs .tile li{margin:7px 0}
 .readme-content img{max-width:100%;height:auto}
+/* Secondary pages use the same surfaces, controls, and hierarchy as index.html. */
+.subpage-header { display:block; width:100%; margin:32px 0 0; padding:0 0 22px; text-align:left; }
+.subpage-header .kicker { display:block; width:100%; margin:0 0 8px; }
+.subpage-header h1 { margin:0 0 8px; font-size:clamp(2rem,4vw,3.25rem); line-height:1.1; letter-spacing:-.045em; }
+.subpage-header p { max-width:72ch; margin:0; color:var(--muted); }
+.subpage-header + .section, .subpage-header + .card { margin-top:12px; }
+.entity-explorer-tools, .relation-map-toolbar { border:1px solid rgba(255,255,255,.06); border-radius:10px; background:rgba(15,15,16,.94); box-shadow:0 10px 30px var(--shadow); backdrop-filter:blur(10px); }
+.entity-search-row input[type="search"], .relationship-filter-row select, .relation-map-search-wrap input, .relation-map-filter-grid select { min-height:40px; border:1px solid var(--line); border-radius:9px; background:rgba(255,255,255,.025); color:var(--text); }
+.entity-search-row input[type="search"]:focus, .relationship-filter-row select:focus, .relation-map-search-wrap input:focus, .relation-map-filter-grid select:focus { border-color:rgba(255,107,157,.55); box-shadow:0 0 0 3px rgba(255,107,157,.08); }
+.entity-search-clear, .entity-disclosure-button, .relation-map-actions button, .relation-link { min-height:40px; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--muted); }
+.entity-search-clear:hover, .entity-disclosure-button:hover, .relation-map-actions button:hover, .relation-link:hover { color:var(--text); border-color:rgba(255,107,157,.30); background:rgba(255,107,157,.025); }
+.entity-explorer-item { border-color:rgba(255,255,255,.065); border-radius:10px; background:rgba(255,255,255,.012); box-shadow:none; }
+.entity-explorer-item:hover { border-color:rgba(255,107,157,.22); }
+#relation-map-panel, #relation-map-details { border-color:rgba(255,255,255,.065); background:linear-gradient(135deg,rgba(255,107,157,.035),transparent 58%),var(--panel); box-shadow:0 10px 30px var(--shadow); }
+#relation-map-canvas { background:linear-gradient(rgba(255,255,255,.012),rgba(255,255,255,.012)),radial-gradient(circle at top,rgba(255,107,157,.055),transparent 60%),var(--bg); }
+.relation-map-accessible, .relation-map-legend { border-color:rgba(255,255,255,.065); background:linear-gradient(135deg,rgba(255,107,157,.035),transparent 58%),var(--panel); }
+.relation-map-search-results { background:var(--panel); box-shadow:0 10px 30px var(--shadow); }
+.relation-map-search-results button { background:transparent; }
+@media (max-width:760px) { .subpage-header { margin-top:24px; } }
+
 """
 
 PAW_SVG = """
@@ -4063,45 +4083,6 @@ def _render_three_layer_architecture(project: Project) -> str:
 .readme-content blockquote { margin: 12px 0; padding: 8px 14px; border-left: 2px solid var(--accent); color: var(--muted); background: rgba(255,107,157,.035); }
 .readme-content hr { border: 0; border-top: 1px solid rgba(255,255,255,.07); margin: 20px 0; }
 .readme-content a { color: var(--accent-bright); }
-
-/* Barkly Standard secondary-page header — independent of the index hero grid. */
-.subpage-header {
-  display: block;
-  width: 100%;
-  margin: 24px 0 0;
-  padding: 0 0 22px;
-  text-align: left;
-}
-.subpage-header .kicker {
-  display: block;
-  width: 100%;
-  margin: 0 0 8px;
-  text-align: left;
-}
-.subpage-header h1 {
-  display: block;
-  width: 100%;
-  margin: 0 0 6px;
-  padding: 0;
-  text-align: left;
-  font-size: clamp(1.8rem, 3vw, 2.35rem);
-  line-height: 1.15;
-  letter-spacing: -0.035em;
-}
-.subpage-header p {
-  display: block;
-  width: 100%;
-  max-width: 72ch;
-  margin: 0;
-  padding: 0;
-  text-align: left;
-  color: var(--muted);
-}
-.subpage-header + .section,
-.subpage-header + .card {
-  margin-top: 12px;
-}
-
 
 /* Entity disclosure layout fix.
    The expandable <details> owns the full row. Only its <summary> is a grid. */
