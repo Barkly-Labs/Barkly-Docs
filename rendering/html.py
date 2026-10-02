@@ -6,7 +6,6 @@ import re
 from pathlib import Path
 
 from analysis.graph import build_relation_graph
-from rendering.structurizr import write_structurizr_files
 from model.project import Project
 
 CSS = """
@@ -1459,22 +1458,121 @@ def _page_shell(title: str, current: str, body: str) -> str:
 
 
 def _render_project_architecture(project: Project) -> str:
-    """Render the Structurizr project-level graph on the index page only."""
-    graph = build_relation_graph(project, view="project_overview", max_nodes=None, max_edges=None)
+    """Render a native, project-only architecture diagram in Barkly Docs HTML."""
+    graph = build_relation_graph(
+        project, view="project_overview", max_nodes=None, max_edges=None
+    )
+
+    nodes = list(graph.nodes)
+    edges = list(graph.edges)
+
+    # A predictable grid keeps the diagram usable without a JavaScript
+    # framework, an external server, or a Docker container.
+    columns = 4
+    node_width = 218
+    node_height = 72
+    horizontal_gap = 54
+    vertical_gap = 78
+    margin_x = 28
+    margin_y = 38
+    rows = max(1, (len(nodes) + columns - 1) // columns)
+    width = margin_x * 2 + columns * node_width + (columns - 1) * horizontal_gap
+    height = margin_y * 2 + rows * node_height + (rows - 1) * vertical_gap
+
+    positions = {}
+    for index, node in enumerate(nodes):
+        column = index % columns
+        row = index // columns
+        x = margin_x + column * (node_width + horizontal_gap)
+        y = margin_y + row * (node_height + vertical_gap)
+        positions[node.id] = (x, y)
+
+    svg_parts = [
+        f'<svg class="barkly-architecture-svg" viewBox="0 0 {width} {height}" '
+        f'role="img" aria-label="Project component architecture diagram" '
+        f'xmlns="http://www.w3.org/2000/svg">',
+        '<defs><marker id="barkly-arrow" markerWidth="8" markerHeight="8" '
+        'refX="6" refY="3" orient="auto" markerUnits="strokeWidth">'
+        '<path d="M0,0 L0,6 L6,3 z" fill="#7DFFB2"/></marker></defs>',
+    ]
+
+    # Draw connections behind component cards.
+    for edge in edges:
+        if edge.source not in positions or edge.target not in positions:
+            continue
+        sx, sy = positions[edge.source]
+        tx, ty = positions[edge.target]
+        x1, y1 = sx + node_width / 2, sy + node_height / 2
+        x2, y2 = tx + node_width / 2, ty + node_height / 2
+        count = int(edge.metadata.get("relationship_count", 1) or 1)
+        kinds = ", ".join(
+            str(kind) for kind in edge.metadata.get("relationship_kinds", [])
+        )
+        tooltip = _escape(f"{count} relationship(s)" + (f": {kinds}" if kinds else ""))
+        svg_parts.append(
+            f'<line x1="{x1:g}" y1="{y1:g}" x2="{x2:g}" y2="{y2:g}" '
+            f'stroke="#7DFFB2" stroke-opacity="0.55" stroke-width="1.7" '
+            f'marker-end="url(#barkly-arrow)"><title>{tooltip}</title></line>'
+        )
+
+    # Draw only project-level components, never individual symbols or
+    # external dependencies.
+    for node in nodes:
+        x, y = positions[node.id]
+        label = str(node.label)
+        display_label = label if len(label) <= 27 else label[:24] + "..."
+        file_count = int(node.metadata.get("file_count", 0) or 0)
+        entity_count = int(node.metadata.get("entity_count", 0) or 0)
+        svg_parts.append(
+            f'<g><title>{_escape(label)}</title>'
+            f'<rect x="{x}" y="{y}" width="{node_width}" height="{node_height}" '
+            'rx="11" fill="#2A1B27" stroke="#FF6B9D" stroke-width="1.5"/>'
+            f'<text x="{x + 13}" y="{y + 27}" fill="#FFD5E6" '
+            'font-size="14" font-weight="600">'
+            f'{_escape(display_label)}</text>'
+            f'<text x="{x + 13}" y="{y + 49}" fill="#D9C5D2" '
+            'font-size="11">'
+            f'{file_count} file(s) ? {entity_count} code element(s)</text>'
+            '</g>'
+        )
+
+    svg_parts.append("</svg>")
+    diagram = "".join(svg_parts)
+
     return f"""
     <section class="section project-architecture" id="project-architecture">
       <h2>Project Architecture</h2>
-      <div class="section-subtitle">A project-level view of major components and their connections. Individual files, classes, functions, and methods are excluded.</div>
+      <div class="section-subtitle">
+        A map of this project's major components and their internal connections.
+        Individual functions and methods are summarized within their project areas.
+        External dependencies are excluded.
+      </div>
       <div class="card" style="padding:18px;margin-top:16px">
-        <div class="meta">{len(graph.nodes)} project component(s) · {len(graph.edges)} component connection(s)</div>
-        <div style="margin-top:16px;border:1px solid var(--line);border-radius:12px;overflow:hidden">
-          <iframe title="Structurizr project-level architecture" src="http://localhost:8080" style="display:block;width:100%;height:620px;background:#080808;border:0" loading="lazy"></iframe>
+        <div class="meta">{len(nodes)} project component(s) ? {len(edges)} component connection(s)</div>
+        <div style="margin-top:16px;border:1px solid var(--line);border-radius:12px;
+                    overflow:auto;background:#171117;padding:12px">
+          <style>
+            .barkly-architecture-svg {{
+              display: block;
+              width: 100%;
+              height: auto;
+              min-width: 760px;
+            }}
+            @media (max-width: 700px) {{
+              .barkly-architecture-svg {{ min-width: 900px; }}
+            }}
+          </style>
+          {diagram}
         </div>
-        <p class="meta">To view the interactive diagram, start Structurizr Lite from the generated architecture folder: <code>cd architecture</code>, then <code>docker compose up -d</code>. Docker must be running.</p>
-        <p><a href="http://localhost:8080" target="_blank" rel="noopener">Open Structurizr Lite</a> · <a href="architecture/workspace.dsl">View workspace.dsl</a> · <a href="architecture/docker-compose.yml">View Docker Compose configuration</a></p>
+        <p class="meta" style="margin-top:12px">
+          Connections represent aggregated relationships between project areas.
+          Hover over a connection or component for more detail.
+          This diagram is rendered directly in Barkly Docs; Docker is not required.
+        </p>
       </div>
     </section>
     """
+
 
 
 def _render_index(project: Project, graph_generated: bool = True) -> str:
@@ -1590,7 +1688,6 @@ def render_project_website(project: Project, output_dir: str | Path) -> list[Pat
     (assets_dir / "site.css").write_text(CSS, encoding="utf-8")
     (assets_dir / "relation-map.js").write_text(RELATION_MAP_JS, encoding="utf-8")
 
-    architecture_paths = write_structurizr_files(project_obj, output_path)
 
     index_path = output_path / "index.html"
     entities_path = output_path / "entities.html"
@@ -1602,7 +1699,7 @@ def render_project_website(project: Project, output_dir: str | Path) -> list[Pat
     relationships_path.write_text(_render_relationships_page(project_obj), encoding="utf-8")
     relation_map_path.write_text(_render_relation_map_page(project_obj), encoding="utf-8")
 
-    return [index_path, entities_path, relationships_path, relation_map_path, assets_dir / "site.css", assets_dir / "relation-map.js", *architecture_paths]
+    return [index_path, entities_path, relationships_path, relation_map_path, assets_dir / "site.css", assets_dir / "relation-map.js"]
 
 
 def generate_html_website(project: Project, output_dir: str | Path) -> list[Path]:
