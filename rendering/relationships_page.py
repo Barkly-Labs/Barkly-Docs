@@ -11,11 +11,11 @@ from rendering.html import (
 def render_relationships_page(project: Project) -> str:
     body = (
         '<section class="subpage-header">'
-        '<div class="kicker">Barkly Docs · Project relationships</div>'
-        "<h1>Relationships</h1>"
-        "<p>Evidence-labeled relationships between project entities.</p>"
-        "</section>"
-        '<section class="section">'
+               '<div class="kicker">Barkly Docs · Project Relationships</div>'
+               "<h1>Relationships</h1>"
+               "<p>Evidence-labeled relationships between project entities.</p>"
+               "</section>"
+               '<section class="section">'
         "<h2>Relationship inventory</h2>"
         + _render_relationships(project)
         + "</section>"
