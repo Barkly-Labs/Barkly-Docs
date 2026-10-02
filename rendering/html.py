@@ -976,7 +976,7 @@ def _relationship_badge(value: str) -> str:
 
 
 def _evidence_summary(project: Project) -> str:
-    """Show exact evidence counts plus the relationship kinds behind each count."""
+    """Show useful project evidence without inventing relationships for empty states."""
     labels = ("DECLARED", "DETECTED", "INFERRED", "UNKNOWN")
     grouped: dict[str, list] = {label: [] for label in labels}
 
@@ -986,6 +986,15 @@ def _evidence_summary(project: Project) -> str:
             key = "UNKNOWN"
         grouped[key].append(relationship)
 
+    def row(name: object, value: object) -> str:
+        return (
+            '<li><span class="evidence-kind">'
+            + _escape(name)
+            + '</span><strong>'
+            + _escape(value)
+            + '</strong></li>'
+        )
+
     entries: list[str] = []
     for label in labels:
         relationships = grouped[label]
@@ -994,26 +1003,74 @@ def _evidence_summary(project: Project) -> str:
             kind = str(getattr(relationship, "kind", None) or "unspecified")
             kind_counts[kind] = kind_counts.get(kind, 0) + 1
 
-        if kind_counts:
-            breakdown = "".join(
-                '<li><span class="evidence-kind">'
-                + _escape(kind)
-                + '</span><strong>'
-                + str(count)
-                + '</strong></li>'
-                for kind, count in sorted(
-                    kind_counts.items(),
-                    key=lambda pair: (-pair[1], pair[0].lower()),
+        data_rows: list[str] = []
+
+        # Relationship evidence remains exact and evidence-labelled.
+        for kind, count in sorted(
+            kind_counts.items(),
+            key=lambda pair: (-pair[1], pair[0].lower()),
+        ):
+            data_rows.append(row(kind, count))
+
+        # Populate the cards with other facts that genuinely belong to that
+        # evidence class instead of pretending zero-count relationships exist.
+        if label == "DECLARED":
+            readme = _readme_path(project)
+            if readme is not None:
+                data_rows.append(row("README", "present"))
+            if project.name:
+                data_rows.append(row("Project name", project.name))
+            description = project.metadata.get("description")
+            if description:
+                data_rows.append(row("Description", str(description)))
+            declared_languages = project.metadata.get("languages")
+            if declared_languages:
+                if isinstance(declared_languages, (list, tuple, set)):
+                    declared_languages = ", ".join(str(x) for x in declared_languages)
+                data_rows.append(row("Declared languages", declared_languages))
+
+        elif label == "DETECTED":
+            data_rows.extend(
+                [
+                    row("Files", len(project.files)),
+                    row("Languages", len(_languages(project))),
+                    row("Classes", len(project.classes)),
+                    row("Functions", len(project.functions)),
+                    row("Methods", len(project.methods)),
+                    row("Relationships", len(relationships)),
+                ]
+            )
+
+        elif label == "INFERRED":
+            if not relationships:
+                data_rows.append(
+                    row("Inferred relationships", "none recorded by static analysis")
+                )
+
+        elif label == "UNKNOWN":
+            if not relationships:
+                data_rows.append(row("Unknown relationships", "none recorded"))
+            data_rows.append(
+                row(
+                    "Runtime behavior",
+                    "not established by static analysis",
                 )
             )
-            data_html = (
-                '<details class="evidence-data">'
-                '<summary>View exact breakdown</summary>'
-                '<ul>' + breakdown + '</ul>'
-                '</details>'
+            data_rows.append(
+                row(
+                    "External/dynamic behavior",
+                    "not established unless present in scanned evidence",
+                )
             )
-        else:
-            data_html = '<p class="evidence-empty">No relationships recorded.</p>'
+
+        data_html = (
+            '<details class="evidence-data">'
+            '<summary>View evidence data</summary>'
+            '<ul>' + "".join(data_rows) + '</ul>'
+            '</details>'
+            if data_rows
+            else '<p class="evidence-empty">No evidence was recorded for this category.</p>'
+        )
 
         entries.append(
             '<div class="tile evidence-tile">'
