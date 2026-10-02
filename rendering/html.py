@@ -1547,6 +1547,98 @@ def _render_files(project: Project) -> str:
     return '<div class="entity-list">' + "".join(items) + "</div>"
 
 
+
+
+def _render_entity_group(items, empty_message: str) -> str:
+    if not items:
+        return f'<div class="empty-state">{_escape(empty_message)}</div>'
+
+    rendered = []
+    for item in sorted(items, key=lambda node: (getattr(node, "path", "") or "", getattr(node, "name", "") or "")):
+        name = getattr(item, "name", "") or "Unnamed"
+        path = getattr(item, "path", "") or ""
+        language = getattr(item, "language", "") or "Unknown"
+        kind = getattr(item, "kind", "") or item.__class__.__name__
+        line = getattr(item, "line", None)
+
+        meta = [
+            f'<span class="meta">Type: {_escape(str(kind))}</span>',
+            f'<span class="meta">Language: {_escape(str(language))}</span>',
+        ]
+        if path:
+            meta.append(f'<span class="meta">Path: {_escape(str(path))}</span>')
+        if line:
+            meta.append(f'<span class="meta">Line: {_escape(str(line))}</span>')
+
+        rendered.append(
+            '<div class="entity-item">'
+            f'<h3>{_escape(str(name))}</h3>'
+            + "".join(meta)
+            + '</div>'
+        )
+
+    return '<div class="entity-list">' + "".join(rendered) + "</div>"
+
+
+def _project_items(project: Project, attribute: str):
+    value = getattr(project, attribute, None)
+    if value is None:
+        return []
+    try:
+        return list(value)
+    except TypeError:
+        return []
+
+
+def _render_index_data_section(title: str, description: str, action: str, body: str) -> str:
+    return (
+        '<details class="index-section-card">'
+        '<summary><div class="index-section-heading">'
+        f'<h2>{_escape(title)}</h2><p>{_escape(description)}</p>'
+        '</div>'
+        f'<span class="index-section-action" aria-hidden="true">{_escape(action)} ↓</span>'
+        '</summary>'
+        f'<div class="index-section-body">{body}</div>'
+        '</details>'
+    )
+
+def _is_json_project_file(item) -> bool:
+    path = str(getattr(item, "path", "") or "").replace("\\", "/").lower()
+    name = str(getattr(item, "name", "") or "").lower()
+    return path.endswith(".json") or name.endswith(".json")
+
+
+def _render_json_files(project: Project) -> str:
+    json_files = [item for item in project.files if _is_json_project_file(item)]
+    if not json_files:
+        return '<div class="empty-state">No JSON files were discovered.</div>'
+    items = []
+    for item in sorted(json_files, key=lambda node: node.path):
+        items.append(f"""
+            <div class="entity-item">
+              <h3>{_escape(item.name)}</h3>
+              <div class="meta">JSON</div>
+              <div class="meta">Path: {_escape(item.path)}</div>
+            </div>
+            """)
+    return '<div class="entity-list">' + "".join(items) + "</div>"
+
+
+def _render_other_files(project: Project) -> str:
+    other_files = [item for item in project.files if not _is_json_project_file(item)]
+    if not other_files:
+        return '<div class="empty-state">No non-JSON project files were discovered.</div>'
+    items = []
+    for item in sorted(other_files, key=lambda node: node.path):
+        items.append(f"""
+            <div class="entity-item">
+              <h3>{_escape(item.name)}</h3>
+              <div class="meta">Language: {_escape(item.language or 'Unknown')}</div>
+              <div class="meta">Path: {_escape(item.path)}</div>
+            </div>
+            """)
+    return '<div class="entity-list">' + "".join(items) + "</div>"
+
 def _render_json_data(project: Project) -> str:
     if not project.data:
         return '<div class="empty-state">No JSON data objects or arrays were extracted.</div>'
@@ -2398,7 +2490,6 @@ def _render_index(project: Project, graph_generated: bool = True) -> str:
         '<p>Start here. The essential project facts are grouped together so the page can be understood before exploring implementation detail.</p>'
         '</div></div>'
         '<div class="index-glance-grid">'
-        f'<article class="index-glance-card index-glance-card-purpose"><h3>Purpose</h3><p>{_escape(description)}</p></article>'
         f'<article class="index-glance-card"><h3>Languages</h3><p>{_escape(", ".join(languages) if languages else "Unknown")}</p></article>'
         f'<article class="index-glance-card"><h3>Documentation</h3><p>{_escape("README present" if _readme_path(project) else "README not discovered")}</p></article>'
         f'<article class="index-glance-card"><h3>Project root</h3><p>{_escape(project.root)}</p></article>'
@@ -2429,19 +2520,64 @@ def _render_index(project: Project, graph_generated: bool = True) -> str:
         + '</div></details>'
     )
 
-    structure = (
+    other_files_section = (
         '<details class="index-section-card">'
-        '<summary><div class="index-section-heading"><h2>Project structure</h2>'
-        '<p>Discovered files and their source identities. Open this when you need the file-level view.</p></div>'
+        '<summary><div class="index-section-heading"><h2>Other project files</h2>'
+        '<p>All discovered non-JSON files, kept separate from structured JSON data.</p></div>'
         '<span class="index-section-action" aria-hidden="true">Explore files ↓</span></summary>'
-        '<div class="index-section-body">' + _render_files(project) + '</div></details>'
+        '<div class="index-section-body">' + _render_other_files(project) + '</div></details>'
     )
+    classes_section = _render_index_data_section(
+        "Classes",
+        "Discovered classes in one consistent source-oriented view.",
+        "Explore classes",
+        _render_entity_group(_project_items(project, "classes"), "No classes were discovered."),
+    )
+
+    functions_section = _render_index_data_section(
+        "Functions",
+        "Discovered functions kept separate from classes and file data.",
+        "Explore functions",
+        _render_entity_group(_project_items(project, "functions"), "No functions were discovered."),
+    )
+
+    methods_section = _render_index_data_section(
+        "Methods",
+        "Methods are grouped separately so class behavior is easier to scan.",
+        "Explore methods",
+        _render_entity_group(_project_items(project, "methods"), "No methods were discovered."),
+    )
+
+    modules_section = _render_index_data_section(
+        "Modules",
+        "Detected modules and source units that organize the project.",
+        "Explore modules",
+        _render_entity_group(_project_items(project, "modules"), "No modules were discovered."),
+    )
+
+    dependencies_section = _render_index_data_section(
+        "Dependencies",
+        "Project dependencies are separated from source entities and relationships.",
+        "Explore dependencies",
+        _render_entity_group(_project_items(project, "dependencies"), "No dependencies were discovered."),
+    )
+
+    relationships_section = _render_index_data_section(
+        "Relationships",
+        "Detected connections between project entities, kept distinct from inferred meaning.",
+        "Explore relationships",
+        _render_entity_group(_project_items(project, "relationships"), "No relationships were discovered."),
+    )
+
     json_section = (
         '<details class="index-section-card">'
-        '<summary><div class="index-section-heading"><h2>JSON data</h2>'
-        '<p>Structured JSON values extracted as data facts, separated from functions and methods.</p></div>'
-        '<span class="index-section-action" aria-hidden="true">Explore data ↓</span></summary>'
-        '<div class="index-section-body">' + _render_json_data(project) + '</div></details>'
+        '<summary><div class="index-section-heading"><h2>JSON</h2>'
+        '<p>JSON files and structured JSON values only. Other project files are kept in their own section.</p></div>'
+        '<span class="index-section-action" aria-hidden="true">Explore JSON ↓</span></summary>'
+        '<div class="index-section-body">'
+        '<h3>JSON files</h3>' + _render_json_files(project)
+        + '<h3 style="margin-top:18px;">Extracted JSON data</h3>' + _render_json_data(project)
+        + '</div></details>'
     )
 
     body = (
@@ -2451,8 +2587,8 @@ def _render_index(project: Project, graph_generated: bool = True) -> str:
         f'{documentation}'
         '<div class="index-deep-label">Reference layer</div>'
         '<h2 class="index-deep-title">Deeper project detail</h2>'
-        '<p class="index-deep-copy">The overview stays calm by default. File-level and structured-data detail remains available here when you need to investigate further.</p>'
-        f'<div class="index-human-flow">{structure}{json_section}</div>'
+        '<p class="index-deep-copy">The overview stays calm by default. Classes, functions, methods, modules, dependencies, relationships, JSON, and files are separated into predictable sections so each type of project data has one clear place.</p>'
+        f'<div class="index-human-flow">{classes_section}{functions_section}{methods_section}{modules_section}{dependencies_section}{relationships_section}{json_section}{other_files_section}</div>'
     )
     return _page_shell(
         f"{_project_name(project)} — Barkly Docs",
