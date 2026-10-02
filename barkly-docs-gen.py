@@ -10,15 +10,16 @@ Static AST analysis — project code is never imported or executed.
 Structure:
 01 Project
 02 Principles
-03 Components
-04 API Endpoints
-05 Functions & Methods
-06 Classes
-07 Modules
-08 Imports
-09 Lifecycle
-10 Git
-11 Changelog
+03 Project Architecture
+04 Components
+05 API Endpoints
+06 Functions & Methods
+07 Classes
+08 Modules
+09 Imports
+10 Lifecycle
+11 Git
+12 Changelog
 
 Design principle:
 Show the shape first.
@@ -1530,6 +1531,310 @@ def module_row(
     """
 
 
+
+# ============================================================
+# PROJECT ARCHITECTURE
+# ============================================================
+
+ARCHITECTURE_LAYERS = (
+    ("entry", "Entry points", "Where execution enters the project."),
+    ("core", "Core logic", "The components that perform the main work."),
+    ("data", "Data and persistence", "Project components that manage data."),
+)
+
+ENTRY_NAMES = {
+    "entry", "entries", "entrypoint", "entrypoints",
+    "cli", "command", "commands", "script", "scripts",
+    "main", "mains", "bin", "runner", "runners",
+}
+
+DATA_NAMES = {
+    "data", "db", "database", "databases", "persistence",
+    "persist", "storage", "stores", "models", "model",
+    "repositories", "repository", "repos", "cache", "caches",
+}
+
+
+def architecture_component_name(path: str) -> str:
+    parts = Path(path).parts
+    if not parts:
+        return "Project root"
+    if len(parts) == 1:
+        return "Project root"
+    return parts[0]
+
+
+def architecture_layer_for(component: str) -> str:
+    key = component.strip().lower().replace("-", "_").replace(" ", "_")
+    if key in ENTRY_NAMES:
+        return "entry"
+    if key in DATA_NAMES:
+        return "data"
+    return "core"
+
+
+def architecture_component_records(
+    scanner: PythonScanner,
+) -> tuple[dict[str, dict], list[tuple[str, str]]]:
+    components: dict[str, dict] = {}
+
+    for module in scanner.modules:
+        component = architecture_component_name(module.path)
+        record = components.setdefault(
+            component,
+            {
+                "name": component,
+                "layer": architecture_layer_for(component),
+                "files": [],
+                "functions": 0,
+                "classes": 0,
+                "endpoints": 0,
+                "entities": 0,
+            },
+        )
+
+        record["files"].append(module.path)
+        record["functions"] += len(module.functions)
+        record["classes"] += len(module.classes)
+        record["endpoints"] += sum(
+            1 for endpoint in scanner.endpoints
+            if endpoint.file == module.path
+        )
+
+    for record in components.values():
+        record["entities"] = (
+            record["functions"]
+            + record["classes"]
+            + record["endpoints"]
+        )
+
+    # Detect internal component-to-component connections from imports.
+    known = {
+        name: name.lower().replace("-", "_").replace(" ", "_")
+        for name in components
+    }
+    connections: set[tuple[str, str]] = set()
+
+    for module in scanner.modules:
+        source_component = architecture_component_name(module.path)
+        for imported in module.imports:
+            normalized = imported.strip().lstrip(".").replace("-", "_")
+            if not normalized:
+                continue
+            first = normalized.split(".")[0].lower()
+
+            for target_component, target_key in known.items():
+                if target_component == source_component:
+                    continue
+                if first == target_key or normalized.lower().startswith(
+                    target_key + "."
+                ):
+                    connections.add((source_component, target_component))
+                    break
+
+    return components, sorted(connections)
+
+
+def architecture_connection_text(
+    source: str,
+    target: str,
+    layer_map: dict[str, dict],
+) -> str:
+    source_layer = layer_map.get(source, {}).get("layer")
+    target_layer = layer_map.get(target, {}).get("layer")
+
+    if source_layer == "entry" and target_layer == "core":
+        return "Entry points lead into core logic"
+    if source_layer == "core" and target_layer == "data":
+        return "Core logic may use data components"
+    if source_layer == "entry" and target_layer == "data":
+        return "Entry points may access data components"
+    if source_layer == "data" and target_layer == "core":
+        return "Data components reference core logic"
+    return "Internal components connect"
+
+
+def architecture_card(record: dict) -> str:
+    entity_parts = []
+    if record["functions"]:
+        entity_parts.append(f'{record["functions"]} functions')
+    if record["classes"]:
+        entity_parts.append(f'{record["classes"]} classes')
+    if record["endpoints"]:
+        entity_parts.append(f'{record["endpoints"]} endpoints')
+
+    breakdown = ", ".join(entity_parts) or "No symbols detected"
+    files = sorted(record["files"])
+
+    return f"""
+      <details class="architecture-card">
+        <summary>
+          <div class="architecture-card-name">
+            {esc(record["name"])}
+          </div>
+          <div class="architecture-card-meta">
+            {len(files)} files · {record["entities"]} entities
+          </div>
+        </summary>
+
+        <div class="architecture-card-details">
+          <div class="architecture-detail-line">
+            <span>ENTITIES</span>
+            <strong>{esc(breakdown)}</strong>
+          </div>
+
+          <div class="architecture-file-list">
+            <div class="detail-label">FILES</div>
+            {"".join(f'<code>{esc(path)}</code>' for path in files)}
+          </div>
+        </div>
+      </details>
+    """
+
+
+def architecture_layer(
+    key: str,
+    title: str,
+    description: str,
+    records: list[dict],
+) -> str:
+    cards = "".join(
+        architecture_card(record)
+        for record in sorted(records, key=lambda item: item["name"].lower())
+    )
+
+    if not cards:
+        cards = """
+          <div class="architecture-empty">
+            No components assigned to this layer.
+          </div>
+        """
+
+    return f"""
+      <section class="architecture-layer architecture-layer-{esc(key)}">
+        <div class="architecture-layer-head">
+          <div>
+            <h3>{esc(title)}</h3>
+            <p>{esc(description)}</p>
+          </div>
+          <span>{len(records)} component(s)</span>
+        </div>
+
+        <div class="architecture-cards">
+          {cards}
+        </div>
+      </section>
+    """
+
+
+def architecture_body(scanner: PythonScanner) -> str:
+    components, connections = architecture_component_records(scanner)
+
+    layer_map = components
+    layers = {
+        key: [
+            record
+            for record in components.values()
+            if record["layer"] == key
+        ]
+        for key, _, _ in ARCHITECTURE_LAYERS
+    }
+
+    layer_html = []
+    for index, (key, title, description) in enumerate(ARCHITECTURE_LAYERS):
+        layer_html.append(
+            architecture_layer(
+                key,
+                title,
+                description,
+                layers[key],
+            )
+        )
+
+        if index < len(ARCHITECTURE_LAYERS) - 1:
+            current_key = ARCHITECTURE_LAYERS[index][0]
+            next_key = ARCHITECTURE_LAYERS[index + 1][0]
+            relevant = [
+                pair for pair in connections
+                if layer_map.get(pair[0], {}).get("layer") == current_key
+                and layer_map.get(pair[1], {}).get("layer") == next_key
+            ]
+            if relevant:
+                text = architecture_connection_text(
+                    relevant[0][0],
+                    relevant[0][1],
+                    layer_map,
+                )
+                label = (
+                    f"{len(relevant)} internal connection(s)"
+                    if len(relevant) != 1
+                    else "1 internal connection"
+                )
+            else:
+                if current_key == "entry" and next_key == "core":
+                    text = "Entry points lead into core logic"
+                elif current_key == "core" and next_key == "data":
+                    text = "Core logic may use data components"
+                else:
+                    text = "No direct internal connections detected"
+                label = "0 internal connection(s)"
+
+            layer_html.append(
+                f"""
+                <div class="architecture-bridge">
+                  <span class="architecture-bridge-icon">?</span>
+                  <strong>{esc(text)}</strong>
+                  <small>{esc(label)}</small>
+                </div>
+                """
+            )
+
+    connection_rows = ""
+    for source_component, target_component in connections:
+        connection_rows += f"""
+          <div class="architecture-connection-row">
+            <code>{esc(source_component)}</code>
+            <span>→</span>
+            <code>{esc(target_component)}</code>
+          </div>
+        """
+
+    if not connection_rows:
+        connection_rows = """
+          <div class="architecture-empty">
+            No internal component-to-component connections were detected.
+          </div>
+        """
+
+    total_entities = sum(
+        record["entities"] for record in components.values()
+    )
+
+    return f"""
+      <div class="architecture-shell">
+        <div class="architecture-summary">
+          <span>{len(components)} project component(s)</span>
+          <span>·</span>
+          <span>{len(connections)} internal connection(s)</span>
+          <span>·</span>
+          <span>{total_entities} entities</span>
+        </div>
+
+        {"".join(layer_html)}
+
+        <details class="architecture-connections">
+          <summary>
+            <span>Internal connections</span>
+            <strong>{len(connections)}</strong>
+          </summary>
+          <div class="architecture-connection-list">
+            {connection_rows}
+          </div>
+        </details>
+      </div>
+    """
+
+
 # ============================================================
 # SECTION HELPERS
 # ============================================================
@@ -1777,6 +2082,12 @@ def build_html(
             [],
         )
     )
+
+    # --------------------------------------------------------
+    # 03 PROJECT ARCHITECTURE
+    # --------------------------------------------------------
+
+    architecture_body_html = architecture_body(scanner)
 
     # --------------------------------------------------------
     # 04 API ENDPOINTS
@@ -2449,6 +2760,280 @@ def build_html(
       font-size: 12px;
     }}
 
+
+    /* ------------------------------------------------------
+       PROJECT ARCHITECTURE
+    ------------------------------------------------------ */
+
+    .architecture-shell {{
+      padding: 16px;
+      background: #101010;
+      border: 1px solid #292929;
+      border-radius: 14px;
+    }}
+
+    .architecture-summary {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      padding: 2px 0 18px;
+      color: #b7b7b7;
+      font-size: 12px;
+    }}
+
+    .architecture-layer {{
+      padding: 18px;
+      border: 1px solid;
+      border-radius: 11px;
+      background: rgba(255,255,255,0.015);
+    }}
+
+    .architecture-layer-entry {{
+      border-color: rgba(255, 115, 183, 0.48);
+      background: rgba(255, 115, 183, 0.035);
+    }}
+
+    .architecture-layer-core {{
+      border-color: rgba(93, 220, 153, 0.48);
+      background: rgba(93, 220, 153, 0.025);
+    }}
+
+    .architecture-layer-data {{
+      border-color: rgba(117, 151, 255, 0.48);
+      background: rgba(117, 151, 255, 0.025);
+    }}
+
+    .architecture-layer-head {{
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 16px;
+    }}
+
+    .architecture-layer-head h3 {{
+      margin: 0 0 2px;
+      font-size: 16px;
+      letter-spacing: -0.02em;
+    }}
+
+    .architecture-layer-head p {{
+      margin: 0;
+      color: var(--muted);
+      font-size: 11px;
+    }}
+
+    .architecture-layer-head > span {{
+      flex: 0 0 auto;
+      color: var(--muted);
+      font-family: monospace;
+      font-size: 10px;
+      white-space: nowrap;
+    }}
+
+    .architecture-cards {{
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }}
+
+    .architecture-card {{
+      min-width: 0;
+      overflow: hidden;
+      background: rgba(8, 8, 8, 0.52);
+      border: 1px solid #292929;
+      border-radius: 8px;
+    }}
+
+    .architecture-card > summary {{
+      position: relative;
+      display: block;
+      min-height: 72px;
+      padding: 12px 11px;
+      cursor: pointer;
+      list-style: none;
+    }}
+
+    .architecture-card > summary::-webkit-details-marker {{
+      display: none;
+    }}
+
+    .architecture-card > summary::after {{
+      content: "›";
+      position: absolute;
+      right: 10px;
+      top: 10px;
+      color: #666;
+      font-size: 15px;
+      transition: transform .15s ease;
+    }}
+
+    .architecture-card[open] > summary::after {{
+      transform: rotate(90deg);
+    }}
+
+    .architecture-card-name {{
+      padding-right: 16px;
+      color: #f2f2f2;
+      font-size: 13px;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }}
+
+    .architecture-card-meta {{
+      margin-top: 8px;
+      color: #8f8f8f;
+      font-family: monospace;
+      font-size: 9px;
+    }}
+
+    .architecture-card-details {{
+      padding: 11px;
+      border-top: 1px solid #292929;
+      background: rgba(255,255,255,0.02);
+    }}
+
+    .architecture-detail-line {{
+      display: grid;
+      gap: 4px;
+      margin-bottom: 10px;
+    }}
+
+    .architecture-detail-line span {{
+      color: #666;
+      font-family: monospace;
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: .1em;
+    }}
+
+    .architecture-detail-line strong {{
+      color: #cfcfcf;
+      font-size: 10px;
+      font-weight: 500;
+    }}
+
+    .architecture-file-list {{
+      display: grid;
+      gap: 4px;
+    }}
+
+    .architecture-file-list .detail-label {{
+      margin-bottom: 2px;
+    }}
+
+    .architecture-file-list code {{
+      display: block;
+      width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 8px;
+    }}
+
+    .architecture-empty {{
+      grid-column: 1 / -1;
+      padding: 18px 8px;
+      color: #777;
+      font-size: 11px;
+    }}
+
+    .architecture-bridge {{
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 7px;
+      min-height: 48px;
+      color: var(--green);
+      text-align: center;
+    }}
+
+    .architecture-bridge-icon {{
+      display: inline-grid;
+      width: 16px;
+      height: 16px;
+      place-items: center;
+      border-radius: 50%;
+      color: #111;
+      background: var(--green);
+      font-family: monospace;
+      font-size: 10px;
+      font-weight: 900;
+    }}
+
+    .architecture-bridge strong {{
+      font-size: 11px;
+      font-weight: 700;
+    }}
+
+    .architecture-bridge small {{
+      color: #777;
+      font-family: monospace;
+      font-size: 9px;
+    }}
+
+    .architecture-connections {{
+      margin-top: 12px;
+      border: 1px solid #292929;
+      border-radius: 9px;
+      background: rgba(255,255,255,0.012);
+    }}
+
+    .architecture-connections > summary {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      cursor: pointer;
+      list-style: none;
+      font-size: 11px;
+      font-weight: 700;
+    }}
+
+    .architecture-connections > summary::-webkit-details-marker {{
+      display: none;
+    }}
+
+    .architecture-connections > summary strong {{
+      color: #999;
+      font-family: monospace;
+      font-size: 9px;
+    }}
+
+    .architecture-connection-list {{
+      border-top: 1px solid #292929;
+    }}
+
+    .architecture-connection-row {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      padding: 7px 12px;
+      border-bottom: 1px solid #1d1d1d;
+    }}
+
+    .architecture-connection-row:last-child {{
+      border-bottom: 0;
+    }}
+
+    .architecture-connection-row span {{
+      color: #777;
+      font-family: monospace;
+      font-size: 10px;
+    }}
+
+    .architecture-connection-row code {{
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 9px;
+    }}
+
     /* ------------------------------------------------------
        SEARCH
     ------------------------------------------------------ */
@@ -3022,6 +3607,15 @@ def build_html(
         gap: 8px;
       }}
 
+      .architecture-cards {{
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }}
+
+      .architecture-layer-head {{
+        flex-direction: column;
+        gap: 6px;
+      }}
+
       .group-summary,
       .symbol-summary {{
         grid-template-columns: 1fr auto;
@@ -3058,6 +3652,18 @@ def build_html(
         flex-basis: 100%;
       }}
 
+      .architecture-shell {{
+        padding: 10px;
+      }}
+
+      .architecture-layer {{
+        padding: 12px;
+      }}
+
+      .architecture-cards {{
+        grid-template-columns: 1fr;
+      }}
+
       .hero-card {{
         padding: 22px;
       }}
@@ -3074,6 +3680,630 @@ def build_html(
       }}
 
     }}
+
+  
+
+/* ============================================================
+   BARKLY STANDARD — HUMAN-CENTERED VISUAL SYSTEM
+   Visual layer only. Existing structure/content is preserved.
+   ============================================================ */
+
+:root {
+  --bg: #070707;
+  --bg-raised: #0b0b0b;
+  --panel: #101010;
+  --panel-2: #141414;
+  --panel-3: #181818;
+  --line: #272727;
+  --line-soft: #1b1b1b;
+  --text: #f5f3f4;
+  --text-soft: #d2cfd1;
+  --muted: #9b979a;
+  --dim: #686568;
+  --accent: #ff6b9d;
+  --accent-bright: #ff86ad;
+  --accent-soft: rgba(255, 107, 157, .10);
+  --green: #7dffb2;
+  --green-soft: rgba(125, 255, 178, .09);
+  --yellow: #ffd76b;
+  --yellow-soft: rgba(255, 215, 107, .09);
+  --blue: #88a9ff;
+  --blue-soft: rgba(136, 169, 255, .09);
+  --shadow: 0 18px 55px rgba(0, 0, 0, .32);
+  --shadow-small: 0 8px 24px rgba(0, 0, 0, .24);
+  --radius: 14px;
+  --radius-small: 9px;
+  --content-width: 1440px;
+}
+
+html {
+  background: var(--bg);
+  scroll-padding-top: 86px;
+}
+
+body {
+  min-width: 320px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(255,107,157,.055), transparent 31rem),
+    radial-gradient(circle at 88% 9%, rgba(125,255,178,.032), transparent 28rem),
+    var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.58;
+  letter-spacing: .002em;
+}
+
+::selection {
+  color: #090909;
+  background: var(--accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.page {
+  width: min(calc(100% - 32px), var(--content-width));
+  margin: 0 auto;
+}
+
+.topbar {
+  min-height: 62px;
+  padding: 0 max(18px, calc((100vw - var(--content-width)) / 2));
+  background: rgba(7,7,7,.88);
+  border-bottom-color: rgba(255,255,255,.08);
+  box-shadow: 0 8px 30px rgba(0,0,0,.16);
+}
+
+.brand {
+  gap: 10px;
+}
+
+.brand-paw {
+  width: 27px;
+  height: 27px;
+  filter: drop-shadow(0 0 12px rgba(255,107,157,.18));
+}
+
+.brand small {
+  letter-spacing: .18em;
+  color: #858185;
+}
+
+.nav {
+  scrollbar-width: none;
+}
+
+.nav::-webkit-scrollbar {
+  display: none;
+}
+
+.nav a {
+  padding: 7px 9px;
+  color: #858185;
+  font-size: 10px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  border: 1px solid transparent;
+  transition: color .16s ease, border-color .16s ease, background .16s ease;
+}
+
+.nav a:hover,
+.nav a:focus-visible {
+  color: var(--text);
+  background: var(--accent-soft);
+  border-color: rgba(255,107,157,.22);
+}
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  margin: 28px 0 18px;
+  padding: clamp(22px, 3vw, 38px);
+  border: 1px solid rgba(255,255,255,.085);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(255,107,157,.075), transparent 42%),
+    linear-gradient(315deg, rgba(125,255,178,.035), transparent 48%),
+    linear-gradient(180deg, #121212, #0d0d0d);
+  box-shadow: var(--shadow);
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,.75), transparent 90%);
+}
+
+.hero > * {
+  position: relative;
+}
+
+.hero-kicker,
+.eyebrow {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  max-width: 900px;
+  margin: 7px 0 8px;
+  font-size: clamp(26px, 4vw, 43px);
+  line-height: 1.05;
+  letter-spacing: -.045em;
+}
+
+.hero p {
+  max-width: 820px;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 18px;
+}
+
+.meta-pill {
+  padding: 5px 8px;
+  color: #aaa6aa;
+  background: rgba(255,255,255,.035);
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: 999px;
+  font-size: 9px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+}
+
+.section {
+  margin: 14px 0;
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: var(--radius);
+  background: rgba(15,15,15,.82);
+  box-shadow: 0 10px 32px rgba(0,0,0,.13);
+  overflow: hidden;
+}
+
+.section:hover {
+  border-color: rgba(255,255,255,.105);
+}
+
+.section-head {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 17px 18px 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,.018), transparent);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.section-number {
+  display: grid;
+  width: 34px;
+  height: 27px;
+  place-items: center;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid rgba(255,107,157,.18);
+  border-radius: 7px;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.section-title {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.25;
+  letter-spacing: -.02em;
+}
+
+.section-copy {
+  max-width: 900px;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.section-body {
+  padding: 16px 18px 20px;
+}
+
+.section-body > p {
+  max-width: 900px;
+  color: #c5c1c4;
+}
+
+.section-body > p + p {
+  margin-top: 9px;
+}
+
+.section-body h3,
+.section-body h4 {
+  color: var(--text);
+  letter-spacing: -.015em;
+}
+
+.section-body h3 {
+  margin: 21px 0 8px;
+  font-size: 14px;
+}
+
+.section-body h4 {
+  margin: 15px 0 6px;
+  font-size: 12px;
+}
+
+.section-body h3:first-child,
+.section-body h4:first-child {
+  margin-top: 0;
+}
+
+.card-grid {
+  gap: 8px;
+}
+
+.card-grid > *,
+.info-card,
+.note-card,
+.hero-card,
+.detail-block {
+  border-color: rgba(255,255,255,.075);
+  background: linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,.012));
+  border-radius: var(--radius-small);
+  box-shadow: none;
+}
+
+.card-grid > *:hover,
+.info-card:hover,
+.note-card:hover,
+.hero-card:hover {
+  border-color: rgba(255,107,157,.24);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-small);
+}
+
+.card-label,
+.detail-label {
+  color: #777277;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.card-value {
+  color: var(--text);
+}
+
+.note-card {
+  position: relative;
+  border-left: 2px solid var(--accent);
+}
+
+.note-card::before {
+  content: "BARKLY";
+  position: absolute;
+  top: 10px;
+  right: 11px;
+  color: rgba(255,107,157,.36);
+  font: 800 8px/1 "SFMono-Regular", Consolas, monospace;
+  letter-spacing: .12em;
+}
+
+pre {
+  max-width: 100%;
+  margin: 12px 0;
+  padding: 14px;
+  color: #dedadd;
+  background: #090909;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.52;
+}
+
+code {
+  color: #e7e3e6;
+  background: #0a0a0a;
+  border-color: #292929;
+}
+
+.section-body ul,
+.section-body ol {
+  max-width: 940px;
+  padding-left: 21px;
+}
+
+.section-body li {
+  margin: 4px 0;
+  color: #c8c4c7;
+}
+
+.section-body li::marker {
+  color: var(--accent);
+}
+
+.section-body input[type="checkbox"] {
+  accent-color: var(--accent);
+  transform: translateY(1px);
+}
+
+.architecture-shell {
+  padding: 14px;
+  border-color: rgba(255,255,255,.075);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255,107,157,.035), transparent 35%),
+    #0b0b0b;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
+}
+
+.architecture-summary {
+  padding: 2px 2px 14px;
+  color: #aaa6aa;
+}
+
+.architecture-layer-head h3 {
+  font-size: 14px;
+}
+
+.architecture-cards {
+  gap: 7px;
+}
+
+.architecture-card {
+  background: rgba(5,5,5,.52);
+  transition: border-color .16s ease, transform .16s ease;
+}
+
+.architecture-card:hover {
+  border-color: rgba(255,255,255,.16);
+  transform: translateY(-1px);
+}
+
+.architecture-card > summary {
+  min-height: 68px;
+}
+
+.architecture-card-name {
+  font-size: 12px;
+}
+
+.architecture-card-meta {
+  font-size: 8px;
+}
+
+.architecture-bridge {
+  min-height: 42px;
+}
+
+.architecture-connections {
+  box-shadow: none;
+}
+
+.symbol-groups,
+.symbol-list,
+.module-list,
+.import-list,
+.git-log,
+.lifecycle {
+  gap: 6px;
+}
+
+.symbol-row,
+.module-row,
+.git-row,
+.lifecycle-step,
+.method-row,
+.param-row {
+  border-color: var(--line-soft);
+  background: rgba(255,255,255,.012);
+}
+
+.symbol-row:hover,
+.module-row:hover,
+.git-row:hover,
+.lifecycle-step:hover,
+.method-row:hover {
+  background: rgba(255,255,255,.025);
+  border-color: rgba(255,107,157,.16);
+}
+
+.symbol-name,
+.module-name,
+.endpoint-path {
+  color: #eee9ec;
+}
+
+.group-summary,
+.symbol-summary,
+.module-summary {
+  border-radius: 8px;
+}
+
+.search-toolbar {
+  position: sticky;
+  top: 72px;
+  z-index: 10;
+  padding: 8px;
+  background: rgba(10,10,10,.92);
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 10px;
+  backdrop-filter: blur(14px);
+}
+
+.search-box input {
+  color: var(--text);
+  background: #0b0b0b;
+  border-color: #2b2b2b;
+}
+
+.search-box input:focus {
+  border-color: rgba(255,107,157,.5);
+  box-shadow: 0 0 0 3px rgba(255,107,157,.08);
+}
+
+.new-toggle {
+  color: var(--green);
+}
+
+.empty-state,
+.empty-detail {
+  color: #858185;
+  border-color: var(--line-soft);
+  background: rgba(255,255,255,.012);
+}
+
+.result-count,
+.group-count,
+.module-count {
+  color: #777277;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 9px;
+}
+
+@media (max-width: 900px) {
+  .page {
+    width: min(calc(100% - 20px), var(--content-width));
+  }
+
+  .hero {
+    margin-top: 16px;
+    padding: 22px;
+  }
+
+  .architecture-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .search-toolbar {
+    position: static;
+  }
+}
+
+@media (max-width: 620px) {
+  body {
+    font-size: 12px;
+  }
+
+  .topbar {
+    padding: 0 12px;
+  }
+
+  .brand small {
+    display: none;
+  }
+
+  .page {
+    width: calc(100% - 12px);
+  }
+
+  .hero {
+    padding: 18px;
+    border-radius: 13px;
+  }
+
+  .hero h1 {
+    font-size: 25px;
+  }
+
+  .section-head {
+    grid-template-columns: 37px minmax(0, 1fr);
+    gap: 9px;
+    padding: 13px;
+  }
+
+  .section-body {
+    padding: 13px;
+  }
+
+  .architecture-shell {
+    padding: 9px;
+  }
+
+  .architecture-layer {
+    padding: 11px;
+  }
+
+  .architecture-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+@media print {
+  .topbar,
+  .nav,
+  .search-toolbar {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  .page,
+  .section,
+  .hero {
+    width: 100% !important;
+    max-width: none !important;
+    background: #fff !important;
+    color: #111 !important;
+    box-shadow: none !important;
+  }
+
+  .section {
+    break-inside: avoid;
+  }
+}
+
+  
+
+/* Main-page component metadata: compact Barkly status tags. */
+.language-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  padding: 3px 7px;
+  border: 1px solid rgba(136, 169, 255, .30);
+  border-radius: 999px;
+  background: rgba(136, 169, 255, .09);
+  color: #b8c8ff;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: .02em;
+}
+
+.language-tag > span {
+  color: #7f91d4;
+  font-weight: 600;
+}
 
   </style>
 
@@ -3111,6 +4341,7 @@ def build_html(
       <a href="#section-09">09</a>
       <a href="#section-10">10</a>
       <a href="#section-11">11</a>
+      <a href="#section-12">12</a>
 
     </nav>
 
@@ -3174,62 +4405,69 @@ def build_html(
 
     {section(
         "03",
+        "Project Architecture",
+        "A readable overview of the project's own components. Follow the layers first; expand detailed connections when needed.",
+        architecture_body_html,
+    )}
+
+    {section(
+        "04",
         "Components",
         "The major systems and pieces that make up the project.",
         components_body,
     )}
 
     {section(
-        "04",
+        "05",
         "API Endpoints",
         "Every discovered route is compact by default and expandable when you need its technical details.",
         endpoint_body,
     )}
 
     {section(
-        "05",
+        "06",
         "Functions & Methods",
         "Searchable, grouped symbols with details hidden until requested.",
         function_body,
     )}
 
     {section(
-        "06",
+        "07",
         "Classes",
         "Classes stay collapsed so large projects remain readable.",
         class_body,
     )}
 
     {section(
-        "07",
+        "08",
         "Modules",
         "A lightweight map of source files and their discovered contents.",
         module_body,
     )}
 
     {section(
-        "08",
+        "09",
         "Imports",
         "Dependencies discovered from Python import statements.",
         imports_body,
     )}
 
     {section(
-        "09",
+        "10",
         "Lifecycle",
         "The development path used by the project.",
         lifecycle_body,
     )}
 
     {section(
-        "10",
+        "11",
         "Git",
         "Repository state and recent development history.",
         git_body,
     )}
 
     {section(
-        "11",
+        "12",
         "Changelog",
         "What BARKLY DOCS noticed changed between documentation generations.",
         changelog_body,

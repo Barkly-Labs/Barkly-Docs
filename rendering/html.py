@@ -565,26 +565,187 @@ def _escape(value: object) -> str:
     return html.escape(str(value or ""), quote=False)
 
 
+def _readme_title(project: Project) -> str:
+    """Use the README's first H1 as the human-facing project name when present."""
+    text = _read_readme(project)
+    if text:
+        for line in text.splitlines():
+            match = re.match(r"^\s*#\s+(.+?)\s*#*\s*$", line)
+            if match:
+                title = re.sub(r"[`*_]", "", match.group(1)).strip()
+                if title:
+                    return title
+    return ""
+
+
 def _project_name(project: Project) -> str:
-    return project.name or "Project"
+    return _readme_title(project) or project.name or "Project"
+
+
+def _readme_path(project: Project) -> Path | None:
+    """Find the project README without requiring an exact filename case."""
+    root = Path(project.root)
+    preferred = ["README.md", "README.markdown", "README"]
+    for name in preferred:
+        candidate = root / name
+        if candidate.is_file():
+            return candidate
+    try:
+        for candidate in root.iterdir():
+            if candidate.is_file() and candidate.name.lower() in {"readme.md", "readme.markdown", "readme"}:
+                return candidate
+    except OSError:
+        pass
+    return None
+
+
+def _read_readme(project: Project) -> str:
+    path = _readme_path(project)
+    if path is None:
+        return ""
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+def _markdown_inline(value: str) -> str:
+    """Small dependency-free Markdown inline renderer for documentation output."""
+    escaped = html.escape(value, quote=False)
+    escaped = re.sub(r'!\[([^\]]*)\]\(([^)]+)\)', r'<img alt="\1" src="\2">', escaped)
+    escaped = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', escaped)
+    escaped = re.sub(r'`([^`]+)`', r'<code>\1</code>', escaped)
+    escaped = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', escaped)
+    escaped = re.sub(r'__([^_]+)__', r'<strong>\1</strong>', escaped)
+    escaped = re.sub(r'(?<!\*)\*([^*]+)\*(?!\*)', r'<em>\1</em>', escaped)
+    escaped = re.sub(r'(?<!_)_([^_]+)_(?!_)', r'<em>\1</em>', escaped)
+    return escaped
+
+
+def _render_markdown(text: str) -> str:
+    """Render the README as Markdown-shaped HTML while preserving its structure."""
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    out: list[str] = []
+    paragraph: list[str] = []
+    list_items: list[tuple[str, str]] = []
+    in_code = False
+    code_lang = ""
+    code_lines: list[str] = []
+
+    def flush_paragraph() -> None:
+        if paragraph:
+            out.append("<p>" + " ".join(_markdown_inline(x.strip()) for x in paragraph) + "</p>")
+            paragraph.clear()
+
+    def flush_list() -> None:
+        if not list_items:
+            return
+        ordered = list_items[0][0] == "ol"
+        tag = "ol" if ordered else "ul"
+        out.append("<" + tag + ">" + "".join("<li>" + item + "</li>" for _, item in list_items) + "</" + tag + ">")
+        list_items.clear()
+
+    def flush_code() -> None:
+        nonlocal in_code, code_lang
+        if in_code:
+            cls = f' class="language-{html.escape(code_lang, quote=True)}"' if code_lang else ""
+            out.append("<pre><code" + cls + ">" + html.escape("\n".join(code_lines), quote=False) + "</code></pre>")
+            code_lines.clear()
+            in_code = False
+            code_lang = ""
+
+    for raw in lines:
+        line = raw.rstrip()
+        fence = re.match(r'^\s*```\s*([\w+-]*)\s*$', line)
+        if fence:
+            flush_paragraph()
+            flush_list()
+            if in_code:
+                flush_code()
+            else:
+                in_code = True
+                code_lang = fence.group(1)
+            continue
+        if in_code:
+            code_lines.append(line)
+            continue
+        if not line.strip():
+            flush_paragraph()
+            flush_list()
+            continue
+        heading = re.match(r'^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$', line)
+        if heading:
+            flush_paragraph(); flush_list()
+            level = len(heading.group(1))
+            out.append(f"<h{level}>{_markdown_inline(heading.group(2))}</h{level}>")
+            continue
+        if re.match(r'^\s*([-*_])(?:\s*\1){2,}\s*$', line):
+            flush_paragraph(); flush_list(); out.append('<hr>'); continue
+        bullet = re.match(r'^\s*[-*+]\s+(.+)$', line)
+        if bullet:
+            flush_paragraph(); list_items.append(("ul", _markdown_inline(bullet.group(1)))); continue
+        ordered = re.match(r'^\s*\d+[.)]\s+(.+)$', line)
+        if ordered:
+            flush_paragraph(); list_items.append(("ol", _markdown_inline(ordered.group(1)))); continue
+        quote = re.match(r'^\s*>\s?(.*)$', line)
+        if quote:
+            flush_paragraph(); flush_list(); out.append('<blockquote>' + _markdown_inline(quote.group(1)) + '</blockquote>'); continue
+        paragraph.append(line.strip())
+
+    flush_code(); flush_paragraph(); flush_list()
+    return "".join(out)
+
+
+def _readme_sections(project: Project) -> dict[str, str]:
+    """Return README sections keyed by normalized heading name."""
+    text = _read_readme(project)
+    if not text:
+        return {}
+    sections: dict[str, list[str]] = {"__intro__": []}
+    current = "__intro__"
+    for line in text.splitlines():
+        match = re.match(r'^\s*#{1,6}\s+(.+?)\s*#*\s*$', line)
+        if match:
+            current = re.sub(r'[^a-z0-9]+', ' ', match.group(1).lower()).strip()
+            sections.setdefault(current, [])
+        else:
+            sections.setdefault(current, []).append(line)
+    return {key: "\n".join(value).strip() for key, value in sections.items() if "\n".join(value).strip()}
 
 
 def _project_description(project: Project) -> str:
+    """Use the README lead as the short, human-facing project description."""
+    text = _read_readme(project)
+    if text:
+        lines = text.replace("\r\n", "\n").split("\n")
+        lead: list[str] = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                if lead:
+                    break
+                continue
+            if re.match(r"^#{1,6}\s+", stripped):
+                if lead:
+                    break
+                continue
+            if stripped.startswith("```") or stripped.startswith((">", "- ", "* ", "+ ")):
+                if lead:
+                    break
+                continue
+            lead.append(re.sub(r"[`*_>#]", "", stripped))
+            if len(" ".join(lead)) >= 220:
+                break
+        if lead:
+            # Small overview cards should stay compact: use only the first
+            # complete sentence from the README lead. The full README remains
+            # available in the dedicated README section below.
+            text = " ".join(lead).strip()
+            match = re.search(r"^(.+?[.!?](?:\s|$))", text)
+            return (match.group(1).strip() if match else text).strip()
     description = project.metadata.get("description")
     if description:
         return str(description)
-    readme_path = Path(project.root) / "README.md"
-    if readme_path.exists():
-        try:
-            text = readme_path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            return "Project purpose unknown."
-        cleaned = [line.strip() for line in text.splitlines() if line.strip()]
-        for line in cleaned:
-            if line.startswith("#"):
-                continue
-            if line and not line.startswith("!"):
-                return line[:220]
     return "Project purpose unknown."
 
 
@@ -642,17 +803,37 @@ def _stat_card(label: str, value: str) -> str:
 
 
 def _render_readme(project: Project) -> str:
-    readme_path = Path(project.root) / "README.md"
-    if not readme_path.exists():
-        return '<div class="empty-state">No README.md was found in the project root.</div>'
-    try:
-        text = readme_path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return '<div class="empty-state">README.md exists but could not be read.</div>'
-    lines = [line.strip() for line in text.splitlines() if line.strip()][:12]
-    if not lines:
-        return '<div class="empty-state">README.md exists but contains no readable text.</div>'
-    return "".join(f"<p>{_escape(line)}</p>" for line in lines)
+    """Render README content as a calm, structured, human-readable document."""
+    text = _read_readme(project)
+    if not text:
+        if _readme_path(project) is None:
+            return '<div class="empty-state">No README was found in the project root.</div>'
+        return '<div class="empty-state">README exists but could not be read.</div>'
+
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    title = _readme_title(project)
+    body_lines: list[str] = []
+    skipped_title = False
+    for line in lines:
+        if not skipped_title and re.match(r"^\s*#\s+", line):
+            skipped_title = True
+            continue
+        body_lines.append(line)
+
+    rendered = _render_markdown("\n".join(body_lines))
+    if not rendered.strip():
+        return '<div class="empty-state">README is present but contains no readable content.</div>'
+
+    return (
+        '<article class="readme-panel">'
+        '<header class="readme-intro">'
+        '<span class="readme-kicker">PROJECT README</span>'
+        f'<h2>{_escape(title or "Project documentation")}</h2>'
+        f'<p class="readme-lead">{_escape(_project_description(project))}</p>'
+        '</header>'
+        f'<div class="readme-content">{rendered}</div>'
+        '</article>'
+    )
 
 
 def _render_entity_summary(project: Project) -> str:
@@ -1466,7 +1647,7 @@ def _render_project_architecture(project: Project) -> str:
 
 
 def _render_three_layer_architecture(project: Project) -> str:
-    """Show entry points, core project structure, and supporting systems."""
+    """Render a connected, three-layer overview of the scanned project."""
     from pathlib import PurePosixPath
 
     def esc(value: object) -> str:
@@ -1482,30 +1663,86 @@ def _render_three_layer_architecture(project: Project) -> str:
     def get(item: object, *names: str) -> str:
         for name in names:
             value = item.get(name) if isinstance(item, dict) else getattr(item, name, None)
-            if value:
+            if value is not None and value != "":
                 return str(value)
         return ""
 
     def path_of(item: object) -> str:
-        value = get(item, "path", "file_path", "source_file", "filename")
-        return value.replace("\\", "/")
+        return get(item, "path", "file_path", "source_file", "filename").replace("\\", "/")
 
-    def card(title: str, description: str, kind: str) -> str:
+    def item_card(item: object, kind: str, duplicate_count: int = 1) -> str:
+        name = (
+            get(item, "qualified_name", "name", "label", "module")
+            or path_of(item)
+            or "(unnamed item)"
+        )
+        path = path_of(item)
+        description = (
+            get(item, "description", "docstring", "summary", "explanation")
+            or "No description was recorded by the scanner."
+        )
+        extra = (
+            f'<p class="architecture-match-note">{duplicate_count} matching scan records were grouped into this card.</p>'
+            if duplicate_count > 1 else ""
+        )
         return (
-            '<article class="card" style="margin:.5rem 0;padding:1rem">'
-            f'<div class="kicker">{esc(kind)}</div>'
-            f'<strong>{esc(title)}</strong>'
-            f'<p style="margin:.35rem 0 0;color:var(--muted,#aaa)">'
-            f'{esc(description)}</p></article>'
+            '<details class="card architecture-item">'
+            '<summary class="architecture-item-summary">'
+            f'<div class="architecture-item-kind-row"><span class="architecture-item-kind">{esc(kind)}</span></div>'
+            '<div class="architecture-item-main-row">'
+            f'<strong class="architecture-item-name">{esc(name)}</strong>'
+            '<span class="architecture-expand">View details →</span>'
+            '</div>'
+            '</summary>'
+            '<div class="architecture-item-details">'
+            f'<p>{esc(description)}</p>'
+            + (f'<p class="architecture-path"><strong>File:</strong> {esc(path)}</p>' if path else '')
+            + extra
+            + '</div></details>'
         )
 
-    def section(number: int, title: str, description: str, content: str) -> str:
+    def item_name(item: object, fallback_to_path: bool = True) -> str:
         return (
-            '<section class="card" style="margin:1rem 0;padding:1rem">'
-            f'<div class="kicker">Layer {number}</div>'
-            f'<h2>{esc(title)}</h2><p>{esc(description)}</p>'
-            f'{content}</section>'
+            get(item, "qualified_name", "name", "label", "module")
+            or (path_of(item) if fallback_to_path else "")
+            or "(unnamed item)"
+        ).strip()
+
+    def dedupe_items(items: list, *, display_name_only: bool = False) -> list[tuple[object, int]]:
+        grouped: dict[str, tuple[object, int]] = {}
+        order: list[str] = []
+        for item in items:
+            name = item_name(item)
+            path = path_of(item).lower().strip("/")
+            key = name.lower().strip() if display_name_only else (name.lower().strip(), path)
+            if key in grouped:
+                representative, count = grouped[key]
+                grouped[key] = (representative, count + 1)
+            else:
+                grouped[key] = (item, 1)
+                order.append(key)
+        return [grouped[key] for key in order]
+
+    def cards(items: list, kind: str, limit: int) -> str:
+        if not items:
+            return (
+                '<p class="architecture-empty">No '
+                + esc(kind.lower())
+                + ' records were identified in this scan.</p>'
+            )
+        unique = dedupe_items(items, display_name_only=True)
+        shown = "".join(
+            item_card(item, kind, count)
+            for item, count in unique[:limit]
         )
+        if len(unique) > limit:
+            shown += (
+                '<p class="architecture-more">Showing '
+                + str(limit) + ' of ' + str(len(unique))
+                + ' unique items here. See the Structure and Relationship Map pages '
+                  'for the full inventory.</p>'
+            )
+        return '<div class="architecture-card-grid">' + shown + '</div>'
 
     entry_names = {
         "main.py", "__main__.py", "app.py", "server.py", "manage.py",
@@ -1513,86 +1750,277 @@ def _render_three_layer_architecture(project: Project) -> str:
         "server.js", "server.ts", "program.cs", "startup.cs",
         "application.java",
     }
+    # Candidate discovery is intentionally conservative. Duplicate scan
+    # records must not turn into a wall of identical "main" cards.
     entry_files = []
+    seen_entry_paths = set()
     for item in files:
         p = path_of(item)
+        normalized_path = p.lower().strip("/")
         name = PurePosixPath(p).name.lower()
-        if name in entry_names or any(
-            f"/{part}/" in f"/{p.lower().strip('/')}/"
-            for part in ("routes", "routers", "controllers")
-        ):
-            entry_files.append(item)
+        is_candidate = (
+            name in entry_names
+            or any(
+                f"/{part}/" in f"/{normalized_path}/"
+                for part in ("routes", "routers", "controllers")
+            )
+        )
+        if not is_candidate:
+            continue
+        key = normalized_path or f"unnamed-file-{len(entry_files)}"
+        if key in seen_entry_paths:
+            continue
+        seen_entry_paths.add(key)
+        entry_files.append(item)
 
+    entry_function_names = {
+        "main", "run", "cli", "app", "create_app", "createapp",
+        "serve", "start_server", "main_cli",
+    }
     entry_functions = [
         item for item in functions
         if get(item, "name", "qualified_name").split(".")[-1].lower()
-        in {"main", "run", "cli", "app", "create_app", "createapp",
-            "serve", "start_server", "main_cli"}
+        in entry_function_names
     ]
 
-    def render_items(items: list, kind: str, limit: int = 12) -> str:
-        if not items:
-            return card("No records detected", "The current scan did not provide records for this category.", kind)
-        result = []
-        for item in items[:limit]:
-            name = get(item, "qualified_name", "name", "label", "module") or path_of(item) or "(unnamed)"
-            description = get(item, "description", "docstring", "summary") or path_of(item)
-            result.append(card(name, description or "Detected by the project scanner.", kind))
-        if len(items) > limit:
-            result.append(
-                f'<p class="muted">Showing {limit} of {len(items)} records. '
-                'See the project structure and relationship inventory for more.</p>'
-            )
-        return "".join(result)
+    # Entry candidates are grouped by their visible entry name. This prevents
+    # dozens of identical "main" cards when the project contains multiple
+    # modules exposing a conventional entry function. The first source record
+    # remains the representative and the card records how many matches were
+    # grouped into it.
+    entry_candidates = []
+    entry_candidates.extend(entry_files)
+    entry_candidates.extend(entry_functions)
 
-    layer1_items = []
-    seen = set()
-    for item in entry_files + entry_functions:
-        p = path_of(item)
-        name = get(item, "qualified_name", "name", "label") or p or "(unnamed entry point)"
-        key = (name, p)
-        if key in seen:
-            continue
-        seen.add(key)
-        description = get(item, "description", "docstring", "summary") or p or (
-            "Candidate entry point based on its name; verify by inspecting the code."
-        )
-        layer1_items.append(card(name, description, "Entry-point candidate"))
+    # For entry points, group by the name the human actually sees on the
+    # card: file candidates use their basename (main.py/app.py/etc.), while
+    # function candidates use the function name (main/run/etc.). This is
+    # intentionally broader than path-based deduplication so repeated
+    # conventional entry names do not flood the homepage.
+    grouped_entries: dict[str, tuple[object, int]] = {}
+    entry_order: list[str] = []
+    for item in entry_candidates:
+        path = path_of(item)
+        if item in entry_files:
+            visible = PurePosixPath(path).name if path else item_name(item)
+        else:
+            visible = get(item, "name", "qualified_name").split(".")[-1] or item_name(item)
+        key = visible.lower().strip()
+        if key in grouped_entries:
+            representative, count = grouped_entries[key]
+            grouped_entries[key] = (representative, count + 1)
+        else:
+            grouped_entries[key] = (item, 1)
+            entry_order.append(key)
+    unique_entry_candidates = [grouped_entries[key] for key in entry_order]
 
-    layer1 = "".join(layer1_items) or card(
-        "No entry points identified",
-        "The scan did not identify a conventional entry point. This does not prove that none exists.",
-        "Needs inspection",
+    layer1_items = [
+        item_card(item, "Entry-point candidate", count)
+        for item, count in unique_entry_candidates
+    ]
+
+    layer1 = (
+        '<div class="architecture-card-grid">' + "".join(layer1_items[:24]) + '</div>'
+        if layer1_items
+        else '<p class="architecture-empty">No conventional entry points were identified. '
+             'This does not prove that the project has none.</p>'
     )
+    if len(unique_entry_candidates) > 24:
+        layer1 += '<p class="architecture-more">Showing 24 of ' + str(len(unique_entry_candidates)) + ' unique entry candidates. Check the full project structure for others.</p>'
 
-    core_items = []
-    core_items.append(render_items(modules, "Module", 12))
-    core_items.append(render_items(classes, "Class", 8))
-    core_items.append(render_items(functions, "Function", 8))
-    core_items.append(render_items(methods, "Method", 8))
-    layer2 = "".join(core_items)
+    layer2 = (
+        cards(modules, "Module", 16)
+        + cards(classes, "Class", 16)
+        + cards(functions, "Function", 16)
+        + cards(methods, "Method", 16)
+    )
 
     support_files = [
         item for item in files
         if any(word in path_of(item).lower() for word in (
             "config", "setting", "database", "repository", "migration",
-            "schema", "storage", "persist", "model"
+            "schema", "storage", "persist", "model",
         ))
     ]
-    layer3 = render_items(data_items, "Data record", 12)
+    layer3 = cards(data_items, "Data record", 16)
     if support_files:
-        layer3 += render_items(support_files, "Supporting file candidate", 12)
+        layer3 += (
+            '<h3 class="architecture-subheading">Supporting files</h3>'
+            + cards(support_files, "Supporting file candidate", 16)
+        )
 
     return (
-        '<section id="project-architecture-layers">'
-        '<h2>Project architecture</h2>'
-        '<p>Three views of how the project is organized. Candidates are based on scan evidence '
-        'and may need confirmation.</p>'
-        f'{section(1, "Entry points", "Where execution or requests may enter the project.", layer1)}'
-        f'{section(2, "Main project and modules", "The modules and code symbols that make up the core project.", layer2)}'
-        f'{section(3, "Data and supporting systems", "Detected data records and files that may support configuration, persistence, or schemas.", layer3)}'
+        '<section id="project-architecture-layers" class="architecture-flow">'
+        '<style>'
+        '#project-architecture-layers{margin:2rem 0}'
+        '.architecture-flow-intro{max-width:70ch;color:var(--muted,#aaa)}'
+        '.architecture-layer{position:relative;padding:1.25rem;margin:0 auto;'
+        'width:100%;box-sizing:border-box;border:1px solid var(--border,#383838);'
+        'border-radius:1rem;background:var(--panel,#101010)}'
+        '.architecture-layer-1{border-top:3px solid #b985d6}'
+        '.architecture-layer-2{border-top:3px solid #729ee8}'
+        '.architecture-layer-3{border-top:3px solid #72b994}'
+        '.architecture-layer-heading{display:flex;gap:.8rem;align-items:center;'
+        'flex-wrap:wrap;margin-bottom:1rem}'
+        '.architecture-layer-number{display:inline-grid;place-items:center;'
+        'width:2rem;height:2rem;border-radius:50%;background:var(--panel-alt,#202020);'
+        'font-weight:700}'
+        '.architecture-layer-heading h3{margin:0}'
+        '.architecture-layer-description{color:var(--muted,#aaa);margin:.4rem 0 1rem}'
+        '.architecture-connector{height:3.25rem;display:flex;align-items:center;'
+        'justify-content:center;position:relative}'
+        '.architecture-connector:before{content:"";height:100%;width:2px;'
+        'background:linear-gradient(to bottom,#b985d6,#729ee8)}'
+        '.architecture-connector:nth-of-type(4):before{background:linear-gradient(to bottom,#729ee8,#72b994)}'
+        '.architecture-connector span{position:absolute;bottom:0;transform:translateY(50%);'
+        'background:var(--bg,#080808);border:1px solid var(--border,#383838);'
+        'border-radius:999px;padding:.2rem .65rem;font-size:.75rem;color:var(--muted,#aaa)}'
+        '.architecture-card-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.7rem}'
+        '.architecture-item{margin:0!important;padding:0!important;min-width:0;min-height:112px;'
+        'overflow:hidden;overflow-wrap:anywhere;border:1px solid var(--border,#383838);'
+        'background:linear-gradient(180deg,rgba(255,255,255,.018),rgba(255,255,255,.006));}'
+        '.architecture-item-summary{display:block;min-height:112px;padding:.7rem .75rem;'
+        'cursor:pointer;list-style:none;box-sizing:border-box}'
+        '.architecture-item-summary::-webkit-details-marker{display:none}'
+        '.architecture-item-kind-row{height:22px;display:flex;align-items:flex-start}'
+        '.architecture-item-kind{display:inline-flex;align-items:center;max-width:100%;'
+        'font-size:.62rem;text-transform:uppercase;letter-spacing:.055em;line-height:1.2;'
+        'color:#b9b5b8;border:1px solid #343434;background:#101010;'
+        'border-radius:999px;padding:.22rem .45rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+        '.architecture-item-main-row{display:grid;grid-template-columns:minmax(0,1fr) auto;'
+        'gap:.55rem;align-items:end;min-height:58px}'
+        '.architecture-item-name{display:block;min-width:0;color:var(--text,#f5f5f5);'
+        'font-size:.78rem;line-height:1.35;font-weight:700;overflow-wrap:anywhere;word-break:normal}'
+        '.architecture-expand{align-self:end;white-space:nowrap;color:#9b979a;font-size:.63rem}'
+        '.architecture-item[open] .architecture-expand{font-size:0}'
+        '.architecture-item[open] .architecture-expand:after{content:"Hide details ↑";font-size:.63rem}'
+        '.architecture-item-details{padding:.7rem .75rem .8rem;border-top:1px solid #222;'
+        'color:var(--muted,#aaa);font-size:.78rem;line-height:1.5}'
+        '.architecture-path{font-size:.72rem;overflow-wrap:anywhere}'
+        '.architecture-match-note{margin:.45rem 0 0;color:#7f7a7e;font-size:.68rem}'
+        '.architecture-empty,.architecture-more{color:var(--muted,#aaa);font-size:.82rem}'
+        '.architecture-subheading{margin:1.25rem 0 .75rem}'
+        '@media(max-width:980px){.architecture-card-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}'
+        '@media(max-width:720px){.architecture-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}'
+        '@media(max-width:520px){.architecture-layer{padding:.85rem}.architecture-card-grid{grid-template-columns:1fr}}'
+        '''
+
+/* Human-centered architecture cards: closed by default, explicit controls,
+   and a clear click target without removing any underlying information. */
+.architecture-controls{
+  display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+  margin:0 0 10px;padding:7px;
+  border:1px solid rgba(255,255,255,.055);border-radius:9px;
+  background:rgba(255,255,255,.012)
+}
+.architecture-control{
+  appearance:none;border:1px solid #303030;border-radius:999px;
+  padding:5px 9px;background:#111;color:#c8c4c7;
+  font:600 9px/1.2 "SFMono-Regular",Consolas,monospace;
+  cursor:pointer;transition:background .15s,border-color .15s,color .15s
+}
+.architecture-control:hover,.architecture-control:focus-visible{
+  color:#fff;border-color:rgba(255,107,157,.38);background:rgba(255,107,157,.08)
+}
+.architecture-control-hint{color:#777277;font-size:9px;margin-left:2px}
+.architecture-card{cursor:pointer}
+.architecture-card > summary{
+  position:relative;display:grid!important;grid-template-columns:minmax(0,1fr) auto;
+  grid-template-rows:auto auto;column-gap:8px;align-items:center;
+  list-style:none;cursor:pointer;user-select:none
+}
+.architecture-card > summary::-webkit-details-marker{display:none}
+.architecture-card > summary:after{display:none!important}
+.architecture-card-name{grid-column:1;grid-row:1;color:#f5f3f4}
+.architecture-card-meta{grid-column:1;grid-row:2;color:#8f8b8e}
+.architecture-card-action{
+  grid-column:2;grid-row:1 / span 2;align-self:center;white-space:nowrap;
+  color:#8f8b8e;font:600 8px/1.2 "SFMono-Regular",Consolas,monospace;
+  transition:color .15s
+}
+.architecture-card:hover .architecture-card-action{color:#ff86ad}
+.architecture-card[open] .architecture-card-action{font-size:0}
+.architecture-card[open] .architecture-card-action:after{content:"Hide details ↑";font-size:8px}
+.architecture-card[open] > summary{background:rgba(255,107,157,.025)}
+.architecture-card-details{animation:architecture-reveal .13s ease-out}
+@keyframes architecture-reveal{from{opacity:0;transform:translateY(-2px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:560px){
+ .architecture-controls{align-items:stretch}
+ .architecture-control-hint{flex-basis:100%;margin-top:1px}
+ .architecture-card > summary{grid-template-columns:minmax(0,1fr)}
+ .architecture-card-action{grid-column:1;grid-row:3;margin-top:4px}
+}
+
+
+/* Simple collapsible architecture cards — applies to all 3 layers. */
+.architecture-item { cursor: default; }
+.architecture-item > summary { cursor: pointer; user-select: none; }
+.architecture-item > summary:hover { background: rgba(255,255,255,.018); }
+.architecture-item > .architecture-item-details { display: none; }
+.architecture-item[open] > .architecture-item-details { display: block; }
+.architecture-item[open] { border-color: rgba(255,107,157,.28); }
+.architecture-item[open] > summary .architecture-expand { color: #ff86ad; }
+
+
+/* Human-centered README presentation */
+.readme-panel {
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,.012));
+  overflow: hidden;
+}
+.readme-intro {
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  background: linear-gradient(135deg, rgba(255,107,157,.06), transparent 55%);
+}
+.readme-kicker {
+  color: var(--accent);
+  font: 800 8px/1 "SFMono-Regular", Consolas, monospace;
+  letter-spacing: .16em;
+}
+.readme-intro h2 { margin: 7px 0 6px; font-size: 20px; letter-spacing: -.03em; }
+.readme-lead { max-width: 850px; margin: 0; color: var(--text-soft); line-height: 1.65; }
+.readme-content { padding: 20px 22px 24px; max-width: 980px; }
+.readme-content h1 { font-size: 22px; }
+.readme-content h2 { margin: 25px 0 9px; padding-top: 6px; font-size: 16px; border-top: 1px solid rgba(255,255,255,.055); }
+.readme-content h3 { margin: 18px 0 7px; font-size: 13px; }
+.readme-content p { max-width: 820px; color: #c9c5c8; }
+.readme-content ul, .readme-content ol { max-width: 820px; padding-left: 22px; }
+.readme-content li { margin: 5px 0; color: #c9c5c8; }
+.readme-content pre { margin: 12px 0 16px; }
+.readme-content blockquote { margin: 12px 0; padding: 8px 14px; border-left: 2px solid var(--accent); color: var(--muted); background: rgba(255,107,157,.035); }
+.readme-content hr { border: 0; border-top: 1px solid rgba(255,255,255,.07); margin: 20px 0; }
+.readme-content a { color: var(--accent-bright); }
+</style>'''
+        '<h2>How the project fits together</h2>'
+        '<p class="architecture-flow-intro">Follow the three layers from possible entry points, '
+        'through the main code, to data and supporting systems. Expand any card for its recorded '
+        'description and source path. Entry points and supporting roles are candidates inferred '
+        'from names and paths, not guaranteed execution flow.</p>'
+        '<details class="architecture-layer architecture-layer-1">'
+        '<summary class="architecture-layer-summary"><span class="architecture-layer-heading"><span class="architecture-layer-number">1</span>'
+        '<h3>Main entrance</h3><span class="architecture-layer-toggle">View section →</span></span>'
+        '<span class="architecture-layer-description">Where execution or requests may enter the project.</span></summary>'
+        + layer1 +
+        '</details>'
+        '<div class="architecture-connector" aria-hidden="true"><span>Entry into the core</span></div>'
+        '<details class="architecture-layer architecture-layer-2">'
+        '<summary class="architecture-layer-summary"><span class="architecture-layer-heading"><span class="architecture-layer-number">2</span>'
+        '<h3>Main project files and code</h3><span class="architecture-layer-toggle">View section →</span></span>'
+        '<span class="architecture-layer-description">Modules, classes, functions, and methods identified by the scanner.</span></summary>'
+        + layer2 +
+        '</details>'
+        '<div class="architecture-connector" aria-hidden="true"><span>Core code and data</span></div>'
+        '<details class="architecture-layer architecture-layer-3">'
+        '<summary class="architecture-layer-summary"><span class="architecture-layer-heading"><span class="architecture-layer-number">3</span>'
+        '<h3>Data points and supporting systems</h3><span class="architecture-layer-toggle">View section →</span></span>'
+        '<span class="architecture-layer-description">Data records and candidate configuration, schema, storage, and persistence files.</span></summary>'
+        + layer3 +
+        '</details>'
         '</section>'
     )
+
 
 
 def _render_index(project: Project, graph_generated: bool = True) -> str:
@@ -1623,7 +2051,7 @@ def _render_index(project: Project, graph_generated: bool = True) -> str:
         f'<div class="tile"><h3>Purpose</h3><p>{_escape(description)}</p></div>'
         f'<div class="tile"><h3>Languages</h3><p>{_escape(", ".join(languages) if languages else "Unknown")}</p></div>'
         f'<div class="tile"><h3>Root</h3><p>{_escape(project.root)}</p></div>'
-        f'<div class="tile"><h3>Documentation</h3><p>{_escape("README.md present" if (Path(project.root) / "README.md").exists() else "README.md not discovered")}</p></div>'
+        f'<div class="tile"><h3>Documentation</h3><p>{_escape("README present" if _readme_path(project) else "README not discovered")}</p></div>'
         '</div>'
         '</div>'
     )
@@ -1638,7 +2066,7 @@ def _render_index(project: Project, graph_generated: bool = True) -> str:
     documentation = (
         '<div class="section">'
         '<h2>Documentation references</h2>'
-        '<div class="section-subtitle">HTML output retains the project README where available.</div>'
+        '<div class="section-subtitle">The project README is rendered as Markdown when it exists, preserving its headings, lists, links, code blocks, and other readable structure.</div>'
         + _render_readme(project)
         + '</div>'
     )
