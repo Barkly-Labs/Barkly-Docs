@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import json
 import re
+import shutil
 from pathlib import Path
 
 from analysis.graph import build_relation_graph
@@ -750,7 +751,7 @@ def _stat_card(label: str, value: str) -> str:
     )
 
 
-def _render_readme_markdown(text: str) -> str:
+def _render_readme_markdown(text: str, image_map: dict[str, str] | None = None) -> str:
     """Convert README Markdown into structured HTML, including flattened input."""
     text = (text or "").replace("\ufeff", "").replace("\ufffd", "")
     text = text.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
@@ -768,6 +769,10 @@ def _render_readme_markdown(text: str) -> str:
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
 
     def inline(value: str) -> str:
+        if image_map:
+            for source, generated in image_map.items():
+                value = value.replace(f"]({source})", f"]({generated})")
+                value = value.replace(f"](<{source}>)", f"]({generated})")
         value = html.escape(value, quote=False)
         value = re.sub(r"!\[([^\]]*)\]\(([^)\s]+)(?:\s+[\"']([^\"']*)[\"'])?\)", lambda m: '<img alt="'+html.escape(m.group(1),quote=True)+'" src="'+html.escape(m.group(2),quote=True)+'"'+((' title="'+html.escape(m.group(3),quote=True)+'"') if m.group(3) else '')+'>', value)
         value = re.sub(r"\[([^\]]+)\]\(([^)\s]+)(?:\s+[\"']([^\"']*)[\"'])?\)", lambda m: '<a href="'+html.escape(m.group(2),quote=True)+'" target="_blank" rel="noopener noreferrer">'+m.group(1)+'</a>', value)
@@ -819,7 +824,61 @@ def _render_readme_markdown(text: str) -> str:
     return "\n".join(out)
 
 
-def _render_readme(project: Project) -> str:
+def _readme_image_map(project: Project, output_dir: str | Path) -> dict[str, str]:
+    """Copy local images referenced by README into generated site assets."""
+    readme = _readme_path(project)
+    if readme is None:
+        return {}
+    root = Path(project.root)
+    target = Path(output_dir) / "assets" / "readme"
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return {}
+
+    text = _read_readme(project)
+    mapping: dict[str, str] = {}
+    seen: set[Path] = set()
+    # Standard Markdown image syntax. Also catches optional titles.
+    pattern = re.compile(r"!\[[^\]]*\]\((<[^>]+>|[^)\s]+)(?:\s+[\"'][^\)]*[\"'])?\)")
+    for match in pattern.finditer(text):
+        raw = match.group(1).strip().strip("<>")
+        if not raw or re.match(r"^(?:https?:|data:|//)", raw, re.I):
+            continue
+        clean = raw.split("#", 1)[0]
+        if not clean:
+            continue
+        source = (readme.parent / clean).resolve()
+        # A few READMEs use project-root-relative paths rather than README-relative paths.
+        if not source.is_file():
+            source = (root / clean).resolve()
+        try:
+            source.relative_to(root.resolve())
+        except ValueError:
+            continue
+        if not source.is_file() or source in seen:
+            continue
+        seen.add(source)
+        name = source.name
+        destination = target / name
+        if destination.exists() and destination.resolve() != source:
+            stem, suffix = source.stem, source.suffix
+            n = 2
+            while (target / f"{stem}-{n}{suffix}").exists():
+                n += 1
+            name = f"{stem}-{n}{suffix}"
+            destination = target / name
+        try:
+            shutil.copy2(source, destination)
+        except OSError:
+            continue
+        generated = f"assets/readme/{name}"
+        mapping[raw] = generated
+        mapping[clean] = generated
+    return mapping
+
+
+def _render_readme(project: Project, image_map: dict[str, str] | None = None) -> str:
     text = _read_readme(project)
     if not text:
         return '<div class="empty-state">No README was found in the project root.</div>'
@@ -829,7 +888,7 @@ def _render_readme(project: Project) -> str:
     for line in lines:
         if not skipped and re.match(r"^\s*#\s+", line): skipped=True; continue
         body.append(line)
-    rendered=_render_readme_markdown("\n".join(body))
+    rendered=_render_readme_markdown("\n".join(body), image_map)
     return '<article class="readme-panel"><header class="readme-intro"><span class="readme-kicker">PROJECT README</span><h2>'+_escape(title or "Project documentation")+'</h2><p class="readme-lead">'+_escape(_project_description(project))+'</p></header><div class="readme-content">'+rendered+'</div></article>'
 
 def _render_entity_summary(project: Project) -> str:
@@ -2022,6 +2081,7 @@ def _render_three_layer_architecture(project: Project) -> str:
 .readme-content blockquote { margin: 12px 0; padding: 8px 14px; border-left: 2px solid var(--accent); color: var(--muted); background: rgba(255,107,157,.035); }
 .readme-content hr { border: 0; border-top: 1px solid rgba(255,255,255,.07); margin: 20px 0; }
 .readme-content a { color: var(--accent-bright); }
+.readme-content img { max-width:100%; height:auto; display:block; margin:14px 0; border-radius:10px; border:1px solid rgba(255,255,255,.08); }
 </style>'''
         '<h2>How the project fits together</h2>'
         '<p class="architecture-flow-intro">Follow the three layers from possible entry points, '
@@ -2053,7 +2113,7 @@ def _render_three_layer_architecture(project: Project) -> str:
 
 
 
-def _render_index(project: Project, graph_generated: bool = True) -> str:
+def _render_index(project: Project, graph_generated: bool = True, image_map: dict[str, str] | None = None) -> str:
     description = _project_description(project)
     languages = _languages(project)
     project_summary = (
@@ -2103,7 +2163,7 @@ def _render_index(project: Project, graph_generated: bool = True) -> str:
         '<span class="documentation-references-toggle" aria-hidden="true">View documentation →</span>'
         '</summary>'
         '<div class="documentation-references-body">'
-        + _render_readme(project)
+        + _render_readme(project, image_map)
         + '</div>'
         + '</details>'
     )
@@ -2178,7 +2238,8 @@ def render_project_website(project: Project, output_dir: str | Path) -> list[Pat
     relationships_path = output_path / "relationships.html"
     relation_map_path = output_path / "relation-map.html"
 
-    index_path.write_text(_render_index(project_obj), encoding="utf-8")
+    readme_image_map = _readme_image_map(project_obj, output_path)
+    index_path.write_text(_render_index(project_obj, image_map=readme_image_map), encoding="utf-8")
     entities_path.write_text(_render_entities_page(project_obj), encoding="utf-8")
     relationships_path.write_text(_render_relationships_page(project_obj), encoding="utf-8")
     relation_map_path.write_text(_render_relation_map_page(project_obj), encoding="utf-8")
