@@ -408,6 +408,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const depthInput = document.getElementById("relation-map-depth");
   const nodeTypeFilters = Array.from(document.querySelectorAll("input[data-filter-node]"));
   const edgeTypeFilters = Array.from(document.querySelectorAll("input[data-filter-edge]"));
+  const evidenceFilters = Array.from(document.querySelectorAll("input[data-filter-evidence]"));
   const directionFilters = Array.from(document.querySelectorAll("input[data-filter-direction]"));
   const buttons = Array.from(document.querySelectorAll("[data-graph-action]"));
   const nodeMap = new Map((graphData.nodes || []).map((node) => [node.id, node]));
@@ -418,6 +419,7 @@ document.addEventListener("DOMContentLoaded", () => {
     search: "",
     nodeTypes: new Set(nodeTypeFilters.filter((input) => input.checked).map((input) => input.value)),
     edgeTypes: new Set(edgeTypeFilters.filter((input) => input.checked).map((input) => input.value)),
+    evidenceTypes: new Set(evidenceFilters.filter((input) => input.checked).map((input) => input.value)),
     showIncoming: true,
     showOutgoing: true,
     hopDepth: Number(depthInput?.value || 1),
@@ -500,6 +502,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const visibleNodeIds = new Set(getVisibleNodes().map((node) => node.id));
     return (graphData.edges || []).filter((edge) => {
       if (!state.edgeTypes.has(edge.kind)) return false;
+      if (!state.evidenceTypes.has((edge.evidence || "UNKNOWN").toUpperCase())) return false;
       if (!visibleNodeIds.has(edge.source) || !visibleNodeIds.has(edge.target)) return false;
       const sourceToTarget = edge.source === state.selectedNodeId || edge.target === state.selectedNodeId;
       if (state.selectedNodeId && !sourceToTarget && state.hopDepth <= 1) {
@@ -652,6 +655,39 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  function fitToViewport() {
+    const visibleNodes = getVisibleNodes();
+    if (!visibleNodes.length) {
+      state.scale = 1;
+      state.offsetX = 0;
+      state.offsetY = 0;
+      return;
+    }
+
+    const positions = computeLayout();
+    const xs = [];
+    const ys = [];
+    for (const node of visibleNodes) {
+      const pos = positions.get(node.id);
+      if (!pos) continue;
+      xs.push(pos.x);
+      ys.push(pos.y);
+    }
+    if (!xs.length) return;
+    const minX = Math.min(...xs);
+    const minY = Math.min(...ys);
+    const maxX = Math.max(...xs);
+    const maxY = Math.max(...ys);
+    const width = Math.max(1, maxX - minX);
+    const height = Math.max(1, maxY - minY);
+    const viewWidth = 900;
+    const viewHeight = 560;
+    const scale = clamp(Math.min((viewWidth - 80) / width, (viewHeight - 80) / height), 0.35, 2.2);
+    state.scale = scale;
+    state.offsetX = (viewWidth / 2) - ((minX + maxX) / 2) * scale;
+    state.offsetY = (viewHeight / 2) - ((minY + maxY) / 2) * scale;
+  }
+
   function renderGraph() {
     const visibleNodes = getVisibleNodes();
     const visibleEdges = getVisibleEdges();
@@ -766,6 +802,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function applyFilters() {
     state.nodeTypes = new Set(nodeTypeFilters.filter((input) => input.checked).map((input) => input.value));
     state.edgeTypes = new Set(edgeTypeFilters.filter((input) => input.checked).map((input) => input.value));
+    state.evidenceTypes = new Set(evidenceFilters.filter((input) => input.checked).map((input) => input.value));
     state.showIncoming = directionFilters.some((input) => input.dataset.filterDirection === "incoming" && input.checked);
     state.showOutgoing = directionFilters.some((input) => input.dataset.filterDirection === "outgoing" && input.checked);
     renderGraph();
@@ -776,13 +813,27 @@ document.addEventListener("DOMContentLoaded", () => {
       state.scale = clamp(state.scale * 1.2, 0.35, 2.5);
     } else if (action === "zoom-out") {
       state.scale = clamp(state.scale / 1.2, 0.35, 2.5);
+    } else if (action === "fit") {
+      fitToViewport();
     } else if (action === "reset") {
       state.scale = 1;
       state.offsetX = 0;
       state.offsetY = 0;
       state.selectedNodeId = null;
       state.selectedEdgeId = null;
-      state.hopDepth = Number(depthInput?.value || 1);
+      state.hopDepth = 1;
+      if (depthInput) depthInput.value = "1";
+    } else if (action === "reset-filters") {
+      nodeTypeFilters.forEach((input) => { input.checked = true; });
+      edgeTypeFilters.forEach((input) => { input.checked = true; });
+      evidenceFilters.forEach((input) => { input.checked = true; });
+      directionFilters.forEach((input) => { input.checked = true; });
+      state.hopDepth = 1;
+      if (depthInput) depthInput.value = "1";
+      state.selectedNodeId = null;
+      state.selectedEdgeId = null;
+      applyFilters();
+      return;
     } else if (action === "expand") {
       if (state.selectedNodeId) {
         state.hopDepth = Math.min(4, Number(state.hopDepth) + 1);
@@ -790,6 +841,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     } else if (action === "focus") {
       state.selectedNodeId = state.selectedNodeId || (graphData.nodes || [])[0]?.id || null;
+      fitToViewport();
     }
     renderGraph();
   }
@@ -804,6 +856,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   nodeTypeFilters.forEach((input) => input.addEventListener("change", applyFilters));
   edgeTypeFilters.forEach((input) => input.addEventListener("change", applyFilters));
+  evidenceFilters.forEach((input) => input.addEventListener("change", applyFilters));
   directionFilters.forEach((input) => input.addEventListener("change", applyFilters));
   buttons.forEach((button) => {
     button.addEventListener("click", () => handleButtonAction(button.dataset.graphAction));
@@ -1064,7 +1117,7 @@ def _render_relationships(project: Project) -> str:
 
 
 def _render_relation_map_page(project: Project) -> str:
-    graph = build_relation_graph(project, view="relation_map")
+    graph = build_relation_graph(project, view="relation_map", max_nodes=None, max_edges=None)
     graph_payload = json.dumps(graph.as_dict(), ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     node_types = sorted({node.kind for node in graph.nodes}) or ["file"]
     edge_types = sorted({edge.kind for edge in graph.edges}) or ["imports"]
@@ -1077,6 +1130,7 @@ def _render_relation_map_page(project: Project) -> str:
         ('method', '#ff9f7a'),
         ('endpoint', '#ff7b8c'),
     ]
+    evidence_types = ["DECLARED", "DETECTED", "INFERRED", "UNKNOWN"]
     filter_boxes = (
         ''.join(
             f'<label class="filter-chip"><input type="checkbox" data-filter-node value="{_escape(kind)}" checked /> {_escape(kind)}</label>'
@@ -1085,6 +1139,10 @@ def _render_relation_map_page(project: Project) -> str:
         + ''.join(
             f'<label class="filter-chip"><input type="checkbox" data-filter-edge value="{_escape(kind)}" checked /> {_escape(kind)}</label>'
             for kind in edge_types
+        )
+        + ''.join(
+            f'<label class="filter-chip"><input type="checkbox" data-filter-evidence value="{_escape(kind)}" checked /> {_escape(kind)}</label>'
+            for kind in evidence_types
         )
     )
     legend_html = ''.join(
@@ -1120,9 +1178,11 @@ def _render_relation_map_page(project: Project) -> str:
         '      </select>'
         '      <button type="button" data-graph-action="focus">Center</button>'
         '      <button type="button" data-graph-action="expand">Expand</button>'
+        '      <button type="button" data-graph-action="fit">Fit</button>'
         '      <button type="button" data-graph-action="zoom-in">Zoom+</button>'
         '      <button type="button" data-graph-action="zoom-out">Zoom-</button>'
-        '      <button type="button" data-graph-action="reset">Reset</button>'
+        '      <button type="button" data-graph-action="reset">Reset view</button>'
+        '      <button type="button" data-graph-action="reset-filters">Reset filters</button>'
         '    </div>'
         '    <div class="graph-filters">' + filter_boxes + '</div>'
         '    <svg id="relation-map-canvas" aria-label="Relation map graph" viewBox="0 0 900 560"></svg>'

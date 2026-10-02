@@ -745,6 +745,14 @@ class PythonReader(LanguageReader):
             if not target_name:
                 continue
 
+            # Resolve common instance/class-qualified calls within the caller's
+            # class. For example, MyClass.run calling self.refresh() should
+            # produce MyClass.run -> MyClass.refresh, not MyClass.run -> self.refresh.
+            if source_name and "." in source_name:
+                caller_class = source_name.rsplit(".", 1)[0]
+                if target_name.startswith("self.") or target_name.startswith("cls."):
+                    target_name = f"{caller_class}.{target_name.split('.', 1)[1]}"
+
             if project is None:
                 continue
 

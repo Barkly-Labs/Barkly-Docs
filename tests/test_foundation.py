@@ -363,6 +363,9 @@ def test_html_site_generation_renders_pages_and_relationships(tmp_path):
     assert "Relation Map" in relation_map_html
     assert "relation-map-data" in relation_map_html
     assert "assets/relation-map.js" in relation_map_html
+    assert "data-filter-evidence" in relation_map_html
+    assert "Reset filters" in relation_map_html
+    assert "Fit" in relation_map_html
 
 
 def test_relation_graph_normalizes_scan_relationships_and_unresolved_refs():
@@ -545,3 +548,26 @@ def test_build_preview_server_uses_localhost_and_port(monkeypatch, tmp_path):
 
     assert isinstance(server, FakeHTTPServer)
     assert captured["server_address"] == ("127.0.0.1", 8123)
+
+
+def test_relation_graph_connects_path_qualified_classes_to_all_methods(tmp_path):
+    source = tmp_path / "tools.py"
+    source.write_text(
+        "class Tool:\n"
+        "    def first(self):\n"
+        "        return self.second()\n"
+        "    def second(self):\n"
+        "        return 1\n",
+        encoding="utf-8",
+    )
+    project = Project(name="fixture", root=str(tmp_path))
+    PythonReader().read(source, project)
+    graph = build_relation_graph(project, view="relation_map", max_nodes=None, max_edges=None)
+
+    class_id = f"Tool@{source}"
+    method_ids = {f"Tool.first", "Tool.second"}
+    edge_pairs = {(edge.source, edge.target, edge.kind) for edge in graph.edges}
+
+    assert (class_id, "Tool.first", "contains") in edge_pairs
+    assert (class_id, "Tool.second", "contains") in edge_pairs
+    assert ("Tool.first", "Tool.second", "calls") in edge_pairs

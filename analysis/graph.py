@@ -216,7 +216,7 @@ def _sort_nodes(nodes: list[GraphNode]) -> list[GraphNode]:
     return sorted(nodes, key=lambda item: (order.get(item.kind, 999), item.label.lower(), item.id.lower()))
 
 
-def build_relation_graph(project: Project, *, view: str = "project_overview", max_nodes: int | None = 200, max_edges: int | None = 400) -> RelationGraph:
+def build_relation_graph(project: Project, *, view: str = "project_overview", max_nodes: int | None = 400, max_edges: int | None = 400) -> RelationGraph:
     graph = RelationGraph(project=project, view=view, max_nodes=max_nodes, max_edges=max_edges)
 
     known_identifiers: set[str] = set()
@@ -267,10 +267,12 @@ def build_relation_graph(project: Project, *, view: str = "project_overview", ma
                 )
             )
 
+    class_ids_by_name: dict[str, list[str]] = {}
     for class_node in project.classes:
         class_id = class_node.name
         if class_node.path:
             class_id = f"{class_node.name}@{class_node.path}"
+        class_ids_by_name.setdefault(class_node.name, []).append(class_id)
         known_identifiers.add(class_id)
         graph.add_node(
             GraphNode(
@@ -423,7 +425,14 @@ def build_relation_graph(project: Project, *, view: str = "project_overview", ma
             )
         )
         if method.class_name:
-            class_id = method.class_name
+            # Match the class node's canonical ID. Class nodes are path-qualified
+            # when a project contains source files, so using only class_name here
+            # creates orphaned containment edges that the renderer cannot draw.
+            candidates = class_ids_by_name.get(method.class_name, [])
+            class_id = next(
+                (candidate for candidate in candidates if candidate.endswith(f"@{method.path}")),
+                candidates[0] if candidates else method.class_name,
+            )
             graph.add_edge(
                 GraphEdge(
                     id=f"{class_id}->{method_id}",
