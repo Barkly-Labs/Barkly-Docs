@@ -1950,6 +1950,40 @@ def _render_three_layer_architecture(project: Project) -> str:
 
 /* Simple collapsible architecture cards — applies to all 3 layers. */
 .architecture-item { cursor: default; }
+.documentation-references-card {
+  overflow: hidden;
+  border: 1px solid var(--border, #2d2d2d);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255,107,157,.035), rgba(255,255,255,.012));
+}
+.documentation-references-summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px;
+}
+.documentation-references-summary::-webkit-details-marker { display:none; }
+.documentation-references-summary:hover { background: rgba(255,255,255,.018); }
+.documentation-references-heading { display:flex; flex-direction:column; gap:5px; min-width:0; }
+.documentation-references-title { color: var(--text, #f5f3f4); font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
+.documentation-references-subtitle { color: var(--muted, #a9a4a8); font-size: .88rem; line-height: 1.45; }
+.documentation-references-toggle { flex: 0 0 auto; color: var(--muted, #a9a4a8); font-size: .78rem; white-space: nowrap; }
+.documentation-references-toggle::after { content: ''; }
+.documentation-references-card[open] .documentation-references-toggle { color: var(--accent-bright, #ff86ad); }
+.documentation-references-card[open] .documentation-references-toggle { font-size: 0; }
+.documentation-references-card[open] .documentation-references-toggle::before { content: 'Hide documentation ↑'; font-size: .78rem; }
+.documentation-references-body { border-top: 1px solid rgba(255,255,255,.07); animation: documentation-references-reveal .14s ease-out; }
+@keyframes documentation-references-reveal { from { opacity:.45; transform:translateY(-3px); } to { opacity:1; transform:translateY(0); } }
+@media (max-width: 700px) {
+  .documentation-references-summary { align-items:flex-start; }
+  .documentation-references-toggle { margin-top:2px; }
+  .documentation-references-title { font-size:1.25rem; }
+}
+
 .architecture-item > summary { cursor: pointer; user-select: none; }
 .architecture-item > summary:hover { background: rgba(255,255,255,.018); }
 .architecture-item > .architecture-item-details { display: none; }
@@ -2060,11 +2094,18 @@ def _render_index(project: Project, graph_generated: bool = True) -> str:
         + '</div>'
     )
     documentation = (
-        '<div class="section">'
-        '<h2>Documentation references</h2>'
-        '<div class="section-subtitle">The project README is rendered as Markdown when it exists, preserving its headings, lists, links, code blocks, and other readable structure.</div>'
+        '<details class="section documentation-references-card">'
+        '<summary class="documentation-references-summary">'
+        '<span class="documentation-references-heading">'
+        '<span class="documentation-references-title">Documentation references</span>'
+        '<span class="documentation-references-subtitle">The project README is rendered as Markdown when it exists, preserving its headings, lists, links, code blocks, and other readable structure.</span>'
+        '</span>'
+        '<span class="documentation-references-toggle" aria-hidden="true">View documentation →</span>'
+        '</summary>'
+        '<div class="documentation-references-body">'
         + _render_readme(project)
         + '</div>'
+        + '</details>'
     )
     structure = (
         '<div class="section">'
