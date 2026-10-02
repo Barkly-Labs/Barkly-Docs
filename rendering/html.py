@@ -1473,7 +1473,7 @@ def _render_relation_map_page(project: Project) -> str:
 
     body = (
         '<section class="hero">'
-        '<div class="kicker">Barkly Docs ? Project explorer</div>'
+        '<div class="kicker">Barkly Docs · Project explorer</div>'
         "<h1>Relationship Map</h1>"
         "<p>Explore files, modules, classes, functions, methods, and their "
         "detected relationships. Expand a card to inspect details and follow connections.</p>"
@@ -1482,7 +1482,8 @@ def _render_relation_map_page(project: Project) -> str:
         '<div class="relation-map-controls">'
         '<label for="relation-map-search">Search names, descriptions, and paths</label>'
         '<input id="relation-map-search" type="search" '
-        'placeholder="Search the project?" autocomplete="off" />'
+        'aria-label="Search relationship map" '
+        'placeholder="Search the project…" autocomplete="off" />'
         '<label for="relation-map-kind">Filter by item type</label>'
         '<select id="relation-map-kind"><option value="">All types</option></select>'
         '<button type="button" id="relation-map-reset">Reset filters</button>'
@@ -1540,13 +1541,8 @@ def _render_files(project: Project) -> str:
         items.append(f"""
             <div class="entity-item">
               <h3>{_escape(item.name)}</h3>
-              <div class="meta entity-kind-column">
-                <span class="entity-type-tag">{_escape(item.language or 'Unknown')}</span>
-              </div>
-              <div class="meta file-path">
-                <span class="meta-label">Path</span>
-                {_escape(item.path)}
-              </div>
+              <div class="meta">Language: {_escape(item.language or 'Unknown')}</div>
+              <div class="meta">Path: {_escape(item.path)}</div>
             </div>
             """)
     return '<div class="entity-list">' + "".join(items) + "</div>"
@@ -1567,11 +1563,7 @@ def _render_entity_group(items, empty_message: str) -> str:
         line = getattr(item, "line", None)
 
         meta = [
-            (
-                '<span class="meta entity-kind-column">'
-                f'<span class="entity-type-tag">{_escape(str(kind))}</span>'
-                '</span>'
-            ),
+            f'<span class="meta">Type: {_escape(str(kind))}</span>',
             f'<span class="meta">Language: {_escape(str(language))}</span>',
         ]
         if path:
@@ -2670,48 +2662,6 @@ def _render_three_layer_architecture(project: Project) -> str:
   .index-section-body .entity-item .meta{margin-top:3px}
 }
 
-
-/* Barkly entity type tags */
-.entity-type-tag {
-  display: inline-flex;
-  align-items: center;
-  width: fit-content;
-  padding: 4px 8px;
-  border: 1px solid rgba(255, 107, 157, 0.18);
-  border-radius: 999px;
-  background: rgba(255, 107, 157, 0.15);
-  color: var(--accent);
-  font-family: "Consolas", "SFMono-Regular", monospace;
-  font-size: 0.72rem;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.entity-kind-column {
-  display: flex;
-  align-items: center;
-  margin: 0;
-}
-
-/* Cleaner file path metadata */
-.file-path {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.file-path .meta-label {
-  color: var(--accent);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
 /* Human-centered README presentation */
 .readme-panel {
   border: 1px solid rgba(255,255,255,.075);
@@ -2906,9 +2856,13 @@ def _render_index(project: Project, graph_generated: bool = True) -> str:
 
 def _render_entities_page(project: Project) -> str:
     body = (
+        '<section class="hero">'
+        '<div class="kicker">Barkly Docs · Project entities</div>'
+        "<h1>Entities</h1>"
+        "<p>Classes, functions, and methods discovered in the project model.</p>"
+        "</section>"
         '<section class="section">'
-        "<h2>Entities</h2>"
-        '<div class="section-subtitle">Classes, functions, and methods discovered in the project model.</div>'
+        "<h2>Entity overview</h2>"
         + _render_entity_summary(project)
         + "</section>"
         + '<section class="section">'
@@ -2922,9 +2876,13 @@ def _render_entities_page(project: Project) -> str:
 
 def _render_relationships_page(project: Project) -> str:
     body = (
+        '<section class="hero">'
+        '<div class="kicker">Barkly Docs · Project relationships</div>'
+        "<h1>Relationships</h1>"
+        "<p>Evidence-labeled relationships between project entities.</p>"
+        "</section>"
         '<section class="section">'
-        "<h2>Relationships</h2>"
-        '<div class="section-subtitle">Evidence-labeled relationships between project entities.</div>'
+        "<h2>Relationship inventory</h2>"
         + _render_relationships(project)
         + "</section>"
     )
@@ -2976,3 +2934,4 @@ __all__ = [
     "render_project_website",
     "generate_html_website",
 ]
+
