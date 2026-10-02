@@ -321,6 +321,9 @@ def _build_symbol_index(
         if _is_project_source_path(project, _node_source_path(endpoint)):
             add(endpoint.path, endpoint.handler or endpoint.path)
             add(endpoint.handler, endpoint.handler or endpoint.path)
+    for dependency in project.dependencies:
+        if (dependency.metadata or {}).get("dependency_scope") == "external_gem":
+            add(dependency.name, f"dependency:ruby:{dependency.name}")
     return symbols, classes_by_name_path
 
 
@@ -593,6 +596,20 @@ def build_relation_graph(
 
     known_identifiers: set[str] = set()
     symbol_index, classes_by_name_path = _build_symbol_index(project)
+
+    for dependency in progress_items("dependencies", project.dependencies):
+        if (dependency.metadata or {}).get("dependency_scope") != "external_gem":
+            continue
+        dependency_id = f"dependency:ruby:{dependency.name}"
+        if dependency_id in known_identifiers:
+            continue
+        known_identifiers.add(dependency_id)
+        graph.add_node(GraphNode(
+            id=dependency_id, label=dependency.name, kind="dependency",
+            qualified_name=dependency.name, path=dependency.source, source_file=dependency.source,
+            evidence=str((dependency.metadata or {}).get("evidence") or "DECLARED"),
+            metadata={"language": "Ruby", "dependency_scope": "external_gem", "version": dependency.version, "dependency_kind": dependency.kind},
+        ))
 
     for file in progress_items("files", project.files):
         if not _is_project_source_path(project, _node_source_path(file)):
@@ -896,8 +913,38 @@ def build_relation_graph(
     except Exception:
         installed_import_roots = set()
     stdlib_import_roots = {name.casefold() for name in sys.stdlib_module_names}
+    ruby_stdlib_roots = {
+        "abbrev", "base64", "benchmark", "bigdecimal", "cgi", "csv", "date", "delegate",
+        "digest", "drb", "erb", "etc", "fileutils", "find", "forwardable", "io", "ipaddr",
+        "json", "logger", "matrix", "monitor", "net", "open-uri", "open3", "openssl", "optparse",
+        "ostruct", "pathname", "pp", "pstore", "racc", "readline", "resolv", "securerandom",
+        "set", "shellwords", "singleton", "socket", "stringio", "strscan", "tempfile", "time",
+        "timeout", "tmpdir", "tsort", "uri", "weakref", "yaml", "zlib",
+    }
 
-    def is_project_import_target(target: str | None) -> bool:
+    def resolve_ruby_relative_import(import_node: Any) -> str | None:
+        if import_node.language != "Ruby" or (import_node.metadata or {}).get("ruby_kind") != "require_relative":
+            return None
+        source_path = Path(import_node.source_file)
+        raw_target = str(import_node.target).replace("\\", "/")
+        candidate = (source_path.parent / raw_target)
+        candidates = [candidate, candidate.with_suffix(".rb") if not candidate.suffix else candidate]
+        for item in candidates:
+            normalized_path = str(item.resolve(strict=False)).replace("\\", "/")
+            match = symbol_index.get(_normalize_identifier(normalized_path))
+            if match:
+                return match
+            try:
+                relative = str(item.resolve(strict=False).relative_to(Path(project.root).resolve())).replace("\\", "/")
+            except (ValueError, OSError):
+                relative = ""
+            if relative:
+                match = symbol_index.get(_normalize_identifier(relative))
+                if match:
+                    return match
+        return None
+
+    def is_project_import_target(target: str | None, *, language: str | None = None) -> bool:
         normalized = _normalize_identifier(target)
         if not normalized:
             return False
@@ -905,6 +952,8 @@ def build_relation_graph(
         root_name = normalized.replace("\\", "/").split("/", 1)[0].split(".", 1)[0]
         folded_root = root_name.casefold()
         if folded_root in ignored_import_roots or folded_root in stdlib_import_roots:
+            return False
+        if language == "Ruby" and folded_root in ruby_stdlib_roots:
             return False
         if normalized in symbol_index or normalized in project_module_names:
             return True
@@ -934,12 +983,22 @@ def build_relation_graph(
             )
             or import_node.source_file
         )
-        if not is_project_import_target(import_node.target):
-            continue
-        target_id = (
-            _match_known_symbol(project, import_node.target, symbol_index=symbol_index)
-            or import_node.target
-        )
+        ruby_relative_target = resolve_ruby_relative_import(import_node)
+        if ruby_relative_target:
+            import_node.metadata["dependency_scope"] = "internal_project"
+            target_id = ruby_relative_target
+        else:
+            normalized_target = _normalize_identifier(import_node.target)
+            root_name = normalized_target.replace("\\", "/").split("/", 1)[0].split(".", 1)[0].casefold() if normalized_target else ""
+            if import_node.language == "Ruby" and root_name in ruby_stdlib_roots:
+                import_node.metadata["dependency_scope"] = "standard_library"
+                continue
+            dependency_match = symbol_index.get(normalized_target)
+            if import_node.language == "Ruby" and dependency_match and dependency_match.startswith("dependency:ruby:"):
+                import_node.metadata["dependency_scope"] = "external_gem"
+            if not is_project_import_target(import_node.target, language=import_node.language):
+                continue
+            target_id = dependency_match or import_node.target
         graph.add_edge(
             GraphEdge(
                 id=f"{source_id}->{target_id}",
@@ -961,8 +1020,19 @@ def build_relation_graph(
 
     report_progress("imports", import_total, import_total)
 
+    canonical_imports = {
+        (str(item.source_file), _normalize_identifier(item.target))
+        for item in project.imports
+    }
     for relationship in progress_items("relationships", project.relationships):
         if not _is_project_source_path(project, relationship.source_file):
+            continue
+        # Readers may preserve an import as both ImportNode and RelationshipNode.
+        # ImportNode is the canonical graph representation; suppress only the
+        # duplicate relationship form so classification/resolution is not bypassed.
+        if relationship.kind == "imports" and (
+            str(relationship.source_file), _normalize_identifier(relationship.target)
+        ) in canonical_imports:
             continue
         source_id = (
             _match_known_symbol(

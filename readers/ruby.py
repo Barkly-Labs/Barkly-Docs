@@ -31,6 +31,7 @@ from typing import Any
 
 from model.project import (
     ClassNode,
+    DependencyNode,
     DocumentationNode,
     EndpointNode,
     FileNode,
@@ -59,7 +60,9 @@ class RubyReader(LanguageReader):
         ".gemspec",
     )
 
-    version = "0.2.0"
+    version = "0.3.0"
+
+    manifest_names = ("Gemfile", "Gemfile.lock")
 
     # ========================================================
     # REGEX
@@ -245,6 +248,10 @@ class RubyReader(LanguageReader):
     # PUBLIC API
     # ========================================================
 
+    def can_read(self, path: Path) -> bool:
+        """Read Ruby source plus Bundler manifests with extensionless names."""
+        return path.name in self.manifest_names or super().can_read(path)
+
     def read(
         self,
         path: Path,
@@ -273,6 +280,11 @@ class RubyReader(LanguageReader):
                     "version": self.version,
                 },
             )
+
+        if path.name in self.manifest_names:
+            return self._read_dependency_manifest(path, source, project)
+        if path.suffix.lower() == ".gemspec":
+            self._read_dependency_manifest(path, source, project, add_file=False)
 
         try:
             # ------------------------------------------------
@@ -589,6 +601,66 @@ class RubyReader(LanguageReader):
                     "version": self.version,
                 },
             )
+
+    _GEM_DECLARATION_RE = re.compile(
+        r'''^\s*gem\s+['\"](?P<name>[^'\"]+)['\"](?P<rest>.*)$'''
+    )
+    _GEMSPEC_DEPENDENCY_RE = re.compile(
+        r'''^\s*(?:[A-Za-z_][A-Za-z0-9_]*\.)?(?P<kind>add_dependency|add_runtime_dependency|add_development_dependency)\s*(?:\(\s*)?['\"](?P<name>[^'\"]+)['\"](?P<rest>.*)$'''
+    )
+    _VERSION_RE = re.compile(r'''['\"](?P<version>(?:[~><=!\s]*\d[^'\"]*))['\"]''')
+
+    def _read_dependency_manifest(self, path: Path, source: str, project: Project, *, add_file: bool = True) -> ReaderResult:
+        """Extract declared Ruby gem dependencies without executing Bundler/Ruby code."""
+        if add_file:
+            file_node = FileNode(
+                path=str(path), language="Ruby", size=len(source.encode("utf-8", errors="replace")),
+                metadata={"reader": self.__class__.__name__, "reader_version": self.version, "kind": "ruby_dependency_manifest"},
+            )
+            project.add_file(file_node)
+        found = 0
+        if path.name == "Gemfile.lock":
+            in_specs = False
+            for line_number, line in enumerate(source.splitlines(), start=1):
+                if line == "  specs:":
+                    in_specs = True
+                    continue
+                if in_specs and line and not line.startswith("    "):
+                    in_specs = False
+                if not in_specs:
+                    continue
+                match = re.match(r"^    ([A-Za-z0-9_.-]+) \(([^)]+)\)\s*$", line)
+                if match:
+                    self._add_gem_dependency(project, path, match.group(1), match.group(2), "locked", line_number, "Gemfile.lock")
+                    found += 1
+        else:
+            pattern = self._GEM_DECLARATION_RE if path.name == "Gemfile" else self._GEMSPEC_DEPENDENCY_RE
+            for line_number, line in enumerate(source.splitlines(), start=1):
+                stripped = self._strip_ruby_comment(line).strip()
+                match = pattern.match(stripped)
+                if not match:
+                    continue
+                kind = "runtime"
+                if path.suffix.lower() == ".gemspec" and match.groupdict().get("kind") == "add_development_dependency":
+                    kind = "development"
+                version_match = self._VERSION_RE.search(match.group("rest") or "")
+                version = version_match.group("version").strip() if version_match else None
+                self._add_gem_dependency(project, path, match.group("name"), version, kind, line_number, path.name)
+                found += 1
+        return ReaderResult(success=True, project=project, metadata={"language": self.language, "version": self.version, "dependencies": found})
+
+    def _add_gem_dependency(self, project: Project, path: Path, name: str, version: str | None, kind: str, line: int, source_kind: str) -> None:
+        identity = (name, str(path), line, source_kind)
+        if not any((d.name, d.source, (d.metadata or {}).get("line"), (d.metadata or {}).get("manifest")) == identity for d in project.dependencies):
+            project.add_dependency(DependencyNode(
+                name=name, source=str(path), version=version, kind=kind,
+                metadata={"language": "Ruby", "manifest": source_kind, "line": line, "dependency_scope": "external_gem", "evidence": "DECLARED"},
+            ))
+        project.add_relationship(RelationshipNode(
+            source=str(path), target=name, kind="depends_on", source_file=str(path),
+            source_location={"line": line}, evidence="DECLARED",
+            metadata={"language": "Ruby", "dependency_scope": "external_gem", "manifest": source_kind, "version": version, "dependency_kind": kind},
+        ))
 
     # ========================================================
     # STRUCTURE SCANNER
@@ -1410,7 +1482,7 @@ class RubyReader(LanguageReader):
                         source_file=str(path),
                         target=name,
                         language=self.language,
-                        metadata={"ruby_kind": "require_relative"},
+                        metadata={"ruby_kind": "require_relative", "dependency_scope": "internal_project"},
                     )
                 )
 
@@ -1444,7 +1516,7 @@ class RubyReader(LanguageReader):
                         source_file=str(path),
                         target=name,
                         language=self.language,
-                        metadata={"ruby_kind": "require"},
+                        metadata={"ruby_kind": "require", "dependency_scope": "unclassified"},
                     )
                 )
 
