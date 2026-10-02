@@ -9,6 +9,8 @@ import pytest
 
 from cli.main import build_preview_server, ensure_website_generated
 from model.project import Project
+pytestmark = pytest.mark.slow
+
 
 
 def _make_project(root: Path, name: str, marker: str) -> Project:

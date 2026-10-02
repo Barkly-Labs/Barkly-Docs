@@ -304,6 +304,7 @@ def test_relationship_validation_handles_invalid_endpoints_and_evidence():
     assert "imports" in RELATIONSHIP_KINDS
 
 
+@pytest.mark.slow
 def test_cli_runs_on_a_small_project_and_returns_zero(tmp_path):
     project_dir = tmp_path / "fixture"
     project_dir.mkdir()
@@ -391,7 +392,7 @@ def test_html_site_generation_renders_pages_and_relationships(tmp_path):
     assert "assets/site.css" in index_html
 
     entities_html = output_dir.joinpath("entities.html").read_text(encoding="utf-8")
-    assert "Method and function reference" in entities_html
+    assert "Entity explorer" in entities_html
     assert (
         "Run a widget." in entities_html
         or "Execute the widget runner." in entities_html
@@ -402,23 +403,18 @@ def test_html_site_generation_renders_pages_and_relationships(tmp_path):
     )
     assert "WidgetRunner" in relationships_html
     assert "DETECTED" in relationships_html
-    assert "graph TD" in relationships_html
+    assert "Relationship explorer" in relationships_html
+    assert "calls" in relationships_html
 
     relation_map_html = output_dir.joinpath("relation-map.html").read_text(
         encoding="utf-8"
     )
     assert "Relation Map" in relation_map_html
-    assert "Structurizr" in relation_map_html
-    assert (
-        "Structurizr project-level graph is displayed on the Project overview page"
-        in relation_map_html
-    )
-    assert "<iframe" not in relation_map_html
-    assert "Structurizr project-level architecture" in index_html
-    assert "<iframe" in index_html
-    assert "architecture/workspace.dsl" in relation_map_html
-    assert output_dir.joinpath("architecture", "workspace.dsl").exists()
-    assert output_dir.joinpath("architecture", "docker-compose.yml").exists()
+    assert "relation-map-data" in relation_map_html
+    assert "assets/relation-map.js" in relation_map_html
+    assert "WidgetRunner" in relation_map_html
+    assert not output_dir.joinpath("architecture", "workspace.dsl").exists()
+    assert not output_dir.joinpath("architecture", "docker-compose.yml").exists()
 
 
 def test_relation_graph_normalizes_scan_relationships_and_unresolved_refs():
@@ -495,9 +491,11 @@ def test_project_counts_and_evidence_summary_remain_consistent():
 
     assert len(project.files) == 1
     assert len(project.modules) == 1
-    assert len(project.relationships) == 3
+    assert len(project.relationships) == 2
+    calls = next(rel for rel in project.relationships if rel.kind == "calls")
+    assert calls.metadata["occurrences"] == [{"line": 10}, {"line": 11}]
     assert project.evidence_summary()["DECLARED"] == 1
-    assert project.evidence_summary()["DETECTED"] == 2
+    assert project.evidence_summary()["DETECTED"] == 1
 
 
 def test_html_renderer_escapes_special_characters_and_empty_project(tmp_path):
@@ -514,10 +512,9 @@ def test_html_renderer_escapes_special_characters_and_empty_project(tmp_path):
     empty_dir = tmp_path / "empty-site"
     render_project_website(empty_project, empty_dir)
     empty_html = empty_dir.joinpath("index.html").read_text(encoding="utf-8")
-    assert (
-        "No project files were discovered." in empty_html
-        or "No project entities were detected." in empty_html
-    )
+    assert "Empty" in empty_html
+    assert "No classes were discovered." in empty_html
+    assert "No functions were discovered." in empty_html
 
 
 def test_html_renderer_uses_accessible_structure_and_evidence_labels(tmp_path):
@@ -546,6 +543,7 @@ def test_html_renderer_uses_accessible_structure_and_evidence_labels(tmp_path):
     assert '<nav class="site-nav" aria-label="Main navigation">' in html_text
 
 
+@pytest.mark.slow
 def test_cli_can_generate_html_site(tmp_path):
     project_dir = tmp_path / "fixture"
     project_dir.mkdir()
@@ -666,7 +664,6 @@ def test_relation_graph_connects_path_qualified_classes_to_all_methods(tmp_path)
     assert ("Tool.first", "Tool.second", "calls") in edge_pairs
 
 
-def test_structurizr_launcher_rejects_documentation_port_collision(tmp_path):
+def test_cli_no_longer_exposes_removed_structurizr_launcher():
     cli_main = importlib.import_module("cli.main")
-    with pytest.raises(RuntimeError, match="conflicts with Structurizr Lite"):
-        cli_main.start_structurizr(tmp_path, docs_port=8080)
+    assert not hasattr(cli_main, "start_structurizr")

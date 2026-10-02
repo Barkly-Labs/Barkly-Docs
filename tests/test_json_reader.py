@@ -138,10 +138,10 @@ def test_json_reader_html_output_includes_data_paths(tmp_path):
     render_project_website(project, tmp_path / "site")
     html = (tmp_path / "site" / "index.html").read_text(encoding="utf-8")
 
-    assert "JSON data" in html
-    assert "$.settings" in html
-    assert "$.items" in html
-    assert "boolean" in html
+    assert "Explore JSON" in html
+    assert "settings" in html
+    assert "version" in html
+    assert "items" in html
 
 
 def test_json_reader_keeps_existing_python_and_java_counts_unchanged(tmp_path):

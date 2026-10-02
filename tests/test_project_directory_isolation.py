@@ -6,8 +6,12 @@ import threading
 import urllib.request
 from pathlib import Path
 
+import pytest
+
 from cli.main import build_preview_server, ensure_website_generated
 from model.project import Project
+pytestmark = pytest.mark.slow
+
 
 
 def _project(root: Path, name: str) -> Project:

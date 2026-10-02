@@ -109,3 +109,24 @@ The workspace uses Barkly's dark, pink, and green visual styling. Component grou
 ## Development status
 
 This repository retains an earlier prototype alongside the newer shared model and reader architecture. The prototype scripts are intentionally kept in place while the core project-discovery and model layers are being stabilized.
+## Testing Barkly Docs
+
+The default test run is intentionally the fast developer suite:
+
+```bash
+pytest -q
+```
+
+It excludes tests marked `slow`, such as live preview-server isolation checks. Run the complete suite, including slower integration coverage, with:
+
+```bash
+pytest -q -m "slow or not slow"
+```
+
+To run only the slower integration checks:
+
+```bash
+pytest -q -m slow
+```
+
+Reader and analysis tests use small local fixtures and do not require network access. A passing parser test establishes extraction only where its assertions say so; resolution and rendered-output behavior are tested separately.

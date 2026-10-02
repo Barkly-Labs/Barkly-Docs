@@ -48,55 +48,26 @@ def test_class_methods_are_connected_to_path_qualified_class_nodes(tmp_path):
     )
 
 
-def test_relation_map_uses_structurizr_project_level_workspace(tmp_path):
+def test_relation_map_uses_native_barkly_graph_without_structurizr_artifacts(tmp_path):
     project = Project(name="demo", root=str(tmp_path))
-    project.add_file(
-        FileNode(path=str(tmp_path / "src" / "frontend" / "app.py"), language="Python")
-    )
-    project.add_file(
-        FileNode(path=str(tmp_path / "src" / "backend" / "api.py"), language="Python")
-    )
-    project.add_relationship(
-        RelationshipNode(
-            source="frontend.app",
-            target="backend.api",
-            kind="imports",
-            source_file=str(tmp_path / "src" / "frontend" / "app.py"),
-            evidence="DETECTED",
-        )
-    )
+    project.add_file(FileNode(path=str(tmp_path / "src" / "frontend" / "app.py"), language="Python"))
+    project.add_file(FileNode(path=str(tmp_path / "src" / "backend" / "api.py"), language="Python"))
+    project.add_relationship(RelationshipNode(
+        source="frontend.app", target="backend.api", kind="imports",
+        source_file=str(tmp_path / "src" / "frontend" / "app.py"), evidence="DETECTED",
+    ))
     output = tmp_path / "site"
-
     render_project_website(project, output)
     html = (output / "relation-map.html").read_text(encoding="utf-8")
-    index_html = (output / "index.html").read_text(encoding="utf-8")
     relationships_html = (output / "relationships.html").read_text(encoding="utf-8")
-    dsl = (output / "architecture" / "workspace.dsl").read_text(encoding="utf-8")
-    compose = (output / "architecture" / "docker-compose.yml").read_text(
-        encoding="utf-8"
-    )
-
-    assert "Structurizr" in html
-    assert (
-        "Structurizr project-level graph is displayed on the Project overview page"
-        in html
-    )
-    assert "<iframe" not in html
-    assert "<iframe" in index_html
-    assert "Project Architecture" in index_html
-    assert "graph TD" in relationships_html
-    assert 'container "frontend"' in dsl
-    assert 'container "backend"' in dsl
-    assert "project.frontend -> project.backend" in dsl
-    assert "function" not in dsl.lower()
-    assert "method" not in dsl.lower()
-    assert "structurizr/lite" in compose
-    assert '"${STRUCTURIZR_PORT:-8080}:8080"' in compose
-    assert '"${BARKLY_DOCS_PORT:-8000}:80"' in compose
-    dockerfile = (output / "Dockerfile").read_text(encoding="utf-8")
-    assert "FROM nginx:alpine" in dockerfile
-    assert "EXPOSE 80" in dockerfile
-
+    assert "relation-map-data" in html
+    assert "assets/relation-map.js" in html
+    assert "frontend.app" in html
+    assert "backend.api" in html
+    assert "imports" in html
+    assert "frontend.app" in relationships_html
+    assert not (output / "architecture" / "workspace.dsl").exists()
+    assert not (output / "architecture" / "docker-compose.yml").exists()
 
 def test_project_overview_collapses_symbols_into_components_and_hides_external_imports(
     tmp_path,

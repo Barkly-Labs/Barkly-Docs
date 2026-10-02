@@ -1,10 +1,13 @@
 from pathlib import Path
+
+import pytest
 from bs4 import BeautifulSoup
 from analysis.discovery import ProjectDiscovery
 from readers.ruby import RubyReader
 from rendering.html import render_project_website
 
 
+@pytest.mark.slow
 def test_ruby_endpoint_source_to_generated_html_pipeline(tmp_path):
     source=tmp_path/'app.rb'
     source.write_text("""require 'sinatra/base'\n\nclass API < Sinatra::Base\n  # Health check.\n  get '/health' do\n    'ok'\n  end\n\n  post('/items', provides: :json) { 'created' }\nend\n""", encoding='utf-8')
