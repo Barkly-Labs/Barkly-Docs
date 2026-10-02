@@ -525,6 +525,39 @@ a:focus-visible {
     transform: rotate(90deg);
   }
 }
+
+/* Individual entity rows expand into their method/function/source details. */
+.entity-expandable { padding: 0; overflow: hidden; }
+.entity-row-summary {
+  display: grid; grid-template-columns: minmax(180px, 1fr) minmax(120px, .5fr) minmax(120px, .5fr) minmax(260px, 1.7fr) auto;
+  align-items: center; gap: 14px; padding: 13px 10px; cursor: pointer; list-style: none;
+}
+.entity-row-summary::-webkit-details-marker { display: none; }
+.entity-row-summary:hover { background: rgba(255,255,255,.018); }
+.entity-row-name { min-width: 0; overflow-wrap: anywhere; }
+.entity-row-summary .meta { margin: 0; min-width: 0; overflow-wrap: anywhere; font-size: .72rem; }
+.entity-row-action { color: var(--accent); font-size: .68rem; white-space: nowrap; }
+.entity-expandable[open] .entity-row-action { font-size: 0; }
+.entity-expandable[open] .entity-row-action::after { content: "Hide ↑"; font-size: .68rem; }
+.entity-expandable[open] { border-color: rgba(255,107,157,.34); }
+.entity-expanded-view { padding: 16px 18px 18px; border-top: 1px solid var(--line); background: #0b0b0b; }
+.entity-expanded-description { margin: 0 0 14px; color: var(--muted); }
+.entity-expanded-facts { display: grid; gap: 8px; margin: 0 0 14px; }
+.entity-expanded-facts > div { display: grid; grid-template-columns: 100px minmax(0,1fr); gap: 12px; }
+.entity-expanded-facts dt, .entity-detail-label { color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; }
+.entity-expanded-facts dd { margin: 0; overflow-wrap: anywhere; }
+.entity-members { margin-top: 14px; }
+.entity-child-row { display: grid; gap: 4px; padding: 9px 0; border-bottom: 1px solid #202020; }
+.entity-child-row:last-child { border-bottom: 0; }
+.entity-child-row span { color: var(--muted); font-size: .82rem; }
+.entity-source-preview { margin-top: 14px; }
+.entity-source-preview .entity-detail-label { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 7px; }
+.entity-source-preview pre { margin: 0; max-height: 300px; overflow: auto; padding: 13px; border: 1px solid var(--line); border-radius: 10px; background: #070707; }
+.entity-source-preview code { font-family: Consolas, "SFMono-Regular", monospace; font-size: .78rem; white-space: pre; }
+@media (max-width: 900px) {
+  .entity-row-summary { grid-template-columns: 1fr auto; }
+  .entity-row-summary .meta { grid-column: 1 / -1; }
+}
 """
 
 PAW_SVG = """
@@ -1479,8 +1512,91 @@ def _render_files(project: Project) -> str:
 
 
 def _render_entity_group(items, empty_message: str) -> str:
+    """Render each entity row as its own disclosure with useful code-level details."""
     if not items:
         return f'<div class="empty-state">{_escape(empty_message)}</div>'
+
+    def value(item, *names):
+        for name in names:
+            candidate = getattr(item, name, None)
+            if candidate is not None and candidate != "":
+                return candidate
+        return None
+
+    def source_excerpt(item, max_lines: int = 14) -> str:
+        raw_path = str(value(item, "path", "file_path", "source_file") or "")
+        if not raw_path:
+            return ""
+        candidate = Path(raw_path)
+        if not candidate.is_absolute() or not candidate.is_file():
+            return ""
+        try:
+            lines = candidate.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            return ""
+        if not lines:
+            return ""
+        raw_start = value(item, "line_start", "start_line", "line", "lineno") or 1
+        raw_end = value(item, "line_end", "end_line")
+        try:
+            first = max(1, int(raw_start))
+        except (TypeError, ValueError):
+            first = 1
+        try:
+            last = int(raw_end) if raw_end else first + max_lines - 1
+        except (TypeError, ValueError):
+            last = first + max_lines - 1
+        first = min(first, len(lines))
+        last = min(max(first, last), first + max_lines - 1, len(lines))
+        excerpt = "\n".join(lines[first - 1:last]).rstrip()
+        if not excerpt:
+            return ""
+        return (
+            '<div class="entity-source-preview">'
+            '<div class="entity-detail-label">Source preview '
+            f'<span>lines {first}–{last}</span></div>'
+            f'<pre><code>{html.escape(excerpt, quote=False)}</code></pre>'
+            '</div>'
+        )
+
+    def child_entities(item) -> str:
+        children = value(item, "methods", "functions", "members")
+        if not children:
+            return ""
+        if isinstance(children, str):
+            children = [part.strip() for part in children.split(",") if part.strip()]
+        try:
+            children = list(children)
+        except TypeError:
+            children = [children]
+        if not children:
+            return ""
+
+        rows = []
+        for child in children:
+            if isinstance(child, str):
+                child_name = child
+                signature = child
+                child_doc = ""
+            else:
+                child_name = str(value(child, "name", "qualified_name", "label") or "Unnamed member")
+                params = value(child, "parameters", "params")
+                if isinstance(params, (list, tuple)):
+                    params = ", ".join(str(x) for x in params)
+                signature = f"{child_name}({params})" if params else child_name
+                child_doc = str(value(child, "documentation", "docstring", "description") or "")
+            rows.append(
+                '<div class="entity-child-row">'
+                f'<code>{_escape(signature)}</code>'
+                + (f'<span>{_escape(child_doc[:180])}</span>' if child_doc else "")
+                + '</div>'
+            )
+        return (
+            '<div class="entity-members">'
+            '<div class="entity-detail-label">Methods / functions</div>'
+            + "".join(rows)
+            + '</div>'
+        )
 
     rendered = []
     for item in sorted(items, key=lambda node: (getattr(node, "path", "") or "", getattr(node, "name", "") or "")):
@@ -1488,7 +1604,15 @@ def _render_entity_group(items, empty_message: str) -> str:
         path = getattr(item, "path", "") or ""
         language = getattr(item, "language", "") or "Unknown"
         kind = getattr(item, "kind", "") or item.__class__.__name__
-        line = getattr(item, "line", None)
+        line = value(item, "line_start", "start_line", "line", "lineno")
+        end_line = value(item, "line_end", "end_line")
+        documentation = value(item, "documentation", "docstring", "description", "summary")
+        parameters = value(item, "parameters", "params", "arguments")
+        return_type = value(item, "return_type", "returns")
+        class_name = value(item, "class_name", "owner", "parent_class")
+
+        if isinstance(parameters, (list, tuple)):
+            parameters = ", ".join(str(x) for x in parameters)
 
         meta = [
             f'<span class="meta">Type: {_escape(str(kind))}</span>',
@@ -1496,18 +1620,45 @@ def _render_entity_group(items, empty_message: str) -> str:
         ]
         if path:
             meta.append(f'<span class="meta">Path: {_escape(str(path))}</span>')
-        if line:
-            meta.append(f'<span class="meta">Line: {_escape(str(line))}</span>')
+
+        facts = []
+        if class_name:
+            facts.append(f'<div><dt>Class</dt><dd>{_escape(str(class_name))}</dd></div>')
+        if parameters:
+            facts.append(f'<div><dt>Parameters</dt><dd><code>{_escape(str(parameters))}</code></dd></div>')
+        if return_type:
+            facts.append(f'<div><dt>Returns</dt><dd><code>{_escape(str(return_type))}</code></dd></div>')
+        if path:
+            location = str(path)
+            if line:
+                location += f':{line}'
+                if end_line and str(end_line) != str(line):
+                    location += f'–{end_line}'
+            facts.append(f'<div><dt>Source</dt><dd><code>{_escape(location)}</code></dd></div>')
+
+        detail = (
+            (f'<p class="entity-expanded-description">{_escape(str(documentation))}</p>' if documentation else '')
+            + ('<dl class="entity-expanded-facts">' + ''.join(facts) + '</dl>' if facts else '')
+            + child_entities(item)
+            + source_excerpt(item)
+        )
+        if not detail:
+            detail = '<p class="muted">No additional source details were recorded for this entity.</p>'
 
         rendered.append(
-            '<div class="entity-item">'
-            f'<h3>{_escape(str(name))}</h3>'
-            + "".join(meta)
+            '<details class="entity-item entity-expandable">'
+            '<summary class="entity-row-summary">'
+            f'<strong class="entity-row-name">{_escape(str(name))}</strong>'
+            + ''.join(meta)
+            + '<span class="entity-row-action">Expand ↓</span>'
+            + '</summary>'
+            '<div class="entity-expanded-view">'
+            + detail
             + '</div>'
+            + '</details>'
         )
 
     return '<div class="entity-list">' + "".join(rendered) + "</div>"
-
 
 def _collect_project_entities(project: Project, kind: str):
     """Collect one semantic entity type without mixing it into other cards."""
@@ -2053,6 +2204,58 @@ def _render_three_layer_architecture(project: Project) -> str:
             "\\", "/"
         )
 
+    def source_preview(item: object, max_lines: int = 12) -> str:
+        """Return a small, bounded source excerpt for a scanned project entity."""
+        raw_path = path_of(item)
+        if not raw_path:
+            return ""
+
+        root = Path(project.root).resolve()
+        candidate = Path(raw_path)
+        if not candidate.is_absolute():
+            candidate = root / candidate
+
+        try:
+            candidate = candidate.resolve()
+            # Homepage previews must only read files from the scanned project.
+            candidate.relative_to(root)
+            if not candidate.is_file():
+                return ""
+            lines = candidate.read_text(encoding="utf-8", errors="replace").splitlines()
+        except (OSError, ValueError):
+            return ""
+
+        if not lines:
+            return ""
+
+        start_value = (
+            get(item, "line_start", "start_line", "line", "lineno")
+            or "1"
+        )
+        end_value = get(item, "line_end", "end_line")
+        try:
+            start = max(1, int(start_value))
+        except (TypeError, ValueError):
+            start = 1
+        try:
+            end = int(end_value) if end_value else start + max_lines - 1
+        except (TypeError, ValueError):
+            end = start + max_lines - 1
+
+        end = max(start, min(end, start + max_lines - 1, len(lines)))
+        start = min(start, len(lines))
+        excerpt = "\n".join(lines[start - 1:end]).rstrip()
+        if not excerpt:
+            return ""
+
+        return (
+            '<div class="architecture-source-preview">'
+            '<div class="architecture-source-label">Source preview'
+            f'<span>lines {start}–{end}</span></div>'
+            f'<pre><code>{esc(excerpt)}</code></pre>'
+            '</div>'
+        )
+
     def item_card(item: object, kind: str, duplicate_count: int = 1) -> str:
         name = (
             get(item, "qualified_name", "name", "label", "module")
@@ -2063,6 +2266,55 @@ def _render_three_layer_architecture(project: Project) -> str:
         description = (
             get(item, "description", "docstring", "summary", "explanation")
             or "No description was recorded by the scanner."
+        )
+        preview = source_preview(item)
+
+        # Give every architecture entry a useful expanded view. Keep this
+        # evidence-based: only render fields actually present on the scan model.
+        detail_rows: list[str] = []
+        line_start = get(item, "line_start", "start_line", "line", "lineno")
+        line_end = get(item, "line_end", "end_line")
+        if path:
+            location = path
+            if line_start:
+                location += f":{line_start}"
+                if line_end and line_end != line_start:
+                    location += f"–{line_end}"
+            detail_rows.append(
+                f'<div><dt>Source</dt><dd class="code">{esc(location)}</dd></div>'
+            )
+
+        parameters = get(item, "parameters", "params", "arguments")
+        return_type = get(item, "return_type", "returns")
+        class_name = get(item, "class_name", "parent_class", "owner")
+        methods = get(item, "methods")
+        language = get(item, "language")
+
+        if class_name:
+            detail_rows.append(
+                f'<div><dt>Class</dt><dd class="code">{esc(class_name)}</dd></div>'
+            )
+        if parameters:
+            detail_rows.append(
+                f'<div><dt>Parameters</dt><dd class="code">{esc(parameters)}</dd></div>'
+            )
+        if return_type:
+            detail_rows.append(
+                f'<div><dt>Returns</dt><dd class="code">{esc(return_type)}</dd></div>'
+            )
+        if methods:
+            detail_rows.append(
+                f'<div><dt>Methods</dt><dd class="code">{esc(methods)}</dd></div>'
+            )
+        if language:
+            detail_rows.append(
+                f'<div><dt>Language</dt><dd>{esc(language)}</dd></div>'
+            )
+
+        details = (
+            '<dl class="architecture-entity-facts">' + "".join(detail_rows) + "</dl>"
+            if detail_rows
+            else ""
         )
         extra = (
             f'<p class="architecture-match-note">{duplicate_count} matching scan records were grouped into this card.</p>'
@@ -2075,16 +2327,14 @@ def _render_three_layer_architecture(project: Project) -> str:
             f'<div class="architecture-item-kind-row"><span class="architecture-item-kind">{esc(kind)}</span></div>'
             '<div class="architecture-item-main-row">'
             f'<strong class="architecture-item-name">{esc(name)}</strong>'
-            '<span class="architecture-expand">View details →</span>'
+            '<span class="architecture-expand">Expand →</span>'
             "</div>"
             "</summary>"
             '<div class="architecture-item-details">'
-            f"<p>{esc(description)}</p>"
-            + (
-                f'<p class="architecture-path"><strong>File:</strong> {esc(path)}</p>'
-                if path
-                else ""
-            )
+            '<div class="architecture-expanded-heading">Expanded view</div>'
+            f'<p class="architecture-entity-description">{esc(description)}</p>'
+            + details
+            + preview
             + extra
             + "</div></details>"
         )
@@ -2322,6 +2572,11 @@ def _render_three_layer_architecture(project: Project) -> str:
         ".architecture-item-details{padding:.7rem .75rem .8rem;border-top:1px solid #222;"
         "color:var(--muted,#aaa);font-size:.78rem;line-height:1.5}"
         ".architecture-path{font-size:.72rem;overflow-wrap:anywhere}"
+        ".architecture-source-preview{margin-top:.65rem;border:1px solid #292929;border-radius:9px;overflow:hidden;background:#090909}"
+        ".architecture-source-label{display:flex;justify-content:space-between;gap:.75rem;padding:.38rem .55rem;border-bottom:1px solid #242424;color:#d4d0d2;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.045em}"
+        ".architecture-source-label span{color:#777;font-weight:500;text-transform:none;letter-spacing:0}"
+        ".architecture-source-preview pre{margin:0;padding:.6rem;max-height:15rem;overflow:auto;background:#090909}"
+        ".architecture-source-preview code{font-family:Consolas,\"SFMono-Regular\",monospace;font-size:.7rem;line-height:1.5;color:#ddd;white-space:pre;tab-size:4}"
         ".architecture-match-note{margin:.45rem 0 0;color:#7f7a7e;font-size:.68rem}"
         ".architecture-empty,.architecture-more{color:var(--muted,#aaa);font-size:.82rem}"
         ".architecture-subheading{margin:1.25rem 0 .75rem}"
