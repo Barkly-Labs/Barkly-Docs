@@ -172,7 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
 
         type=int,
 
-        default=DEFAULT_PREVIEW_PORT,
+        default=None,
 
         help="Local port used for the preview server.",
 
@@ -363,6 +363,7 @@ def build_preview_server(
 
     port: int = DEFAULT_PREVIEW_PORT,
 
+allow_port_fallback: bool = False,
 ) -> ThreadingHTTPServer:
 
     """Build a local HTTP server rooted at the generated documentation directory."""
@@ -397,6 +398,17 @@ def build_preview_server(
             self.send_header("Expires", "0")
             super().end_headers()
 
+        def do_GET(self) -> None:
+            resolved_file = Path(self.translate_path(self.path)).resolve()
+            if resolved_file.is_dir():
+                index_file = resolved_file / "index.html"
+                if index_file.is_file():
+                    resolved_file = index_file.resolve()
+            self.server.last_resolved_file = resolved_file
+            print(f"Served URL:      http://{self.headers.get('Host', '')}{self.path}")
+            print(f"Served file:     {resolved_file}")
+            super().do_GET()
+
         def log_message(self, format: str, *args) -> None:  # noqa: A003, ARG002
 
             return
@@ -404,21 +416,19 @@ def build_preview_server(
 
 
     try:
-
         server = ThreadingHTTPServer((host, port), QuietHandler)
-
     except OSError as exc:
+        if not allow_port_fallback:
+            raise RuntimeError(
+                f"Port {port} is unavailable on {host}. "
+                "Choose a different port with --port."
+            ) from exc
+        # An earlier Barkly preview may still own the default port. Bind this
+        # project's server to a fresh local port rather than reusing the stale URL.
+        server = ThreadingHTTPServer((host, 0), QuietHandler)
 
-        raise RuntimeError(
-
-            f"Port {port} is unavailable on {host}. "
-
-            "Choose a different port with --port."
-
-        ) from exc
-
-
-
+    server.document_root = Path(output_dir)
+    server.last_resolved_file = None
     return server
 
 
@@ -871,19 +881,15 @@ def main() -> int:
 
     try:
 
-        preview_url = f"http://{args.host}:{args.port}/"
-
-
-
+        requested_port = args.port if args.port is not None else DEFAULT_PREVIEW_PORT
         server = build_preview_server(
-
             output_dir,
-
             host=args.host,
-
-            port=args.port,
-
+            port=requested_port,
+            allow_port_fallback=args.port is None,
         )
+        actual_port = int(server.server_address[1])
+        preview_url = f"http://{args.host}:{actual_port}/"
 
 
 
@@ -894,10 +900,16 @@ def main() -> int:
         print("-" * 50)
 
         print(f"Documentation: {preview_url}")
-
-        print(f"Output:        {output_dir}")
-
-        print("Server:        Built-in HTML preview")
+        print(f"Source project: {Path(project.root).resolve()}")
+        print(f"Output:         {Path(output_dir).resolve()}")
+        print(f"Output file:    {(Path(output_dir) / 'index.html').resolve()}")
+        print(f"Server root:    {server.document_root}")
+        if actual_port != requested_port:
+            print(
+                f"Preview port:   {requested_port} was already in use; "
+                f"this project is served on {actual_port} instead."
+            )
+        print("Server:         Built-in HTML preview")
 
         print("Press Ctrl+C to stop the server.")
 
