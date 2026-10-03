@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from bs4 import BeautifulSoup
 
-from model.project import ClassNode, FunctionNode, MethodNode, ModuleNode, Project
+from model.project import ClassNode, FunctionNode, MethodNode, ModuleNode, Project, RelationshipNode
 from rendering.entities_page import render_entities_page
 from rendering.html import render_project_website
 
@@ -116,6 +116,64 @@ def test_large_collection_generation_is_linear_enough_for_static_page(tmp_path):
     assert page.count('class="entity-explorer-item entity-item"') == 2000
     assert elapsed < 3.0
 
+
+
+def test_entity_relationships_cover_source_target_names_and_empty_state(tmp_path):
+    project = _project(tmp_path)
+    project.relationships.extend([
+        RelationshipNode(source="helper", target="Widget", kind="calls", evidence="DETECTED"),
+        RelationshipNode(source="Widget", target="alpha.Widget.run", kind="calls", evidence="INFERRED"),
+    ])
+    soup = BeautifulSoup(render_entities_page(project), "html.parser")
+    helper = next(card for card in soup.select(".entity-explorer-item") if card.select_one(".entity-row-name").get_text(strip=True) == "helper")
+    run = next(card for card in soup.select(".entity-explorer-item") if card.select_one(".entity-row-name").get_text(strip=True) == "run")
+    alpha = next(card for card in soup.select(".entity-explorer-item") if card.select_one(".entity-row-name").get_text(strip=True) == "alpha")
+    assert "helper calls Widget DETECTED" in helper.select_one(".entity-related").get_text(" ", strip=True)
+    assert "Widget calls alpha.Widget.run INFERRED" in run.select_one(".entity-related").get_text(" ", strip=True)
+    assert alpha.select_one(".entity-no-relationships") is not None
+
+
+def test_entity_relationship_index_suppresses_duplicate_name_matches(tmp_path):
+    project = Project(name="Duplicates", root=str(tmp_path))
+    project.functions.append(FunctionNode(name="same", path="same.rb", metadata={"qualified_name": "same"}))
+    project.relationships.append(RelationshipNode(source="same", target="same", kind="calls", evidence="DETECTED"))
+    soup = BeautifulSoup(render_entities_page(project), "html.parser")
+    related = soup.select_one(".entity-related")
+    assert len(related.select("li")) == 1
+
+
+def test_entity_relationships_preserve_order_count_and_30_item_limit(tmp_path):
+    project = Project(name="Limit", root=str(tmp_path))
+    project.functions.append(FunctionNode(name="focus", path="focus.rb", metadata={"qualified_name": "Pkg.focus"}))
+    project.relationships.extend(
+        RelationshipNode(source="focus" if i % 2 == 0 else "Pkg.focus", target=f"target_{i}", kind="calls", evidence="DETECTED")
+        for i in range(35)
+    )
+    soup = BeautifulSoup(render_entities_page(project), "html.parser")
+    related = soup.select_one(".entity-related")
+    rows = related.select("li")
+    assert len(rows) == 30
+    assert "target_0" in rows[0].get_text()
+    assert "target_29" in rows[-1].get_text()
+    assert "Showing 30 of 35 relationships." in related.get_text(" ", strip=True)
+
+
+def test_entity_relationship_index_is_built_once_for_multiple_entities(tmp_path, monkeypatch):
+    import rendering.entities_page as entities_page
+
+    project = _project(tmp_path)
+    project.relationships.append(RelationshipNode(source="helper", target="Widget", kind="calls", evidence="DETECTED"))
+    original = entities_page._build_relationship_index
+    calls = []
+
+    def counted(current_project):
+        calls.append(current_project)
+        return original(current_project)
+
+    monkeypatch.setattr(entities_page, "_build_relationship_index", counted)
+    page = entities_page.render_entities_page(project)
+    assert page.count('class="entity-explorer-item entity-item"') == 5
+    assert calls == [project]
 
 def test_full_site_preserves_other_pages_and_relation_map(tmp_path):
     project = _project(tmp_path)

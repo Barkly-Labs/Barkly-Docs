@@ -151,26 +151,22 @@ def _members(item) -> str:
 
 
 def _build_relationship_index(project: Project) -> dict[str, list]:
-    """Index relationships by source and target for fast entity lookups."""
+    """Index relationships by endpoint, preserving original order."""
     index: dict[str, list] = {}
 
-    for relationship in project.relationships:
+    for position, relationship in enumerate(project.relationships):
         source = str(getattr(relationship, "source", "") or "")
         target = str(getattr(relationship, "target", "") or "")
 
         if source:
-            index.setdefault(source, []).append(relationship)
+            index.setdefault(source, []).append((position, relationship))
 
         if target and target != source:
-            index.setdefault(target, []).append(relationship)
+            index.setdefault(target, []).append((position, relationship))
 
     return index
 
-def _related_relationships(
-    project: Project,
-    item,
-    relationship_index: dict[str, list],
-) -> str:
+def _related_relationships(relationship_index, item) -> str:
     names = {
         str(value)
         for value in (
@@ -180,23 +176,31 @@ def _related_relationships(
         if value
     }
 
-    # Merge matches without showing the same relationship twice.
-    related = {}
+    indexed_matches = {}
     for name in names:
-        for relationship in relationship_index.get(name, ()):
-            related.setdefault(id(relationship), relationship)
+        for position, relationship in relationship_index.get(name, ()):
+            indexed_matches[position] = relationship
 
-    matches = []
-    total = len(related)
+    matches = [
+        indexed_matches[position]
+        for position in sorted(indexed_matches)
+    ]
 
-    for relationship in related.values():
+    if not matches:
+        return (
+            '<p class="muted entity-no-relationships">'
+            'No relationships recorded for this entity.</p>'
+        )
+
+    rows = []
+    for relationship in matches[:30]:
         source = str(getattr(relationship, "source", "") or "")
         target = str(getattr(relationship, "target", "") or "")
         evidence = str(
             getattr(relationship, "evidence", "UNKNOWN") or "UNKNOWN"
         )
 
-        matches.append(
+        rows.append(
             '<li>'
             f'<code>{_escape(source)}</code> '
             f'<span class="entity-relation-kind">'
@@ -207,24 +211,16 @@ def _related_relationships(
             '</li>'
         )
 
-    if not matches:
-        return (
-            '<p class="muted entity-no-relationships">'
-            'No relationships recorded for this entity.</p>'
-        )
-
     return (
         '<div class="entity-related">'
         '<div class="entity-detail-label">Relationships</div>'
-        '<ul>' + "".join(matches[:30]) + '</ul>'
+        '<ul>' + "".join(rows) + '</ul>'
         + (
-            f'<p class="muted">Showing 30 of {total} relationships.</p>'
-            if total > 30 else ""
+            f'<p class="muted">Showing 30 of {len(matches)} relationships.</p>'
+            if len(matches) > 30 else ""
         )
         + '</div>'
     )
-
-
 def _collect_entities(project: Project):
     collections = (
         "classes", "functions", "methods", "modules", "interfaces", "variables",
@@ -255,7 +251,12 @@ def _collect_entities(project: Project):
     )
 
 
-def _render_entity_card(project: Project, item, index: int) -> str:
+def _render_entity_card(
+    project: Project,
+    item,
+    index: int,
+    relationship_index: dict[str, list],
+) -> str:
     entity_id = _stable_entity_id(item, index)
     panel_id = entity_id + "-details"
     name = _entity_name(item)
@@ -321,7 +322,7 @@ def _render_entity_card(project: Project, item, index: int) -> str:
            else '<p class="muted">No description available yet.</p>')
         + '<dl class="entity-expanded-facts">' + "".join(facts) + '</dl>'
         + _members(item)
-        + _related_relationships(project, item)
+        + _related_relationships(relationship_index, item)
         + _source_excerpt(item)
         + '</div>'
         '</article>'
@@ -330,7 +331,12 @@ def _render_entity_card(project: Project, item, index: int) -> str:
 
 def _render_entity_explorer(project: Project) -> str:
     entities = _collect_entities(project)
-    cards = "".join(_render_entity_card(project, item, index) for index, item in enumerate(entities))
+    relationship_index = _build_relationship_index(project)
+
+    cards = "".join(
+        _render_entity_card(project, item, index, relationship_index)
+        for index, item in enumerate(entities)
+    )
     total = len(entities)
     if not cards:
         cards = '<div class="empty-state entity-explorer-initial-empty">No project entities were detected.</div>'

@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import html
 import json
+import os
 import re
 import shutil
+import sys
+import time
 from pathlib import Path
 from html.parser import HTMLParser
 
@@ -4438,6 +4441,13 @@ def _render_three_layer_architecture(project: Project) -> str:
 
 
 
+def _render_timing(stage: str, started_at: float) -> None:
+    """Emit opt-in renderer timings without changing generated output."""
+    if os.environ.get("BARKLY_RENDER_TIMINGS") == "1":
+        elapsed = time.perf_counter() - started_at
+        print(f"[barkly-render] {stage}: {elapsed:.3f}s", file=sys.stderr)
+
+
 def render_project_website(project: Project, output_dir: str | Path) -> list[Path]:
     # Page renderers live in separate modules so each page can evolve independently.
     # Imports are intentionally local: page modules reuse shared helpers from this
@@ -4448,25 +4458,38 @@ def render_project_website(project: Project, output_dir: str | Path) -> list[Pat
     from rendering.relation_map_page import render_relation_map_page
 
     project_obj = project
-    build_relation_graph(project_obj)
+    total_started = time.perf_counter()
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     assets_dir = output_path / "assets"
     assets_dir.mkdir(exist_ok=True)
+
+    stage_started = time.perf_counter()
     (assets_dir / "site.css").write_text(CSS, encoding="utf-8")
     (assets_dir / "relation-map.js").write_text(RELATION_MAP_JS, encoding="utf-8")
     _prepare_readme_assets(project_obj, output_path)
     _prepare_readme_title_image(project_obj, output_path)
+    _render_timing("assets", stage_started)
 
     index_path = output_path / "index.html"
     entities_path = output_path / "entities.html"
     relationships_path = output_path / "relationships.html"
     relation_map_path = output_path / "relation-map.html"
 
-    index_path.write_text(render_index(project_obj), encoding="utf-8")
-    entities_path.write_text(render_entities_page(project_obj), encoding="utf-8")
-    relationships_path.write_text(render_relationships_page(project_obj), encoding="utf-8")
-    relation_map_path.write_text(render_relation_map_page(project_obj), encoding="utf-8")
+    for stage, path, renderer in (
+        ("index", index_path, render_index),
+        ("entities", entities_path, render_entities_page),
+        ("relationships", relationships_path, render_relationships_page),
+        ("relation_map", relation_map_path, render_relation_map_page),
+    ):
+        stage_started = time.perf_counter()
+        rendered = renderer(project_obj)
+        render_finished = time.perf_counter()
+        path.write_text(rendered, encoding="utf-8")
+        _render_timing(f"{stage}.render", stage_started)
+        _render_timing(f"{stage}.write", render_finished)
+
+    _render_timing("total", total_started)
 
     return [
         index_path,
