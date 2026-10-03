@@ -311,3 +311,107 @@ Keep this unfamiliar nested section.
     assert "Primeros pasos" in node.headings
     assert node.metadata["overview"] == "A tool for mixed documentation styles."
     assert "installation" not in node.metadata["sections"]
+
+
+def test_cyn_x_style_readme_keeps_title_overview_and_full_document_separate(tmp_path):
+    source = """# CYN-X
+
+[![build](https://example.test/build.svg)](https://example.test/build)
+
+CYN-X turns local project evidence into reviewable technical documentation.
+
+---
+
+### Why CYN-X exists
+
+This heading is intentionally not a Barkly semantic alias.
+
+### Features
+
+- deterministic static analysis
+- source-backed documentation
+
+### Project tree
+
+```text
+cyn-x/
+├── src/
+│   └── scanner.py
+└── README.md
+```
+
+### Example
+
+```python
+print("do not execute me")
+```
+"""
+    readme_path = tmp_path / "README.md"
+    readme_path.write_text(source, encoding="utf-8")
+
+    project = _discover(tmp_path)
+    node = project.documentation[0]
+    assert node.title == "CYN-X"
+    assert node.documentation == source
+    assert node.metadata["overview"] == (
+        "CYN-X turns local project evidence into reviewable technical documentation."
+    )
+    assert "###" not in node.metadata["overview"]
+    assert "deterministic static analysis" not in node.metadata["overview"]
+    assert "scanner.py" not in node.metadata["overview"]
+
+    out = tmp_path / "site"
+    render_project_website(project, out)
+    soup = BeautifulSoup((out / "index.html").read_text(encoding="utf-8"), "html.parser")
+
+    hero = soup.select_one(".hero-main")
+    assert hero is not None
+    assert hero.find("h1").get_text(" ", strip=True) == "CYN-X"
+    hero_text = hero.get_text(" ", strip=True)
+    assert "CYN-X turns local project evidence into reviewable technical documentation." in hero_text
+    assert "Why CYN-X exists" not in hero_text
+    assert "deterministic static analysis" not in hero_text
+    assert "scanner.py" not in hero_text
+
+    panel = soup.select_one(".readme-panel")
+    assert panel is not None
+    content = panel.select_one(".readme-content")
+    assert content is not None
+    assert content.find("h1").get_text(" ", strip=True) == "CYN-X"
+    assert content.find("h3", string="Why CYN-X exists") is not None
+    assert content.find("h3", string="Project tree") is not None
+    assert "deterministic static analysis" in content.get_text(" ", strip=True)
+    assert "scanner.py" in content.find("pre").get_text()
+    assert 'print("do not execute me")' in content.get_text("\n", strip=True)
+
+
+def test_overview_never_falls_through_into_structure_when_intro_is_missing(tmp_path):
+    source = """# Structural Only
+
+[![status](https://example.test/status.svg)](https://example.test/status)
+
+---
+
+## Features
+
+- one
+- two
+
+```text
+not an overview
+```
+"""
+    (tmp_path / "README.md").write_text(source, encoding="utf-8")
+    project = _discover(tmp_path)
+    node = project.documentation[0]
+    assert node.metadata["overview"] == ""
+
+    out = tmp_path / "site"
+    render_project_website(project, out)
+    soup = BeautifulSoup((out / "index.html").read_text(encoding="utf-8"), "html.parser")
+    hero = soup.select_one(".hero-main")
+    assert hero is not None
+    hero_text = hero.get_text(" ", strip=True)
+    assert "- one" not in hero_text
+    assert "not an overview" not in hero_text
+    assert soup.select_one(".readme-content h2").get_text(" ", strip=True) == "Features"

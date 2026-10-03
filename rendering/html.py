@@ -1239,41 +1239,84 @@ def _escape(value: object) -> str:
 
 
 def _readme_title(project: Project) -> str:
-    """Use the README's first H1 as the human-facing project name when present."""
+    """Use an explicitly declared README title when the selected format provides one."""
     text = _read_readme(project)
-    if text:
-        for line in text.splitlines():
+    path = _readme_path(project)
+    fmt = _readme_format(path)
+    if not text:
+        return ""
+    lines = text.splitlines()
+    if fmt in {"markdown", "mdx"}:
+        for index, line in enumerate(lines):
             match = re.match(r"^\s*#\s+(.+?)\s*#*\s*$", line)
             if match:
-                title = re.sub(r"[`*_]", "", match.group(1)).strip()
-                if title:
-                    return title
+                return re.sub(r"[`*_]", "", match.group(1)).strip()
+            if index + 1 < len(lines) and line.strip() and re.match(r"^\s*=+\s*$", lines[index + 1]):
+                return line.strip()
+    elif fmt == "rst":
+        for index, line in enumerate(lines[:-1]):
+            if line.strip() and re.match(r"^\s*=+\s*$", lines[index + 1]):
+                return line.strip()
     return ""
-
 
 def _project_name(project: Project) -> str:
     return _readme_title(project) or project.name or "Project"
 
 
-def _readme_path(project: Project) -> Path | None:
-    """Find the project README without requiring an exact filename case."""
-    root = Path(project.root)
-    preferred = ["README.md", "README.markdown", "README"]
-    for name in preferred:
-        candidate = root / name
+_README_NAME_RE = re.compile(
+    r"^readme(?:[._-][^.]+)*(?:\.(?:md|markdown|mdown|mdx|rst|txt))?$",
+    re.IGNORECASE,
+)
+_README_EXTENSION_PRIORITY = {".md": 0, ".markdown": 1, ".mdown": 2, ".mdx": 3, ".rst": 4, ".txt": 5, "": 6}
+
+
+def _readme_candidates(project: Project) -> list[Path]:
+    """Return README candidates in deterministic project-documentation order."""
+    root = Path(project.root).resolve()
+    candidates: dict[str, Path] = {}
+
+    # Discovery preserves all README identities in the shared model. Use those
+    # records when available, while retaining direct filesystem compatibility
+    # for callers that render a Project without running discovery first.
+    for node in getattr(project, "documentation", []) or []:
+        if not bool((getattr(node, "metadata", {}) or {}).get("readme")):
+            continue
+        candidate = Path(str(getattr(node, "path", "")))
         if candidate.is_file():
-            return candidate
+            candidates[str(candidate.resolve())] = candidate.resolve()
+
+    ignored = {".git", "node_modules", "vendor", "vendors", "dist", "build", "target", "venv", ".venv", "site-packages", ".docs-check", ".barkly-docs-site"}
     try:
-        for candidate in root.iterdir():
-            if candidate.is_file() and candidate.name.lower() in {
-                "readme.md",
-                "readme.markdown",
-                "readme",
-            }:
-                return candidate
+        for candidate in root.rglob("*"):
+            if not candidate.is_file() or not _README_NAME_RE.match(candidate.name):
+                continue
+            try:
+                relative = candidate.relative_to(root)
+            except ValueError:
+                continue
+            if any(part.casefold() in ignored for part in relative.parts[:-1]):
+                continue
+            candidates[str(candidate.resolve())] = candidate.resolve()
     except OSError:
         pass
-    return None
+
+    def rank(path: Path) -> tuple[int, int, int, str]:
+        try:
+            relative = path.relative_to(root)
+            depth = len(relative.parts) - 1
+        except ValueError:
+            depth = 999
+        name = path.name.casefold()
+        exact = 0 if name in {"readme.md", "readme.markdown", "readme.mdown", "readme.mdx", "readme.rst", "readme.txt", "readme"} else 1
+        return (0 if depth == 0 else 1, exact, _README_EXTENSION_PRIORITY.get(path.suffix.casefold(), 99), path.as_posix().casefold())
+
+    return sorted(candidates.values(), key=rank)
+
+
+def _readme_path(project: Project) -> Path | None:
+    """Select the main README deterministically, preferring a root project README."""
+    candidates = _readme_candidates(project)
+    return candidates[0] if candidates else None
 
 
 def _read_readme(project: Project) -> str:
@@ -1285,6 +1328,16 @@ def _read_readme(project: Project) -> str:
     except OSError:
         return ""
 
+
+def _readme_format(path: Path | None) -> str:
+    suffix = path.suffix.casefold() if path is not None else ""
+    if suffix == ".rst":
+        return "rst"
+    if suffix == ".txt" or suffix == "":
+        return "text"
+    if suffix == ".mdx":
+        return "mdx"
+    return "markdown"
 
 def _markdown_inline(value: str) -> str:
     """Render common README Markdown inline syntax to safe HTML."""
@@ -1436,15 +1489,21 @@ def _normalize_readme_markdown(text: str) -> str:
     """Normalize common README transport/encoding artifacts before parsing."""
     text = text.replace("\ufeff", "")
     text = text.replace("\ufffd", "")
-    text = text.replace("\\r\\n", "\n").replace("\\n", "\n")
-    text = text.replace("\\t", "\t")
+    # Preserve literal backslash escapes from the repository. They may be part
+    # of code examples or prose and are not transport newlines. Only normalize
+    # actual newline encodings here.
     text = text.replace("\r\n", "\n").replace("\r", "\n")
 
-    # Some generated/transported READMEs arrive flattened into one line with
-    # Markdown section separators. Turn those separators back into real lines.
-    text = re.sub(r"\s+---\s+(?=#{1,6}\s+)", "\n\n", text)
-    text = re.sub(r"(?<!\n)\s+(#{1,6}\s+[^\n]+)", r"\n\n\1", text)
-    text = re.sub(r"\n{3,}", "\n\n", text)
+    # YAML-style front matter is metadata, not README prose. Keep the source
+    # untouched in DocumentationNode while omitting the envelope from HTML.
+    if text.startswith("---\n"):
+        match = re.match(r"^---\n.*?\n(?:---|\.\.)\n?", text, flags=re.DOTALL)
+        if match:
+            text = text[match.end():]
+
+    # Do not reconstruct line breaks from arbitrary inline Markdown. The reader
+    # preserves the repository source; rendering should consume that source
+    # rather than guessing that headings/separators were flattened in transit.
     return text.strip()
 
 
@@ -1507,13 +1566,36 @@ def _render_markdown_established(text: str) -> str | None:
     except Exception:
         pass
     rendered = parser.render(_normalize_readme_markdown(text))
-    return bleach.clean(
+    cleaned = bleach.clean(
         rendered,
         tags=_README_SAFE_TAGS,
         attributes=_README_SAFE_ATTRIBUTES,
         protocols=_README_SAFE_PROTOCOLS,
         strip=True,
     )
+    # Add stable local anchors to sanitized headings. IDs are generated only
+    # from rendered heading text, never copied from untrusted attributes.
+    used_ids: set[str] = set()
+    def heading_id(match: re.Match[str]) -> str:
+        level, inner = match.group(1), match.group(2)
+        plain = re.sub(r"<[^>]+>", "", html.unescape(inner))
+        base = re.sub(r"[^a-z0-9]+", "-", plain.casefold()).strip("-") or "section"
+        slug = base
+        counter = 2
+        while slug in used_ids:
+            slug = f"{base}-{counter}"
+            counter += 1
+        used_ids.add(slug)
+        return f'<h{level} id="{html.escape(slug, quote=True)}">{inner}</h{level}>'
+    cleaned = re.sub(r"<h([1-6])>(.*?)</h\1>", heading_id, cleaned, flags=re.DOTALL)
+    # Common task-list syntax remains inert and accessible: Barkly renders a
+    # disabled native checkbox and does not add repository-controlled scripts.
+    cleaned = re.sub(
+        r"<li>\[([ xX])\]\s*",
+        lambda m: '<li><input type="checkbox" disabled' + (' checked' if m.group(1).lower() == 'x' else '') + '> ',
+        cleaned,
+    )
+    return cleaned
 
 
 class _SafeReadmeHTMLParser(HTMLParser):
@@ -1797,7 +1879,34 @@ def _render_markdown(text: str) -> str:
 
 
 def _readme_sections(project: Project) -> dict[str, str]:
-    """Return README sections keyed by normalized heading name."""
+    """Return all recognized README sections without requiring a fixed outline."""
+    path = _readme_path(project)
+    if path is None:
+        return {}
+    resolved = str(path.resolve())
+    for node in getattr(project, "documentation", []) or []:
+        node_path = Path(str(getattr(node, "path", "")))
+        try:
+            matches = str(node_path.resolve()) == resolved
+        except OSError:
+            matches = str(node_path) == str(path)
+        if not matches:
+            continue
+        structure = (getattr(node, "metadata", {}) or {}).get("structure") or []
+        result: dict[str, str] = {}
+        for section in structure:
+            title = str(section.get("title", "")).strip()
+            body = str(section.get("body", "")).strip()
+            if title and body:
+                key = re.sub(r"[^a-z0-9]+", " ", title.casefold()).strip()
+                if key and key not in result:
+                    result[key] = body
+        if result:
+            return result
+
+    # Compatibility for Project objects rendered without discovery.  This is
+    # presentation-only structure detection; semantic interpretation lives in
+    # the README reader.
     text = _read_readme(project)
     if not text:
         return {}
@@ -1806,19 +1915,31 @@ def _readme_sections(project: Project) -> dict[str, str]:
     for line in text.splitlines():
         match = re.match(r"^\s*#{1,6}\s+(.+?)\s*#*\s*$", line)
         if match:
-            current = re.sub(r"[^a-z0-9]+", " ", match.group(1).lower()).strip()
+            current = re.sub(r"[^a-z0-9]+", " ", match.group(1).casefold()).strip()
             sections.setdefault(current, [])
         else:
             sections.setdefault(current, []).append(line)
-    return {
-        key: "\n".join(value).strip()
-        for key, value in sections.items()
-        if "\n".join(value).strip()
-    }
+    return {key: "\n".join(value).strip() for key, value in sections.items() if "\n".join(value).strip()}
 
 
 def _project_description(project: Project) -> str:
-    """Use the README lead as the short, human-facing project description."""
+    """Use README-declared prose when available, otherwise preserve existing fallback."""
+    path = _readme_path(project)
+    if path is not None:
+        resolved = str(path.resolve())
+        for node in getattr(project, "documentation", []) or []:
+            try:
+                matches = str(Path(str(getattr(node, "path", ""))).resolve()) == resolved
+            except OSError:
+                matches = str(getattr(node, "path", "")) == str(path)
+            if not matches:
+                continue
+            overview = str((getattr(node, "metadata", {}) or {}).get("overview") or "").strip()
+            if overview:
+                match = re.search(r"^(.+?[.!?](?:\s|$))", overview)
+                return (match.group(1).strip() if match else overview).strip()
+
+    # Compatibility for callers that render a bare Project without discovery.
     text = _read_readme(project)
     if text:
         lines = text.replace("\r\n", "\n").split("\n")
@@ -1833,27 +1954,27 @@ def _project_description(project: Project) -> str:
                 if lead:
                     break
                 continue
-            if stripped.startswith("```") or stripped.startswith(
-                (">", "- ", "* ", "+ ")
-            ) or re.match(r"^</?[A-Za-z][^>]*>", stripped):
+            if (
+                stripped.startswith(("```", "~~~", ">", "- ", "* ", "+ ", "|"))
+                or re.match(r"^\d+[.)]\s+", stripped)
+                or re.match(r"^([-*_])(?:\s*\1){2,}$", stripped)
+            ):
+                break
+            if re.match(r"^</?[A-Za-z][^>]*>", stripped):
                 if lead:
                     break
                 continue
-            # README badges and image-only lines are media, not project prose.
-            # Rendering them as the lead escapes valid Markdown and duplicates the
-            # same content that is correctly rendered in the README body below.
             if re.match(r"^\s*(?:\[)?!\[", stripped):
                 continue
             lead.append(re.sub(r"[`*_>#]", "", stripped))
-            if len(" ".join(lead)) >= 220:
+            if len(" ".join(lead)) >= 360:
                 break
         if lead:
-            # Small overview cards should stay compact: use only the first
-            # complete sentence from the README lead. The full README remains
-            # available in the dedicated README section below.
-            text = " ".join(lead).strip()
-            match = re.search(r"^(.+?[.!?](?:\s|$))", text)
-            return (match.group(1).strip() if match else text).strip()
+            prose = " ".join(lead).strip()
+            if len(prose) > 360:
+                prose = prose[:361].rsplit(" ", 1)[0].rstrip(" ,;:-") + "…"
+            match = re.search(r"^(.+?[.!?](?:\s|$))", prose)
+            return (match.group(1).strip() if match else prose).strip()
     description = project.metadata.get("description")
     if description:
         return str(description)
@@ -2206,28 +2327,49 @@ def _render_readme_title_image(project: Project) -> str:
         '</div>'
     )
 
+def _render_readme_text(project: Project, text: str) -> str:
+    """Render the selected README according to its real source format."""
+    fmt = _readme_format(_readme_path(project))
+    if fmt in {"markdown", "mdx"}:
+        rendered = _render_markdown_established(text)
+        return rendered if rendered is not None else _render_markdown(text)
+    if fmt == "rst":
+        # reStructuredText is intentionally not passed through the Markdown
+        # parser. Preserve it readably and safely without adding a runtime
+        # dependency or executing directives from an untrusted repository.
+        return '<pre class="readme-plain readme-rst">' + html.escape(text, quote=False) + '</pre>'
+    return '<pre class="readme-plain">' + html.escape(text, quote=False) + '</pre>'
+
+
+def _render_readme_sources(project: Project) -> str:
+    candidates = _readme_candidates(project)
+    if not candidates:
+        return ""
+    root = Path(project.root).resolve()
+    items: list[str] = []
+    for index, path in enumerate(candidates):
+        try:
+            label = path.relative_to(root).as_posix()
+        except ValueError:
+            label = path.name
+        role = "Primary README" if index == 0 else "Additional README"
+        items.append(f'<li><strong>{_escape(role)}:</strong> <span class="code">{_escape(label)}</span></li>')
+    return '<div class="readme-sources"><h3>README sources</h3><ul>' + "".join(items) + '</ul></div>'
+
+
 def _render_readme(project: Project) -> str:
     """Render README content as a calm, structured, human-readable document."""
     text = _read_readme(project)
     if not text:
         if _readme_path(project) is None:
             return '<div class="empty-state">No README was found in the project root.</div>'
-        return '<div class="empty-state">README exists but could not be read.</div>'
+        return '<div class="empty-state">README exists but is empty or could not be read.</div>'
 
-    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     title = _readme_title(project)
-    body_lines: list[str] = []
-    skipped_title = False
-    for line in lines:
-        if not skipped_title and re.match(r"^\s*#\s+", line):
-            skipped_title = True
-            continue
-        body_lines.append(line)
-
-    readme_body = _rewrite_readme_asset_urls(project, "\n".join(body_lines))
-    rendered = _render_markdown_established(readme_body)
-    if rendered is None:
-        rendered = _render_markdown(readme_body)
+    # Render the preserved source document. The panel header is navigation/UI;
+    # it must not consume or rewrite the README's own H1 or document structure.
+    readme_body = _rewrite_readme_asset_urls(project, text)
+    rendered = _render_readme_text(project, readme_body)
     if not rendered.strip():
         return '<div class="empty-state">README is present but contains no readable content.</div>'
 
@@ -2239,7 +2381,8 @@ def _render_readme(project: Project) -> str:
         f'<p class="readme-lead">{_escape(_project_description(project))}</p>'
         "</header>"
         f'<div class="readme-content">{rendered}</div>'
-        "</article>"
+        + _render_readme_sources(project)
+        + "</article>"
     )
 
 
