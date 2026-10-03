@@ -148,7 +148,29 @@ def _members(item) -> str:
     return "".join(groups)
 
 
-def _related_relationships(project: Project, item) -> str:
+
+
+def _build_relationship_index(project: Project) -> dict[str, list]:
+    """Index relationships by source and target for fast entity lookups."""
+    index: dict[str, list] = {}
+
+    for relationship in project.relationships:
+        source = str(getattr(relationship, "source", "") or "")
+        target = str(getattr(relationship, "target", "") or "")
+
+        if source:
+            index.setdefault(source, []).append(relationship)
+
+        if target and target != source:
+            index.setdefault(target, []).append(relationship)
+
+    return index
+
+def _related_relationships(
+    project: Project,
+    item,
+    relationship_index: dict[str, list],
+) -> str:
     names = {
         str(value)
         for value in (
@@ -157,28 +179,48 @@ def _related_relationships(project: Project, item) -> str:
         )
         if value
     }
+
+    # Merge matches without showing the same relationship twice.
+    related = {}
+    for name in names:
+        for relationship in relationship_index.get(name, ()):
+            related.setdefault(id(relationship), relationship)
+
     matches = []
-    for relationship in project.relationships:
+    total = len(related)
+
+    for relationship in related.values():
         source = str(getattr(relationship, "source", "") or "")
         target = str(getattr(relationship, "target", "") or "")
-        if source not in names and target not in names:
-            continue
-        evidence = str(getattr(relationship, "evidence", "UNKNOWN") or "UNKNOWN")
+        evidence = str(
+            getattr(relationship, "evidence", "UNKNOWN") or "UNKNOWN"
+        )
+
         matches.append(
             '<li>'
             f'<code>{_escape(source)}</code> '
-            f'<span class="entity-relation-kind">{_escape(str(getattr(relationship, "kind", "related")))}</span> '
+            f'<span class="entity-relation-kind">'
+            f'{_escape(str(getattr(relationship, "kind", "related")))}</span> '
             f'<code>{_escape(target)}</code> '
-            f'<span class="badge {evidence.lower()}">{_escape(evidence)}</span>'
+            f'<span class="badge {evidence.lower()}">'
+            f'{_escape(evidence)}</span>'
             '</li>'
         )
+
     if not matches:
-        return '<p class="muted entity-no-relationships">No relationships recorded for this entity.</p>'
+        return (
+            '<p class="muted entity-no-relationships">'
+            'No relationships recorded for this entity.</p>'
+        )
+
     return (
         '<div class="entity-related">'
         '<div class="entity-detail-label">Relationships</div>'
         '<ul>' + "".join(matches[:30]) + '</ul>'
-        + (f'<p class="muted">Showing 30 of {len(matches)} relationships.</p>' if len(matches) > 30 else "")
+        + (
+            f'<p class="muted">Showing 30 of {total} relationships.</p>'
+            if total > 30 else ""
+        )
         + '</div>'
     )
 
