@@ -558,3 +558,120 @@ def test_readme_utf8_bom_and_invalid_utf8_have_explicit_non_replacement_decoding
     assert "Cafeé documentation." in node.documentation
     assert "\ufffd" not in node.documentation
     assert node.metadata["source_encoding"] == "latin-1-fallback"
+
+
+def test_extensionless_readme_markdown_is_rendered_from_detected_model_format(tmp_path):
+    source = """# CYN-X 🚀
+
+CYN-X turns local evidence into reviewable documentation — safely.
+
+---
+
+### Capabilities
+
+- first
+  - nested
+- second
+
+> Keep source evidence visible.
+
+```text
+src/
+  app.py
+```
+
+| Item | State |
+| --- | --- |
+| Parser | ready |
+
+**Bold**, *italic*, and `inline` with [docs](https://example.com/docs).
+"""
+    (tmp_path / "README").write_text(source, encoding="utf-8")
+    project = _discover(tmp_path)
+    node = project.documentation[0]
+    assert node.metadata["format"] == "markdown"
+
+    out = tmp_path / "site"
+    render_project_website(project, out)
+    soup = BeautifulSoup((out / "index.html").read_text(encoding="utf-8"), "html.parser")
+    readme = soup.select_one(".readme-panel .readme-content")
+    assert readme is not None
+    assert readme.find("h1", string=lambda s: s and "CYN-X" in s)
+    assert readme.find("h3", string="Capabilities")
+    assert readme.find("hr")
+    assert readme.find("ul") and readme.find("li")
+    assert readme.find("blockquote")
+    code = readme.select_one("pre code")
+    assert code and "src/" in code.get_text()
+    assert readme.find("table") and readme.find("thead") and readme.find("tbody")
+    assert readme.find("strong", string="Bold")
+    assert readme.find("em", string="italic")
+    assert readme.find("code", string="inline")
+    assert readme.find("a", href="https://example.com/docs")
+    assert "🚀" in readme.get_text()
+    assert "—" in readme.get_text()
+    assert "### Capabilities" not in readme.get_text()
+
+
+def test_rendering_uses_model_format_instead_of_reinferring_from_filename(tmp_path):
+    (tmp_path / "README").write_text("# Title\n\n- item\n", encoding="utf-8")
+    project = _discover(tmp_path)
+    assert project.documentation[0].metadata["format"] == "markdown"
+    out = tmp_path / "site"
+    render_project_website(project, out)
+    soup = BeautifulSoup((out / "index.html").read_text(encoding="utf-8"), "html.parser")
+    readme = soup.select_one(".readme-panel .readme-content")
+    assert readme.find("h1", string="Title") is not None
+    assert readme.find("ul") is not None
+
+
+def test_utf16le_bom_readme_survives_real_pipeline_as_structured_html(tmp_path):
+    source = """# CYN-X 🐾\n\nCYN-X preserves architecture evidence — without flattening docs.\n\n---\n\n## Architecture\n\n- scanner\n  - reader\n- renderer\n\n> Evidence stays visible.\n\n```text\nsrc/\n  app.py\n```\n\n| Layer | State |\n| --- | --- |\n| Reader | ready |\n"""
+    (tmp_path / "README.md").write_bytes(b"\xff\xfe" + source.encode("utf-16-le"))
+
+    project = _discover(tmp_path)
+    node = project.documentation[0]
+    assert node.documentation == source
+    assert node.metadata["source_encoding"] == "utf-16-le-bom"
+    assert "ÿþ" not in node.documentation
+    assert "🐾" in node.documentation
+
+    out = tmp_path / "site"
+    render_project_website(project, out)
+    generated = (out / "index.html").read_text(encoding="utf-8")
+    soup = BeautifulSoup(generated, "html.parser")
+    readme = soup.select_one(".readme-panel .readme-content")
+    hero = soup.select_one(".hero-main")
+    assert readme is not None and hero is not None
+    assert readme.find("h1", string=lambda s: s and "CYN-X" in s) is not None
+    assert readme.find("h2", string="Architecture") is not None
+    assert readme.find("ul") is not None
+    assert readme.find("blockquote") is not None
+    assert readme.select_one("pre code") is not None
+    assert readme.find("table") is not None
+    assert "🐾" in readme.get_text(" ", strip=True)
+    assert "ÿþ" not in generated
+    assert "Ø" not in generated
+    hero_text = hero.get_text(" ", strip=True)
+    assert "architecture evidence" in hero_text
+    assert "Architecture" not in hero_text
+    assert "src/" not in hero_text
+
+
+def test_utf16be_bom_readme_is_decoded_before_markdown_interpretation(tmp_path):
+    source = "# Unicode Demo ✨\n\nReadable punctuation — café.\n\n## Details\n\n- one\n"
+    (tmp_path / "README.md").write_bytes(b"\xfe\xff" + source.encode("utf-16-be"))
+    project = _discover(tmp_path)
+    node = project.documentation[0]
+    assert node.documentation == source
+    assert node.metadata["source_encoding"] == "utf-16-be-bom"
+
+    out = tmp_path / "site"
+    render_project_website(project, out)
+    soup = BeautifulSoup((out / "index.html").read_text(encoding="utf-8"), "html.parser")
+    readme = soup.select_one(".readme-panel .readme-content")
+    assert readme.find("h1", string=lambda s: s and "Unicode Demo" in s) is not None
+    assert readme.find("h2", string="Details") is not None
+    assert readme.find("ul") is not None
+    assert "✨" in readme.get_text()
+    assert "café" in readme.get_text()

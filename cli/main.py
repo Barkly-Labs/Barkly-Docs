@@ -46,6 +46,8 @@ from readers.java import JavaReader
 
 from readers.json import JSONReader
 
+from readers.markdown import MarkdownReader
+
 from rendering.html import render_project_website
 
 
@@ -556,6 +558,8 @@ def main() -> int:
         JavaReader(),
 
         JSONReader(),
+
+        MarkdownReader(),
 
     ]
 

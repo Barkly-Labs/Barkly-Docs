@@ -19,6 +19,7 @@ except ImportError:  # Safe fallback uses Barkly's existing escaping renderer.
 
 from analysis.graph import build_relation_graph
 from model.project import Project
+from readers.base import decode_document_bytes
 
 CSS = """
 :root {
@@ -1352,7 +1353,8 @@ def _read_readme(project: Project) -> str:
         if preserved is not None:
             return str(preserved)
     try:
-        return path.read_text(encoding="utf-8", errors="replace")
+        decoded, _encoding = decode_document_bytes(path.read_bytes())
+        return decoded
     except OSError:
         return ""
 
@@ -1361,8 +1363,10 @@ def _readme_format(path: Path | None) -> str:
     suffix = path.suffix.casefold() if path is not None else ""
     if suffix == ".rst":
         return "rst"
-    if suffix == ".txt" or suffix == "":
+    if suffix == ".txt":
         return "text"
+    if suffix == "":
+        return "markdown"
     if suffix == ".mdx":
         return "mdx"
     return "markdown"
@@ -1516,7 +1520,6 @@ def _markdown_inline(value: str) -> str:
 def _normalize_readme_markdown(text: str) -> str:
     """Normalize common README transport/encoding artifacts before parsing."""
     text = text.replace("\ufeff", "")
-    text = text.replace("\ufffd", "")
     # Preserve literal backslash escapes from the repository. They may be part
     # of code examples or prose and are not transport newlines. Only normalize
     # actual newline encodings here.
@@ -2357,8 +2360,11 @@ def _render_readme_title_image(project: Project) -> str:
     )
 
 def _render_readme_text(project: Project, text: str) -> str:
-    """Render the selected README according to its real source format."""
-    fmt = _readme_format(_readme_path(project))
+    """Render the selected README according to the intake-detected format."""
+    path = _readme_path(project)
+    node = _selected_readme_node(project, path)
+    metadata = (getattr(node, "metadata", {}) or {}) if node is not None else {}
+    fmt = str(metadata.get("format") or _readme_format(path)).casefold()
     if fmt in {"markdown", "mdx"}:
         rendered = _render_markdown_established(text)
         return rendered if rendered is not None else _render_markdown(text)
