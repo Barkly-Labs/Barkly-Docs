@@ -60,7 +60,7 @@ class RubyReader(LanguageReader):
         ".gemspec",
     )
 
-    version = "0.3.0"
+    version = "0.4.0"
 
     manifest_names = ("Gemfile", "Gemfile.lock")
 
@@ -88,6 +88,8 @@ class RubyReader(LanguageReader):
         """,
         re.VERBOSE,
     )
+
+    _SINGLETON_CLASS_RE = re.compile(r"^\s*class\s*<<\s*self\s*$")
 
     _MODULE_RE = re.compile(
         r"""
@@ -139,7 +141,11 @@ class RubyReader(LanguageReader):
             |\[\]=|\[\]
             |\+@|-@|~
         )
-        (?P<params>\s*\(.*\))?
+        (?P<params>
+            \s*\(.*\)
+            |
+            \s+(?!=).+
+        )?
         \s*
         $
         """,
@@ -217,6 +223,18 @@ class RubyReader(LanguageReader):
         """,
         re.VERBOSE,
     )
+
+    _COMMENT_RE = re.compile(r"^\s*#(?![!])\s?(?P<text>.*)$")
+    _YARD_PARAM_RE = re.compile(
+        r"^@param\s+(?P<name>[^\s]+)(?:\s+\[(?P<types>[^]]+)\])?\s*(?P<description>.*)$"
+    )
+    _YARD_RETURN_RE = re.compile(
+        r"^@return(?:\s+\[(?P<types>[^]]+)\])?\s*(?P<description>.*)$"
+    )
+    _YARD_RAISE_RE = re.compile(
+        r"^@raise(?:\s+\[(?P<types>[^]]+)\])?\s*(?P<description>.*)$"
+    )
+    _YARD_DEPRECATED_RE = re.compile(r"^@deprecated(?:\s+(?P<description>.*))?$")
 
     # Ruby keywords which introduce nested structures that
     # normally terminate with `end`.
@@ -360,10 +378,51 @@ class RubyReader(LanguageReader):
                         "line_start": structure["line_start"],
                         "line_end": structure["line_end"],
                         "parent": structure.get("parent"),
+                        **self._documentation_metadata(structure.get("documentation_details")),
                     },
                 )
 
                 project.add_module(node)
+
+                # Ruby modules can define instance/singleton methods just as
+                # classes do. Keep them in the shared MethodNode model and
+                # preserve the owning namespace as the qualified owner.
+                module_methods = self._extract_methods(
+                    structure["body"],
+                    structure["line_start"],
+                    name,
+                )
+                for method in module_methods:
+                    method_node = MethodNode(
+                        name=method["name"],
+                        path=str(path),
+                        language=self.language,
+                        parameters=self._parse_parameters(method.get("params", "")),
+                        documentation=method.get("documentation"),
+                        line_start=method["line_start"],
+                        line_end=method["line_end"],
+                        class_name=name,
+                        metadata={
+                            "ruby_kind": "module_method",
+                            "visibility": method.get("visibility", "public"),
+                            "singleton": method.get("singleton", False),
+                            "receiver": method.get("receiver"),
+                            "owner_kind": "module",
+                            "qualified_name": self._qualified_method_name(
+                                structure, method["name"]
+                            ),
+                            **self._documentation_metadata(method.get("documentation_details")),
+                        },
+                    )
+                    project.add_method(method_node)
+                    project.add_relationship(
+                        RelationshipNode(
+                            source=name,
+                            target=method["name"],
+                            kind="contains",
+                            source_file=str(path),
+                        )
+                    )
 
             # ------------------------------------------------
             # CLASSES
@@ -374,7 +433,7 @@ class RubyReader(LanguageReader):
 
                 methods = self._extract_methods(
                     structure["body"],
-                    structure["body_start"],
+                    structure["line_start"],
                     class_name,
                 )
 
@@ -402,6 +461,7 @@ class RubyReader(LanguageReader):
                         "includes": includes,
                         "extends": extends,
                         "parent": structure.get("parent"),
+                        **self._documentation_metadata(structure.get("documentation_details")),
                     },
                 )
 
@@ -477,6 +537,11 @@ class RubyReader(LanguageReader):
                                 False,
                             ),
                             "receiver": method.get("receiver"),
+                            "owner_kind": "class",
+                            "qualified_name": self._qualified_method_name(
+                                structure, method["name"]
+                            ),
+                            **self._documentation_metadata(method.get("documentation_details")),
                         },
                     )
 
@@ -516,6 +581,7 @@ class RubyReader(LanguageReader):
                             "singleton",
                             False,
                         ),
+                        **self._documentation_metadata(function.get("documentation_details")),
                     },
                 )
 
@@ -741,10 +807,8 @@ class RubyReader(LanguageReader):
                     "body_start": line_end_offset,
                     "body": "",
                     "parent": self._nearest_namespace(stack),
-                    "documentation": self._documentation_before(
-                        lines,
-                        index,
-                    ),
+                    "documentation": self._documentation_before(lines, index),
+                    "documentation_details": self._documentation_details_before(lines, index),
                 }
 
                 stack.append(
@@ -776,10 +840,8 @@ class RubyReader(LanguageReader):
                     "body_start": line_end_offset,
                     "body": "",
                     "parent": self._nearest_namespace(stack),
-                    "documentation": self._documentation_before(
-                        lines,
-                        index,
-                    ),
+                    "documentation": self._documentation_before(lines, index),
+                    "documentation_details": self._documentation_details_before(lines, index),
                 }
 
                 stack.append(
@@ -919,6 +981,9 @@ class RubyReader(LanguageReader):
         if self._METHOD_RE.match(stripped):
             return True
 
+        if self._SINGLETON_CLASS_RE.match(stripped):
+            return True
+
         if self._CLASS_RE.match(stripped):
             return True
 
@@ -946,6 +1011,15 @@ class RubyReader(LanguageReader):
         """
         Determine the kind of a generic Ruby nesting opener.
         """
+
+        if self._SINGLETON_CLASS_RE.match(stripped):
+            return "singleton_class"
+
+        if self._CLASS_RE.match(stripped):
+            return "class"
+
+        if self._MODULE_RE.match(stripped):
+            return "module"
 
         if re.match(r"^if\b", stripped):
             return "if"
@@ -984,14 +1058,21 @@ class RubyReader(LanguageReader):
         Return the nearest class/module namespace.
         """
 
-        for entry in reversed(stack):
-            if entry["kind"] in {
-                "class",
-                "module",
-            }:
-                return entry["structure"]["name"]
+        names = [
+            entry["structure"]["name"]
+            for entry in stack
+            if entry["kind"] in {"class", "module"}
+        ]
+        if not names:
+            return None
 
-        return None
+        qualified = names[0]
+        for name in names[1:]:
+            if name.startswith(f"{qualified}::"):
+                qualified = name
+            else:
+                qualified = f"{qualified}::{name}"
+        return qualified
 
     # ========================================================
     # METHODS
@@ -1000,7 +1081,7 @@ class RubyReader(LanguageReader):
     def _extract_methods(
         self,
         body: str,
-        body_start_offset: int,
+        body_start_line: int,
         class_name: str,
     ) -> list[dict[str, Any]]:
         """
@@ -1020,7 +1101,7 @@ class RubyReader(LanguageReader):
 
         offsets: list[int] = []
 
-        offset = body_start_offset
+        offset = 0
 
         for line in lines:
             offsets.append(offset)
@@ -1047,29 +1128,35 @@ class RubyReader(LanguageReader):
             method_match = self._METHOD_RE.match(stripped)
 
             if method_match:
-                stack.append(
-                    {
-                        "kind": "def",
-                        "method": {
-                            "name": method_match.group("name"),
-                            "params": (method_match.group("params") or ""),
-                            "receiver": (method_match.group("receiver")),
-                            "singleton": bool(method_match.group("receiver")),
-                            "line_start": self._line_number_from_offset(
-                                body,
-                                offsets[index],
-                            ),
-                            "line_end": None,
-                            "visibility": visibility,
-                            "documentation": self._documentation_before(
-                                lines,
-                                index,
-                            ),
-                            "class_name": class_name,
-                        },
-                    }
+                nested_owner = any(
+                    entry.get("kind") in {"class", "module"}
+                    for entry in stack
                 )
-
+                singleton_scope = any(
+                    entry.get("kind") == "singleton_class" for entry in stack
+                )
+                entry: dict[str, Any] = {"kind": "def"}
+                if not nested_owner:
+                    receiver = method_match.group("receiver")
+                    details = self._documentation_details_before(lines, index)
+                    if details:
+                        details = dict(details)
+                        details["line_start"] += body_start_line
+                        details["line_end"] += body_start_line
+                    entry["method"] = {
+                        "name": method_match.group("name"),
+                        "params": (method_match.group("params") or ""),
+                        "receiver": receiver or ("self" if singleton_scope else None),
+                        "singleton": bool(receiver) or singleton_scope,
+                        "line_start": body_start_line
+                        + self._line_number_from_offset(body, offsets[index]),
+                        "line_end": None,
+                        "visibility": visibility,
+                        "documentation": details["text"] if details else None,
+                        "documentation_details": details,
+                        "class_name": class_name,
+                    }
+                stack.append(entry)
                 continue
 
             if self._opens_end_structure(stripped):
@@ -1087,12 +1174,12 @@ class RubyReader(LanguageReader):
 
                 entry = stack.pop()
 
-                if entry["kind"] == "def":
+                if entry["kind"] == "def" and "method" in entry:
                     method = entry["method"]
 
-                    method["line_end"] = self._line_number_from_offset(
+                    method["line_end"] = body_start_line + self._line_number_from_offset(
                         body,
-                        offsets[index] + len(raw_line),
+                        offsets[index],
                     )
 
                     methods.append(method)
@@ -1101,15 +1188,12 @@ class RubyReader(LanguageReader):
         while stack:
             entry = stack.pop()
 
-            if entry["kind"] != "def":
+            if entry["kind"] != "def" or "method" not in entry:
                 continue
 
             method = entry["method"]
 
-            method["line_end"] = self._line_number_from_offset(
-                body,
-                len(body),
-            )
+            method["line_end"] = body_start_line + len(lines)
 
             methods.append(method)
 
@@ -1170,6 +1254,7 @@ class RubyReader(LanguageReader):
                     in {
                         "class",
                         "module",
+                        "singleton_class",
                     }
                     for item in stack
                 ):
@@ -1184,10 +1269,8 @@ class RubyReader(LanguageReader):
                             "line_start": index + 1,
                             "line_end": None,
                             "visibility": visibility,
-                            "documentation": self._documentation_before(
-                                lines,
-                                index,
-                            ),
+                            "documentation": self._documentation_before(lines, index),
+                            "documentation_details": self._documentation_details_before(lines, index),
                         }
                     )
 
@@ -1804,68 +1887,65 @@ class RubyReader(LanguageReader):
         path: Path,
         project: Project,
     ) -> None:
-        """
-        Extract Ruby documentation comments.
-        """
+        """Extract file-level Ruby documentation when it is unambiguous."""
 
         lines = source.splitlines()
+        if not lines:
+            return
 
-        current: list[str] = []
-
+        docs: list[str] = []
+        raw: list[str] = []
         start_line: int | None = None
+        cursor = 0
 
-        for index, line in enumerate(
-            lines,
-            start=1,
-        ):
-            match = self._RUBYDOC_RE.match(line)
-
-            if match:
-                if start_line is None:
-                    start_line = index
-
-                current.append(match.group("text").strip())
-
+        # Skip a shebang and Ruby magic comments; these are directives, not docs.
+        while cursor < len(lines):
+            stripped = lines[cursor].strip()
+            if stripped.startswith("#!") or re.match(
+                r"^#\s*(?:frozen_string_literal|encoding|coding):", stripped
+            ):
+                cursor += 1
                 continue
+            break
 
-            if current:
-                text = "\n".join(current).strip()
+        while cursor < len(lines):
+            line = lines[cursor]
+            match = self._COMMENT_RE.match(line)
+            if not match:
+                break
+            if start_line is None:
+                start_line = cursor + 1
+            raw.append(line)
+            docs.append(match.group("text").rstrip())
+            cursor += 1
 
-                if text:
-                    project.add_documentation(
-                        DocumentationNode(
-                            title=self._documentation_title(text),
-                            path=str(path),
-                            kind="ruby_comment",
-                            headings=[self._documentation_title(text)],
-                            metadata={
-                                "line_start": start_line,
-                                "line_end": index - 1,
-                                "language": self.language,
-                            },
-                        )
-                    )
+        # A leading comment directly attached to the first declaration is that
+        # declaration's documentation. A blank separator makes it file-level.
+        if not docs or cursor >= len(lines) or lines[cursor].strip():
+            return
 
-                current = []
-                start_line = None
-
-        if current:
-            text = "\n".join(current).strip()
-
-            if text:
-                project.add_documentation(
-                    DocumentationNode(
-                        title=self._documentation_title(text),
-                        path=str(path),
-                        kind="ruby_comment",
-                        headings=[self._documentation_title(text)],
-                        metadata={
-                            "line_start": start_line,
-                            "line_end": len(lines),
-                            "language": self.language,
-                        },
-                    )
-                )
+        text = "\n".join(docs).strip()
+        if not text:
+            return
+        yard = self._parse_yard_tags(text)
+        project.add_documentation(
+            DocumentationNode(
+                title=self._documentation_title(text),
+                path=str(path),
+                kind="ruby_file_documentation",
+                headings=[self._documentation_title(text)],
+                documentation=text,
+                metadata={
+                    "line_start": start_line,
+                    "line_end": cursor,
+                    "language": self.language,
+                    "scope": "file",
+                    "raw_text": "\n".join(raw),
+                    "yard": yard,
+                    "evidence": "DECLARED",
+                },
+            )
+        )
 
     # ========================================================
     # HELPERS
@@ -1880,6 +1960,19 @@ class RubyReader(LanguageReader):
         """
 
         return path.stem
+
+    def _qualified_method_name(
+        self,
+        structure: dict[str, Any],
+        method_name: str,
+    ) -> str:
+        """Return a stable Ruby namespace-qualified method identity."""
+
+        owner = structure["name"]
+        parent = structure.get("parent")
+        if parent and "::" not in owner:
+            owner = f"{parent}::{owner}"
+        return f"{owner}.{method_name}"
 
     def _class_bases(
         self,
@@ -2025,44 +2118,103 @@ class RubyReader(LanguageReader):
         lines: list[str],
         index: int,
     ) -> str | None:
-        """
-        Return contiguous documentation comments directly
-        preceding a declaration.
-        """
+        details = self._documentation_details_before(lines, index)
+        return details["text"] if details else None
+
+    def _documentation_details_before(
+        self,
+        lines: list[str],
+        index: int,
+    ) -> dict[str, Any] | None:
+        """Return a contiguous comment block directly attached to a declaration."""
 
         docs: list[str] = []
-
+        raw: list[str] = []
         cursor = index - 1
+        end_line = index
 
         while cursor >= 0:
-            line = lines[cursor].strip()
-
-            if not line:
-                if docs:
-                    break
-
-                cursor -= 1
-                continue
-
-            if line.startswith("#"):
-                text = line[1:].strip()
-
-                # Avoid treating normal comments as structured
-                # documentation unless they actually contain text.
-                if text:
-                    docs.append(text)
-
-                cursor -= 1
-                continue
-
-            break
+            line = lines[cursor]
+            stripped = line.strip()
+            if not stripped:
+                break
+            match = self._COMMENT_RE.match(line)
+            if not match:
+                break
+            text = match.group("text").rstrip()
+            # Ruby directives are not human documentation.
+            if re.match(r"^(?:frozen_string_literal|encoding|coding):", text.strip()):
+                break
+            docs.append(text)
+            raw.append(line.rstrip("\r\n"))
+            cursor -= 1
 
         if not docs:
             return None
 
         docs.reverse()
+        raw.reverse()
+        text = "\n".join(docs).strip()
+        if not text:
+            return None
+        return {
+            "text": text,
+            "raw_text": "\n".join(raw),
+            "line_start": cursor + 2,
+            "line_end": end_line,
+            "yard": self._parse_yard_tags(text),
+        }
 
-        return "\n".join(docs).strip()
+    def _parse_yard_tags(self, text: str) -> dict[str, Any]:
+        """Parse the small YARD subset representable without executing Ruby."""
+
+        yard: dict[str, Any] = {"params": [], "returns": [], "raises": [], "deprecated": []}
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            match = self._YARD_PARAM_RE.match(line)
+            if match:
+                yard["params"].append({
+                    "name": match.group("name"),
+                    "types": self._yard_types(match.group("types")),
+                    "description": (match.group("description") or "").strip(),
+                })
+                continue
+            match = self._YARD_RETURN_RE.match(line)
+            if match and not (line.startswith("@return [") and match.group("types") is None):
+                yard["returns"].append({
+                    "types": self._yard_types(match.group("types")),
+                    "description": (match.group("description") or "").strip(),
+                })
+                continue
+            match = self._YARD_RAISE_RE.match(line)
+            if match and not (line.startswith("@raise [") and match.group("types") is None):
+                yard["raises"].append({
+                    "types": self._yard_types(match.group("types")),
+                    "description": (match.group("description") or "").strip(),
+                })
+                continue
+            match = self._YARD_DEPRECATED_RE.match(line)
+            if match:
+                yard["deprecated"].append((match.group("description") or "").strip())
+        return {key: value for key, value in yard.items() if value}
+
+    def _yard_types(self, value: str | None) -> list[str]:
+        if not value:
+            return []
+        return [part.strip() for part in value.split(",") if part.strip()]
+
+    def _documentation_metadata(
+        self, details: dict[str, Any] | None
+    ) -> dict[str, Any]:
+        if not details:
+            return {}
+        return {
+            "documentation_line_start": details["line_start"],
+            "documentation_line_end": details["line_end"],
+            "documentation_raw_text": details["raw_text"],
+            "yard": details["yard"],
+            "documentation_evidence": "DECLARED",
+        }
 
     def _documentation_title(
         self,

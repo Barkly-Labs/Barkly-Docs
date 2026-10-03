@@ -673,6 +673,8 @@ class DocumentationNode:
     headings: list[str] = field(default_factory=list)
     links: list[str] = field(default_factory=list)
 
+    documentation: str | None = None
+
     metadata: dict[str, Any] = field(default_factory=dict)
 
 

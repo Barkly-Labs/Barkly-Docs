@@ -24,7 +24,7 @@ def _entity_kind(item) -> str:
 
 
 def _entity_name(item) -> str:
-    name = _value(item, "name", "label")
+    name = _value(item, "name", "label", "title")
     if name:
         return str(name)
     if item.__class__.__name__ == "EndpointNode":
@@ -219,12 +219,16 @@ def _render_entity_card(project: Project, item, index: int) -> str:
     name = _entity_name(item)
     kind = _entity_kind(item)
     path = str(_value(item, "path", "file_path", "source_file") or "")
-    language = str(_value(item, "language") or "Unknown")
+    metadata = getattr(item, "metadata", {}) or {}
+    language = str(_value(item, "language") or metadata.get("language") or "Unknown")
     qualified_name = _entity_qualified_name(item)
     documentation = str(_value(item, "documentation", "docstring", "description", "summary") or "")
     signature = _entity_signature(item)
-    metadata = getattr(item, "metadata", {}) or {}
-    line = _value(item, "line_start", "start_line", "line", "lineno") or metadata.get("line")
+    line = (
+        _value(item, "line_start", "start_line", "line", "lineno")
+        or metadata.get("line_start")
+        or metadata.get("line")
+    )
     end_line = _value(item, "line_end", "end_line") or metadata.get("line_end")
     module = str(_value(item, "module", "namespace", "package") or metadata.get("module") or "")
     evidence = str(_value(item, "evidence") or metadata.get("evidence") or "DETECTED").upper()
