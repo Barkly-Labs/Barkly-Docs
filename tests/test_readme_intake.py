@@ -460,3 +460,101 @@ preserved/tree.txt
     assert "retained item" in content.get_text(" ", strip=True)
     assert "preserved/tree.txt" in content.find("pre").get_text()
     assert "MUTATED AFTER DISCOVERY" not in content.get_text(" ", strip=True)
+
+
+def test_final_generated_readme_is_structured_html_not_flattened_markdown(tmp_path):
+    source = """# CYN-X
+
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://example.test/build)
+
+CYN-X turns local project evidence into reviewable technical documentation. 😀
+
+---
+
+### Strange Territory
+
+- first feature
+  - nested detail
+- second feature
+
+1. first step
+2. second step
+
+> Preserve what cannot be interpreted.
+
+```text
+src/
+├── app.py
+└── docs/
+```
+
+| Area | State |
+| --- | --- |
+| Reader | Ready |
+
+Unknown sections stay source-backed.
+"""
+    (tmp_path / "README.md").write_text(source, encoding="utf-8")
+    project = _discover(tmp_path)
+    node = project.documentation[0]
+
+    assert node.documentation == source
+    assert node.metadata["source_encoding"] == "utf-8"
+    assert node.metadata["overview"] == (
+        "CYN-X turns local project evidence into reviewable technical documentation. 😀"
+    )
+
+    out = tmp_path / "site"
+    render_project_website(project, out)
+    generated = (out / "index.html").read_text(encoding="utf-8")
+    soup = BeautifulSoup(generated, "html.parser")
+    hero = soup.select_one(".hero-main")
+    readme = soup.select_one(".readme-panel .readme-content")
+    assert hero is not None and readme is not None
+
+    hero_text = hero.get_text(" ", strip=True)
+    assert "CYN-X" in hero_text
+    assert "technical documentation." in hero_text
+    assert "Strange Territory" not in hero_text
+    assert "src/" not in hero_text
+    assert "first feature" not in hero_text
+
+    assert readme.find("h1", string="CYN-X") is not None
+    assert readme.find("h3", string="Strange Territory") is not None
+    assert readme.find("hr") is not None
+    assert readme.find("ul") is not None
+    assert readme.find("ul").find("ul") is not None
+    assert readme.find("ol") is not None
+    assert readme.find("blockquote") is not None
+    code = readme.select_one("pre > code.language-text")
+    assert code is not None
+    assert "├── app.py" in code.get_text()
+    assert readme.find("table") is not None
+    assert readme.find("thead") is not None
+    assert readme.find("tbody") is not None
+    badge = readme.find("img", alt="Build Status")
+    assert badge is not None
+    assert badge.get("src") == "https://img.shields.io/badge/build-passing-brightgreen"
+    assert badge.parent.name == "a"
+    assert "😀" in readme.get_text(" ", strip=True)
+    assert "# CYN-X" not in readme.get_text(" ", strip=True)
+    assert "### Strange Territory" not in readme.get_text(" ", strip=True)
+
+
+def test_readme_utf8_bom_and_invalid_utf8_have_explicit_non_replacement_decoding(tmp_path):
+    (tmp_path / "README.md").write_bytes(
+        b"\xef\xbb\xbf# BOM Demo\n\nEmoji: \xf0\x9f\x90\xbe\n"
+    )
+    project = _discover(tmp_path)
+    node = project.documentation[0]
+    assert node.title == "BOM Demo"
+    assert "🐾" in node.documentation
+    assert "\ufeff" not in node.documentation
+    assert node.metadata["source_encoding"] == "utf-8-sig"
+
+    (tmp_path / "README.md").write_bytes(b"# Legacy\n\nCafe\xe9 documentation.\n")
+    project = _discover(tmp_path)
+    node = project.documentation[0]
+    assert "Cafeé documentation." in node.documentation
+    assert "\ufffd" not in node.documentation
+    assert node.metadata["source_encoding"] == "latin-1-fallback"

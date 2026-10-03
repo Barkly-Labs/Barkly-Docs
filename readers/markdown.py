@@ -31,7 +31,7 @@ class MarkdownReader(LanguageReader):
 
     def read(self, path: Path, project: Project) -> ReaderResult:
         try:
-            text = self.read_text(path)
+            text, source_encoding = _read_document_text(path)
         except OSError as exc:
             return ReaderResult(success=False, errors=[f"{path}: {exc}"])
 
@@ -56,6 +56,7 @@ class MarkdownReader(LanguageReader):
             "structure": structure,
             "overview": overview,
             "empty": not bool(text.strip()),
+            "source_encoding": source_encoding,
         }
 
         project.add_file(
@@ -82,6 +83,21 @@ class MarkdownReader(LanguageReader):
             project=project,
             metadata={"documentation": 1, "format": fmt, "headings": len(headings)},
         )
+
+
+def _read_document_text(path: Path) -> tuple[str, str]:
+    """Read documentation without executing it and without silent replacement.
+
+    UTF-8 (including an optional BOM) is authoritative.  For legacy README files
+    that are not valid UTF-8, Latin-1 is a deterministic byte-preserving fallback:
+    every input byte maps to one Unicode code point instead of becoming U+FFFD.
+    The selected encoding is recorded in DocumentationNode metadata.
+    """
+    data = path.read_bytes()
+    try:
+        return data.decode("utf-8-sig"), "utf-8-sig" if data.startswith(b"\xef\xbb\xbf") else "utf-8"
+    except UnicodeDecodeError:
+        return data.decode("latin-1"), "latin-1-fallback"
 
 
 def _format_for(path: Path) -> str:

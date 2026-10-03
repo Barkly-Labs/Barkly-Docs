@@ -1544,6 +1544,7 @@ _README_SAFE_TAGS = {
 _README_SAFE_ATTRIBUTES = {
     "a": ["href", "title"],
     "img": ["src", "alt", "title", "width", "height"],
+    "code": ["class"],
     "th": ["align"], "td": ["align"],
     "details": ["open"],
 }
