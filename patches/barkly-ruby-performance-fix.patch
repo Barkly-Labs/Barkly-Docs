@@ -1,0 +1,164 @@
+diff --git a/rendering/entities_page.py b/rendering/entities_page.py
+index 9e9515d..eb045e4 100644
+--- a/rendering/entities_page.py
++++ b/rendering/entities_page.py
+@@ -3,6 +3,7 @@ from __future__ import annotations
+ import hashlib
+ import html
+ import json
++from collections import defaultdict
+ from pathlib import Path
+ 
+ from model.project import Project
+@@ -148,7 +149,19 @@ def _members(item) -> str:
+     return "".join(groups)
+ 
+ 
+-def _related_relationships(project: Project, item) -> str:
++def _relationship_index(project: Project) -> dict[str, list[tuple[int, object]]]:
++    index: dict[str, list[tuple[int, object]]] = defaultdict(list)
++    for position, relationship in enumerate(project.relationships):
++        source = str(getattr(relationship, "source", "") or "")
++        target = str(getattr(relationship, "target", "") or "")
++        if source:
++            index[source].append((position, relationship))
++        if target and target != source:
++            index[target].append((position, relationship))
++    return dict(index)
++
++
++def _related_relationships(relationship_index, item) -> str:
+     names = {
+         str(value)
+         for value in (
+@@ -157,14 +170,20 @@ def _related_relationships(project: Project, item) -> str:
+         )
+         if value
+     }
+-    matches = []
+-    for relationship in project.relationships:
++    indexed_matches = {}
++    for name in names:
++        for position, relationship in relationship_index.get(name, ()):
++            indexed_matches[position] = relationship
++    matches = [indexed_matches[position] for position in sorted(indexed_matches)]
++    if not matches:
++        return '<p class="muted entity-no-relationships">No relationships recorded for this entity.</p>'
++
++    rows = []
++    for relationship in matches[:30]:
+         source = str(getattr(relationship, "source", "") or "")
+         target = str(getattr(relationship, "target", "") or "")
+-        if source not in names and target not in names:
+-            continue
+         evidence = str(getattr(relationship, "evidence", "UNKNOWN") or "UNKNOWN")
+-        matches.append(
++        rows.append(
+             '<li>'
+             f'<code>{_escape(source)}</code> '
+             f'<span class="entity-relation-kind">{_escape(str(getattr(relationship, "kind", "related")))}</span> '
+@@ -172,12 +191,10 @@ def _related_relationships(project: Project, item) -> str:
+             f'<span class="badge {evidence.lower()}">{_escape(evidence)}</span>'
+             '</li>'
+         )
+-    if not matches:
+-        return '<p class="muted entity-no-relationships">No relationships recorded for this entity.</p>'
+     return (
+         '<div class="entity-related">'
+         '<div class="entity-detail-label">Relationships</div>'
+-        '<ul>' + "".join(matches[:30]) + '</ul>'
++        '<ul>' + "".join(rows) + '</ul>'
+         + (f'<p class="muted">Showing 30 of {len(matches)} relationships.</p>' if len(matches) > 30 else "")
+         + '</div>'
+     )
+@@ -213,7 +230,7 @@ def _collect_entities(project: Project):
+     )
+ 
+ 
+-def _render_entity_card(project: Project, item, index: int) -> str:
++def _render_entity_card(project: Project, item, index: int, relationship_index) -> str:
+     entity_id = _stable_entity_id(item, index)
+     panel_id = entity_id + "-details"
+     name = _entity_name(item)
+@@ -279,7 +296,7 @@ def _render_entity_card(project: Project, item, index: int) -> str:
+            else '<p class="muted">No description available yet.</p>')
+         + '<dl class="entity-expanded-facts">' + "".join(facts) + '</dl>'
+         + _members(item)
+-        + _related_relationships(project, item)
++        + _related_relationships(relationship_index, item)
+         + _source_excerpt(item)
+         + '</div>'
+         '</article>'
+@@ -288,7 +305,11 @@ def _render_entity_card(project: Project, item, index: int) -> str:
+ 
+ def _render_entity_explorer(project: Project) -> str:
+     entities = _collect_entities(project)
+-    cards = "".join(_render_entity_card(project, item, index) for index, item in enumerate(entities))
++    relationship_index = _relationship_index(project)
++    cards = "".join(
++        _render_entity_card(project, item, index, relationship_index)
++        for index, item in enumerate(entities)
++    )
+     total = len(entities)
+     if not cards:
+         cards = '<div class="empty-state entity-explorer-initial-empty">No project entities were detected.</div>'
+diff --git a/tests/test_entity_explorer.py b/tests/test_entity_explorer.py
+index 8758ca9..c49ab16 100644
+--- a/tests/test_entity_explorer.py
++++ b/tests/test_entity_explorer.py
+@@ -3,7 +3,7 @@ from __future__ import annotations
+ import time
+ from bs4 import BeautifulSoup
+ 
+-from model.project import ClassNode, FunctionNode, MethodNode, ModuleNode, Project
++from model.project import ClassNode, FunctionNode, MethodNode, ModuleNode, Project, RelationshipNode
+ from rendering.entities_page import render_entities_page
+ from rendering.html import render_project_website
+ 
+@@ -117,6 +117,46 @@ def test_large_collection_generation_is_linear_enough_for_static_page(tmp_path):
+     assert elapsed < 3.0
+ 
+ 
++
++def test_entity_relationships_cover_source_target_names_and_empty_state(tmp_path):
++    project = _project(tmp_path)
++    project.relationships.extend([
++        RelationshipNode(source="helper", target="Widget", kind="calls", evidence="DETECTED"),
++        RelationshipNode(source="Widget", target="alpha.Widget.run", kind="calls", evidence="INFERRED"),
++    ])
++    soup = BeautifulSoup(render_entities_page(project), "html.parser")
++    helper = next(card for card in soup.select(".entity-explorer-item") if card.select_one(".entity-row-name").get_text(strip=True) == "helper")
++    run = next(card for card in soup.select(".entity-explorer-item") if card.select_one(".entity-row-name").get_text(strip=True) == "run")
++    alpha = next(card for card in soup.select(".entity-explorer-item") if card.select_one(".entity-row-name").get_text(strip=True) == "alpha")
++    assert "helper calls Widget DETECTED" in helper.select_one(".entity-related").get_text(" ", strip=True)
++    assert "Widget calls alpha.Widget.run INFERRED" in run.select_one(".entity-related").get_text(" ", strip=True)
++    assert alpha.select_one(".entity-no-relationships") is not None
++
++
++def test_entity_relationship_index_suppresses_duplicate_name_matches(tmp_path):
++    project = Project(name="Duplicates", root=str(tmp_path))
++    project.functions.append(FunctionNode(name="same", path="same.rb", metadata={"qualified_name": "same"}))
++    project.relationships.append(RelationshipNode(source="same", target="same", kind="calls", evidence="DETECTED"))
++    soup = BeautifulSoup(render_entities_page(project), "html.parser")
++    related = soup.select_one(".entity-related")
++    assert len(related.select("li")) == 1
++
++
++def test_entity_relationships_preserve_order_count_and_30_item_limit(tmp_path):
++    project = Project(name="Limit", root=str(tmp_path))
++    project.functions.append(FunctionNode(name="focus", path="focus.rb", metadata={"qualified_name": "Pkg.focus"}))
++    project.relationships.extend(
++        RelationshipNode(source="focus" if i % 2 == 0 else "Pkg.focus", target=f"target_{i}", kind="calls", evidence="DETECTED")
++        for i in range(35)
++    )
++    soup = BeautifulSoup(render_entities_page(project), "html.parser")
++    related = soup.select_one(".entity-related")
++    rows = related.select("li")
++    assert len(rows) == 30
++    assert "target_0" in rows[0].get_text()
++    assert "target_29" in rows[-1].get_text()
++    assert "Showing 30 of 35 relationships." in related.get_text(" ", strip=True)
++
+ def test_full_site_preserves_other_pages_and_relation_map(tmp_path):
+     project = _project(tmp_path)
+     (tmp_path / "README.md").write_text("# Explorer Fixture\n\nREADME remains visible.\n", encoding="utf-8")
