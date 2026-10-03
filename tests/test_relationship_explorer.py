@@ -88,3 +88,41 @@ def test_generated_site_preserves_entities_and_relation_map(tmp_path):
     assert "Search project entities" in entities
     assert (output / "relation-map.html").is_file()
     assert (output / "assets" / "relation-map.js").is_file()
+
+
+def test_relationship_cards_distinguish_endpoints_and_preserve_long_values(tmp_path):
+    long_source = r"C:\\workspace\\barkly\\src\\very\\deep\\package\\handlers\\CreateDocumentationRelationshipHandler.execute"
+    long_target = "/srv/barkly/docs/generated/relationships/really/long/module/path/RelationshipDestination.render"
+    project = Project(name="Long relationships", root=str(tmp_path))
+    project.relationships.append(
+        RelationshipNode(
+            source=long_source,
+            target=long_target,
+            kind="calls",
+            source_file=r"C:\\workspace\\barkly\\src\\very\\deep\\package\\handlers.py",
+            evidence="DETECTED",
+            metadata={"qualified_target": long_target},
+        )
+    )
+
+    soup = BeautifulSoup(render_relationships_page(project), "html.parser")
+    card = soup.select_one(".relationship-explorer-item")
+    assert card.select_one(".relationship-source code").get_text() == long_source
+    assert card.select_one(".relationship-target code").get_text() == long_target
+    assert card.select_one(".relationship-arrow").get_text(strip=True) == "→"
+    assert card.select_one(".relationship-type-tag").get_text(strip=True) == "calls"
+    assert card.select_one(".entity-explorer-meta").get_text(" ", strip=True).startswith(r"C:\\workspace")
+    assert card.select_one(".badge.detected").get_text(strip=True) == "DETECTED"
+    assert long_target in card.select_one(".relationship-metadata").get_text(" ", strip=True)
+
+
+def test_relationship_explorer_reuses_entities_card_surface_and_wrap_rules(tmp_path):
+    from rendering.html import CSS
+
+    soup = BeautifulSoup(render_relationships_page(_project(tmp_path)), "html.parser")
+    section = soup.select_one(".relationship-explorer-section")
+    assert section is not None
+    assert {"section", "entity-explorer-section", "relationship-explorer-section", "card"}.issubset(section.get("class", []))
+    assert ".relationship-endpoints { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr);" in CSS
+    assert ".relationship-endpoint code, .relationship-direction code { min-width: 0; overflow-wrap: anywhere; word-break: break-word; white-space: normal; }" in CSS
+    assert ".relationship-explorer-row { grid-template-columns: 1fr; }" in CSS

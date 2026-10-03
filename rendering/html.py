@@ -257,9 +257,7 @@ nav.site-nav a.active {
   grid-template-columns: minmax(0, 2fr) minmax(260px, 360px);
   gap: 18px;
   margin-top: 24px;
-  min-width: 0;
 }
-#relation-map-shell > * { min-width: 0; }
 #relation-map-panel,
 #relation-map-details {
   background: var(--panel);
@@ -688,15 +686,13 @@ a:focus-visible {
   gap: 16px; align-items: center; padding: 13px 14px;
 }
 .entity-explorer-primary { display: flex; gap: 9px; align-items: center; min-width: 0; flex-wrap: wrap; }
-.entity-row-name { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
 .entity-type-tag {
   display: inline-flex; align-items: center; border: 1px solid rgba(255,107,157,.28);
   background: rgba(255,107,157,.1); color: var(--accent); border-radius: 999px;
   padding: 2px 7px; font-size: .68rem; letter-spacing: .04em; text-transform: uppercase;
 }
 .entity-explorer-meta { display: grid; min-width: 0; color: var(--muted); font-size: .76rem; }
-.entity-explorer-meta span { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
-.entity-expanded-description, .entity-related, .entity-members, .entity-expanded-facts code { overflow-wrap: anywhere; word-break: break-word; }
+.entity-explorer-meta span { overflow-wrap: anywhere; }
 .entity-disclosure-button { white-space: nowrap; }
 .entity-explorer-item .entity-expanded-view { border-top: 1px solid var(--line); }
 .entity-related { margin-top: 14px; }
@@ -723,12 +719,56 @@ a:focus-visible {
 .relationship-filter-row { display: grid; gap: 7px; }
 .relationship-filter-row label { margin: 0; font-weight: 650; }
 .relationship-filter-row select { width: 100%; background: #080808; color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px; }
-.relationship-primary .entity-row-name { font-weight: 650; }
-.relationship-direction { margin: 7px 0 14px; overflow-wrap: anywhere; }
+.relationship-explorer-row { grid-template-columns: minmax(0, 1fr) minmax(180px, .42fr) auto; }
+.relationship-primary { align-items: flex-start; }
+.relationship-endpoints { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: 10px; align-items: center; width: 100%; min-width: 0; }
+.relationship-endpoint { display: grid; gap: 3px; min-width: 0; }
+.relationship-endpoint-label { color: var(--muted); font-size: .64rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.relationship-endpoint code, .relationship-direction code { min-width: 0; overflow-wrap: anywhere; word-break: break-word; white-space: normal; }
+.relationship-arrow { color: var(--accent); font-weight: 700; line-height: 1; }
+.relationship-type-tag { flex: 0 0 auto; }
+.relationship-direction { display: flex; flex-wrap: wrap; gap: 7px; align-items: baseline; margin: 7px 0 14px; overflow-wrap: anywhere; }
 .relationship-metadata { margin-top: 14px; }
+.relationship-metadata code, .relationship-explorer-item .entity-expanded-facts code { white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
 .relationship-map-link { display: inline-flex; align-items: center; text-decoration: none; }
 .relationship-map-link:hover { text-decoration: none; }
-@media (max-width: 760px) { .relationship-search-controls { grid-template-columns: 1fr; } }
+@media (max-width: 900px) {
+  .relationship-explorer-row { grid-template-columns: minmax(0,1fr) auto; }
+  .relationship-explorer-row .entity-explorer-meta { grid-column: 1 / -1; }
+}
+@media (max-width: 760px) {
+  .relationship-search-controls { grid-template-columns: 1fr; }
+  .relationship-endpoints { grid-template-columns: 1fr; gap: 6px; }
+  .relationship-arrow { transform: rotate(90deg); justify-self: start; }
+}
+@media (max-width: 560px) {
+  .relationship-explorer-row { grid-template-columns: 1fr; }
+  .relationship-explorer-row .entity-explorer-meta { grid-column: auto; }
+}
+
+/* Shared secondary-page surfaces consumed by the Relationships explorer. */
+.subpage-header { display:block; width:100%; margin:32px 0 0; padding:28px; text-align:left; }
+.subpage-header .kicker { display:block; width:100%; margin:0 0 10px; }
+.subpage-header h1 { margin:0 0 12px; font-size:clamp(2.4rem,5vw,4.5rem); line-height:1.08; letter-spacing:-.06em; }
+.subpage-header p { max-width:60ch; margin:0; color:var(--muted); }
+.subpage-header + .section, .subpage-header + .card { margin-top:32px; }
+.entity-explorer-section.card { padding:28px; }
+.entity-explorer-tools { border:1px solid rgba(255,255,255,.06); border-radius:10px; background:rgba(15,15,16,.94); box-shadow:0 10px 30px var(--shadow); backdrop-filter:blur(10px); }
+.entity-search-row input[type="search"], .relationship-filter-row select { min-height:40px; border:1px solid var(--line); border-radius:9px; background:rgba(255,255,255,.025); color:var(--text); }
+.entity-search-row input[type="search"]:focus, .relationship-filter-row select:focus { border-color:rgba(255,107,157,.55); box-shadow:0 0 0 3px rgba(255,107,157,.08); }
+.entity-search-clear, .entity-disclosure-button { min-height:40px; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--muted); }
+.entity-search-clear:hover, .entity-disclosure-button:hover { color:var(--text); border-color:rgba(255,107,157,.30); background:rgba(255,107,157,.025); }
+.entity-search-clear:focus-visible, .entity-disclosure-button:focus-visible { border-color:var(--accent); }
+.entity-explorer-item { border-color:rgba(255,255,255,.065); border-radius:10px; background:rgba(255,255,255,.012); box-shadow:none; }
+.entity-explorer-item:hover { border-color:rgba(255,107,157,.22); }
+.entity-explorer-section, .entity-explorer, .entity-explorer-list, .entity-explorer-item, .entity-expanded-view { min-width:0; }
+@media (max-width:760px) {
+  .subpage-header { margin-top:24px; padding:22px; }
+  .entity-explorer-section.card { padding:18px; }
+}
+@media (max-width:560px) {
+  .subpage-header h1 { font-size:clamp(2.15rem,12vw,3.2rem); letter-spacing:-.05em; }
+}
 
 /* Reference Layer documentation enhancement; existing sections remain unchanged. */
 .index-reference-docs{margin:18px 0 0}
@@ -737,43 +777,6 @@ a:focus-visible {
 .index-reference-docs .tile ul{margin:0;padding-left:18px}
 .index-reference-docs .tile li{margin:7px 0}
 .readme-content img{max-width:100%;height:auto}
-/* Secondary pages use the same surfaces, controls, and hierarchy as index.html. */
-.subpage-header { display:block; width:100%; margin:32px 0 0; padding:28px; text-align:left; }
-.subpage-header .kicker { display:block; width:100%; margin:0 0 10px; }
-.subpage-header h1 { margin:0 0 12px; font-size:clamp(2.4rem,5vw,4.5rem); line-height:1.08; letter-spacing:-.06em; }
-.subpage-header p { max-width:60ch; margin:0; color:var(--muted); }
-.subpage-header + .section, .subpage-header + .card { margin-top:32px; }
-.entity-explorer-section.card { padding:28px; }
-.entity-explorer-tools, .relation-map-toolbar { border:1px solid rgba(255,255,255,.06); border-radius:10px; background:rgba(15,15,16,.94); box-shadow:0 10px 30px var(--shadow); backdrop-filter:blur(10px); }
-.entity-search-row input[type="search"], .relationship-filter-row select, .relation-map-search-wrap input, .relation-map-filter-grid select { min-height:40px; border:1px solid var(--line); border-radius:9px; background:rgba(255,255,255,.025); color:var(--text); }
-.entity-search-row input[type="search"]:focus, .relationship-filter-row select:focus, .relation-map-search-wrap input:focus, .relation-map-filter-grid select:focus { border-color:rgba(255,107,157,.55); box-shadow:0 0 0 3px rgba(255,107,157,.08); }
-.entity-search-clear, .entity-disclosure-button, .relation-map-actions button, .relation-link { min-height:40px; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--muted); }
-.entity-search-clear:hover, .entity-disclosure-button:hover, .relation-map-actions button:hover, .relation-link:hover { color:var(--text); border-color:rgba(255,107,157,.30); background:rgba(255,107,157,.025); }
-.entity-explorer-item { border-color:rgba(255,255,255,.065); border-radius:10px; background:rgba(255,255,255,.012); box-shadow:none; }
-.entity-explorer-item:hover { border-color:rgba(255,107,157,.22); }
-#relation-map-panel, #relation-map-details { border-color:rgba(255,255,255,.065); background:linear-gradient(135deg,rgba(255,107,157,.035),transparent 58%),var(--panel); box-shadow:0 10px 30px var(--shadow); }
-#relation-map-canvas { background:linear-gradient(rgba(255,255,255,.012),rgba(255,255,255,.012)),radial-gradient(circle at top,rgba(255,107,157,.055),transparent 60%),var(--bg); }
-.relation-map-accessible, .relation-map-legend { border-color:rgba(255,255,255,.065); background:linear-gradient(135deg,rgba(255,107,157,.035),transparent 58%),var(--panel); }
-.relation-map-search-results { background:var(--panel); box-shadow:0 10px 30px var(--shadow); }
-.relation-map-search-results button { background:transparent; }
-.relation-map-toolbar { margin-bottom:0; }
-.relation-map-search-wrap input::placeholder { color:#858585; opacity:1; }
-.relation-map-search-results button:focus-visible, .relation-map-actions button:focus-visible, .relation-link:focus-visible, .entity-search-clear:focus-visible, .entity-disclosure-button:focus-visible { border-color:var(--accent); }
-#relation-map-panel, #relation-map-details, #relation-map-canvas { min-width:0; }
-#relation-map-details { scrollbar-color:var(--line) var(--panel); }
-.relation-map-accessible button { max-width:100%; overflow-wrap:anywhere; text-align:left; }
-.entity-explorer-section, .entity-explorer, .entity-explorer-list, .entity-explorer-item, .entity-expanded-view { min-width:0; }
-@media (max-width:760px) {
-  .subpage-header { margin-top:24px; padding:22px; }
-  .entity-explorer-section.card { padding:18px; }
-  .relation-map-toolbar { padding:14px; }
-  .relation-map-actions > button { flex:1 1 140px; }
-}
-@media (max-width:560px) {
-  .subpage-header h1 { font-size:clamp(2.15rem,12vw,3.2rem); letter-spacing:-.05em; }
-  .relation-map-actions > button { width:100%; flex-basis:100%; }
-}
-
 """
 
 PAW_SVG = """
@@ -4104,6 +4107,50 @@ def _render_three_layer_architecture(project: Project) -> str:
 .readme-content blockquote { margin: 12px 0; padding: 8px 14px; border-left: 2px solid var(--accent); color: var(--muted); background: rgba(255,107,157,.035); }
 .readme-content hr { border: 0; border-top: 1px solid rgba(255,255,255,.07); margin: 20px 0; }
 .readme-content a { color: var(--accent-bright); }
+
+/* Barkly Standard secondary-page header — independent of the index hero grid. */
+.subpage-header {
+  display: block;
+  width: 100%;
+  margin: 32px 0 0;
+  padding: 28px;
+  text-align: left;
+}
+.subpage-header .kicker {
+  display: block;
+  width: 100%;
+  margin: 0 0 10px;
+  text-align: left;
+}
+.subpage-header h1 {
+  display: block;
+  width: 100%;
+  margin: 0 0 12px;
+  padding: 0;
+  text-align: left;
+  font-size: clamp(2.4rem, 5vw, 4.5rem);
+  line-height: 1.08;
+  letter-spacing: -0.06em;
+}
+.subpage-header p {
+  display: block;
+  width: 100%;
+  max-width: 60ch;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+  color: var(--muted);
+}
+.subpage-header + .section,
+.subpage-header + .card {
+  margin-top: 32px;
+}
+.entity-explorer-section.card { padding: 28px; }
+@media (max-width: 760px) {
+  .subpage-header { margin-top: 24px; padding: 22px; }
+  .entity-explorer-section.card { padding: 18px; }
+}
+
 
 /* Entity disclosure layout fix.
    The expandable <details> owns the full row. Only its <summary> is a grid. */
