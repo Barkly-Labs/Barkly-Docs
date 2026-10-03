@@ -1,0 +1,74 @@
+--- a/cli/main.py
++++ b/cli/main.py
+@@ -35,6 +35,7 @@
+ from cli.terminal import build_terminal
+ 
+ from readers.python import PythonReader
++from readers.python_dependencies import PythonDependencyReader
+ 
+ from readers.rust import RustReader
+ 
+@@ -547,6 +548,8 @@
+ 
+     readers = [
+ 
++        PythonDependencyReader(),
++
+         PythonReader(),
+ 
+         RustReader(),
+--- a/analysis/discovery.py
++++ b/analysis/discovery.py
+@@ -493,6 +493,11 @@
+                 failed=len(result.errors),
+             )
+ 
++        # Dependency/import association must run after all source files and manifests
++        # have been read so it cannot depend on discovery order.
++        from readers.python_dependencies import link_python_imports_to_dependencies
++        link_python_imports_to_dependencies(project)
++
+         relationship_input_counts = {
+             "files": len(project.files),
+             "modules": len(project.modules),
+@@ -758,6 +763,11 @@
+                 failed=len(result.errors),
+             )
+ 
++        # Dependency/import association must run after all source files and manifests
++        # have been read so it cannot depend on discovery order.
++        from readers.python_dependencies import link_python_imports_to_dependencies
++        link_python_imports_to_dependencies(project)
++
+         relationship_input_counts = {
+             "files": len(project.files),
+             "modules": len(project.modules),
+--- a/rendering/html.py
++++ b/rendering/html.py
+@@ -3001,6 +3001,26 @@
+             facts.append(f'<div><dt>Parameters</dt><dd><code>{_escape(str(parameters))}</code></dd></div>')
+         if return_type:
+             facts.append(f'<div><dt>Returns</dt><dd><code>{_escape(str(return_type))}</code></dd></div>')
++        if item.__class__.__name__ == "DependencyNode":
++            requirement = value(item, "version")
++            if requirement:
++                facts.append(f'<div><dt>Requirement</dt><dd><code>{_escape(str(requirement))}</code></dd></div>')
++            group = metadata.get("group")
++            if group:
++                facts.append(f'<div><dt>Group / extra</dt><dd>{_escape(str(group))}</dd></div>')
++            marker = metadata.get("marker")
++            if marker:
++                facts.append(f'<div><dt>Marker</dt><dd><code>{_escape(str(marker))}</code></dd></div>')
++            if metadata.get("locked"):
++                facts.append('<div><dt>Evidence</dt><dd>Locked / resolved version evidence</dd></div>')
++            declaration = metadata.get("declaration")
++            if declaration:
++                facts.append(f'<div><dt>Declared as</dt><dd><code>{_escape(str(declaration))}</code></dd></div>')
++            import_evidence = metadata.get("import_evidence") or []
++            if import_evidence:
++                facts.append(f'<div><dt>Static import evidence</dt><dd><code>{_escape(", ".join(str(x) for x in import_evidence))}</code></dd></div>')
++            elif metadata.get("dependency_scope") == "external_python" and not metadata.get("constraint"):
++                facts.append('<div><dt>Static import evidence</dt><dd>Not observed; this does not prove the dependency is unused.</dd></div>')
+         if path:
+             location = str(path)
+             if line:

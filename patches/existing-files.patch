@@ -1,0 +1,123 @@
+--- a/analysis/discovery.py
++++ b/analysis/discovery.py
+@@ -493,6 +493,11 @@
+                 failed=len(result.errors),
+             )
+ 
++        # Link Python imports to declarations only after every source and manifest
++        # has been statically read. This does not inspect the active environment.
++        from readers.python_dependencies import link_python_imports_to_dependencies
++        link_python_imports_to_dependencies(project)
++
+         relationship_input_counts = {
+             "files": len(project.files),
+             "modules": len(project.modules),
+@@ -758,6 +763,9 @@
+                 failed=len(result.errors),
+             )
+ 
++        from readers.python_dependencies import link_python_imports_to_dependencies
++        link_python_imports_to_dependencies(project)
++
+         relationship_input_counts = {
+             "files": len(project.files),
+             "modules": len(project.modules),
+--- a/analysis/graph.py
++++ b/analysis/graph.py
+@@ -322,8 +322,13 @@
+             add(endpoint.path, endpoint.handler or endpoint.path)
+             add(endpoint.handler, endpoint.handler or endpoint.path)
+     for dependency in project.dependencies:
+-        if (dependency.metadata or {}).get("dependency_scope") == "external_gem":
++        scope = (dependency.metadata or {}).get("dependency_scope")
++        if scope == "external_gem":
+             add(dependency.name, f"dependency:ruby:{dependency.name}")
++        elif scope == "external_python":
++            add(dependency.name, f"dependency:python:{dependency.name}")
++            for imported_name in (dependency.metadata or {}).get("import_evidence", []) or []:
++                add(imported_name, f"dependency:python:{dependency.name}")
+     return symbols, classes_by_name_path
+ 
+ 
+@@ -598,9 +603,11 @@
+     symbol_index, classes_by_name_path = _build_symbol_index(project)
+ 
+     for dependency in progress_items("dependencies", project.dependencies):
+-        if (dependency.metadata or {}).get("dependency_scope") != "external_gem":
++        scope = (dependency.metadata or {}).get("dependency_scope")
++        if scope not in {"external_gem", "external_python"}:
+             continue
+-        dependency_id = f"dependency:ruby:{dependency.name}"
++        language = "Ruby" if scope == "external_gem" else "Python"
++        dependency_id = f"dependency:{language.lower()}:{dependency.name}"
+         if dependency_id in known_identifiers:
+             continue
+         known_identifiers.add(dependency_id)
+@@ -608,7 +615,7 @@
+             id=dependency_id, label=dependency.name, kind="dependency",
+             qualified_name=dependency.name, path=dependency.source, source_file=dependency.source,
+             evidence=str((dependency.metadata or {}).get("evidence") or "DECLARED"),
+-            metadata={"language": "Ruby", "dependency_scope": "external_gem", "version": dependency.version, "dependency_kind": dependency.kind},
++            metadata={"language": language, "dependency_scope": scope, "version": dependency.version, "dependency_kind": dependency.kind},
+         ))
+ 
+     for file in progress_items("files", project.files):
+@@ -996,6 +1003,8 @@
+             dependency_match = symbol_index.get(normalized_target)
+             if import_node.language == "Ruby" and dependency_match and dependency_match.startswith("dependency:ruby:"):
+                 import_node.metadata["dependency_scope"] = "external_gem"
++            elif import_node.language == "Python" and dependency_match and dependency_match.startswith("dependency:python:"):
++                import_node.metadata["dependency_scope"] = "external_python"
+             if not is_project_import_target(import_node.target, language=import_node.language):
+                 continue
+             target_id = dependency_match or import_node.target
+--- a/cli/main.py
++++ b/cli/main.py
+@@ -35,6 +35,7 @@
+ from cli.terminal import build_terminal
+ 
+ from readers.python import PythonReader
++from readers.python_dependencies import PythonDependencyReader
+ 
+ from readers.rust import RustReader
+ 
+@@ -547,6 +548,8 @@
+ 
+     readers = [
+ 
++        PythonDependencyReader(),
++
+         PythonReader(),
+ 
+         RustReader(),
+--- a/rendering/html.py
++++ b/rendering/html.py
+@@ -2999,6 +2999,28 @@
+             facts.append(f'<div><dt>Parameters</dt><dd><code>{_escape(str(parameters))}</code></dd></div>')
+         if return_type:
+             facts.append(f'<div><dt>Returns</dt><dd><code>{_escape(str(return_type))}</code></dd></div>')
++        if item.__class__.__name__ == "DependencyNode":
++            version = value(item, "version")
++            if version:
++                facts.append(f'<div><dt>Requirement</dt><dd><code>{_escape(str(version))}</code></dd></div>')
++            group = metadata.get("group")
++            if group:
++                facts.append(f'<div><dt>Group / extra</dt><dd>{_escape(str(group))}</dd></div>')
++            marker = metadata.get("marker")
++            if marker:
++                facts.append(f'<div><dt>Marker</dt><dd><code>{_escape(str(marker))}</code></dd></div>')
++            locked = metadata.get("locked")
++            if locked:
++                facts.append('<div><dt>Evidence</dt><dd>Locked / resolved version evidence</dd></div>')
++            import_evidence = metadata.get("import_evidence") or []
++            if import_evidence:
++                facts.append(f'<div><dt>Static import evidence</dt><dd><code>{_escape(", ".join(str(x) for x in import_evidence))}</code></dd></div>')
++            elif metadata.get("dependency_scope") == "external_python" and not metadata.get("constraint"):
++                facts.append('<div><dt>Static import evidence</dt><dd>Not observed; this does not prove the dependency is unused.</dd></div>')
++            source_type = metadata.get("source_type")
++            source_value = metadata.get("source_value")
++            if source_type and source_type != "registry":
++                facts.append(f'<div><dt>Dependency source</dt><dd>{_escape(str(source_type))}: <code>{_escape(str(source_value or ""))}</code></dd></div>')
+         if path:
+             location = str(path)
+             if line:
