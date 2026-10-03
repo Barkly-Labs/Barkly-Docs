@@ -10,3 +10,10 @@ build/
 *.egg-info/
 .DS_Store
 docs-site/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# ZIP archives
+*.zip
