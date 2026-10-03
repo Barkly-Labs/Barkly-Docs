@@ -1319,10 +1319,38 @@ def _readme_path(project: Project) -> Path | None:
     return candidates[0] if candidates else None
 
 
+def _selected_readme_node(project: Project, path: Path | None = None):
+    """Return the shared-model documentation node for the selected README."""
+    path = path or _readme_path(project)
+    if path is None:
+        return None
+    try:
+        selected = str(path.resolve())
+    except OSError:
+        selected = str(path)
+    for node in getattr(project, "documentation", []) or []:
+        if not bool((getattr(node, "metadata", {}) or {}).get("readme")):
+            continue
+        node_path = Path(str(getattr(node, "path", "")))
+        try:
+            candidate = str(node_path.resolve())
+        except OSError:
+            candidate = str(node_path)
+        if candidate == selected:
+            return node
+    return None
+
+
 def _read_readme(project: Project) -> str:
+    """Read the selected README from preserved model source before filesystem fallback."""
     path = _readme_path(project)
     if path is None:
         return ""
+    node = _selected_readme_node(project, path)
+    if node is not None:
+        preserved = getattr(node, "documentation", None)
+        if preserved is not None:
+            return str(preserved)
     try:
         return path.read_text(encoding="utf-8", errors="replace")
     except OSError:

@@ -415,3 +415,48 @@ not an overview
     assert "- one" not in hero_text
     assert "not an overview" not in hero_text
     assert soup.select_one(".readme-content h2").get_text(" ", strip=True) == "Features"
+
+
+def test_rendering_uses_preserved_readme_source_from_shared_model(tmp_path):
+    source = """# Preserved Project
+
+Preserved Project explains a source-backed workflow without flattening its documentation.
+
+## Unfamiliar Section
+
+- retained item
+
+```text
+preserved/tree.txt
+```
+"""
+    readme = tmp_path / "README.md"
+    readme.write_text(source, encoding="utf-8")
+    project = _discover(tmp_path)
+
+    node = project.documentation[0]
+    assert node.documentation == source
+    assert node.metadata["overview"] == (
+        "Preserved Project explains a source-backed workflow without flattening its documentation."
+    )
+
+    # Rendering must consume the source preserved by discovery rather than
+    # silently reparsing a changed filesystem copy through a second data path.
+    readme.write_text("# MUTATED AFTER DISCOVERY\n\nThis must not replace model source.\n", encoding="utf-8")
+
+    out = tmp_path / "site"
+    render_project_website(project, out)
+    soup = BeautifulSoup((out / "index.html").read_text(encoding="utf-8"), "html.parser")
+
+    hero = soup.select_one(".hero-main")
+    assert hero is not None
+    assert hero.find("h1").get_text(" ", strip=True) == "Preserved Project"
+    assert "MUTATED AFTER DISCOVERY" not in hero.get_text(" ", strip=True)
+
+    content = soup.select_one(".readme-panel .readme-content")
+    assert content is not None
+    assert content.find("h1").get_text(" ", strip=True) == "Preserved Project"
+    assert content.find("h2", string="Unfamiliar Section") is not None
+    assert "retained item" in content.get_text(" ", strip=True)
+    assert "preserved/tree.txt" in content.find("pre").get_text()
+    assert "MUTATED AFTER DISCOVERY" not in content.get_text(" ", strip=True)
