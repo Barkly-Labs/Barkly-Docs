@@ -105,3 +105,32 @@ def test_requirement_url_marker_and_graph_dependency_node(tmp_path):
     pillow=[d for d in p.dependencies if d.name == "Pillow"][0]
     assert pillow.metadata["import_evidence"] == ["PIL"]
     assert p.imports[0].metadata["dependency_scope"] == "external_python"
+
+
+def test_import_alias_evidence_is_selective_preserves_metadata_and_direct_html(tmp_path):
+    (tmp_path / "requirements.txt").write_text(
+        "PyYAML>=6\nPillow>=10\nrich>=13\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "app.py").write_text(
+        "import yaml\nfrom PIL import Image\n",
+        encoding="utf-8",
+    )
+
+    p = scan(tmp_path)
+    deps = {d.name: d for d in p.dependencies}
+
+    assert deps["PyYAML"].metadata["import_evidence"] == ["yaml"]
+    assert deps["Pillow"].metadata["import_evidence"] == ["PIL"]
+    assert "import_evidence" not in deps["rich"].metadata
+    assert "import_observed" not in deps["rich"].metadata
+    assert deps["PyYAML"].metadata["declaration"] == "PyYAML>=6"
+    assert deps["PyYAML"].metadata["source_type"] == "registry"
+
+    html = render_index(p)
+    assert "Static import evidence" in html
+    assert "yaml" in html
+    assert "PIL" in html
+    assert "Not observed; this does not prove the dependency is unused." in html
+    assert "&gt;=6" in html
+    assert "&gt;=10" in html

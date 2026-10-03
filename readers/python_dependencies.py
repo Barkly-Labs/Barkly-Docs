@@ -266,7 +266,13 @@ def link_python_imports_to_dependencies(project: Project) -> None:
         else:
             imp.metadata.setdefault("dependency_scope", "unclassified")
     for norm, deps in declared.items():
-        hits=sorted(import_hits.get(norm, set()))
+        hits = sorted(import_hits.get(norm, set()), key=lambda value: value.casefold())
         for dep in deps:
-            dep.metadata["import_evidence"] = hits
-            dep.metadata["import_observed"] = bool(hits)
+            # Only attach evidence when a static import was actually observed.
+            # Absence is intentionally not represented as evidence of non-use.
+            if hits:
+                dep.metadata["import_evidence"] = hits
+                dep.metadata["import_observed"] = True
+            else:
+                dep.metadata.pop("import_evidence", None)
+                dep.metadata.pop("import_observed", None)
